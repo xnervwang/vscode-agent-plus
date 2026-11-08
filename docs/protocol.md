@@ -1,13 +1,13 @@
 # Agent Work Plan protocol, major 1
 
-How an extension shows its agent's conversations in Agent Work Plan (`xnervwang.agent-work-plan`). Based on the work plan host protocol of Claude Code Extras (`docs/work-plan-host.md` at vscode-claude-code-extras `d2efd51`), renamed and renumbered.
+How an extension shows its agent's conversations in Agent Work Plan (`xnervwang.agent-work-plan`). Based on the work plan host protocol of Work Plan for Claude Code (`docs/work-plan-host.md` at vscode-claude-code-extras `d2efd51`), renamed and renumbered.
 
 ## Roles
 
 | Part | Who | Does |
 | --- | --- | --- |
 | Core | Agent Work Plan | Work plan view, Conversations view, Answer view, status bar entry, reading plan files, answers across windows, VS Code's webview request limit |
-| Source | Each feature extension (Claude Code Extras, Codex Extras) | One agent's conversations, plans, tabs, focus, answer typing |
+| Source | Each feature extension (Work Plan for Claude Code, Codex Extras) | One agent's conversations, plans, tabs, focus, answer typing |
 
 ## Setting up a feature extension
 
@@ -80,7 +80,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `planPath(sessionId)` | Absolute path of the conversation's plan file, or `null` |
 | `planDir()` | Folder of the plan files; the core watches it, with the folder itself as the watcher's base and `*.json` as the pattern, and never writes or deletes in it. A folder that does not exist yet is watched once it appears |
 | `sessionForTab(tab)` | A session id for a tab showing that conversation; `''` for this source's tab with no conversation yet; anything else for a tab not its own. Asked again for the same tab object once its label changes, and on every tab event while the last answer was `''`: a tab keeps one object for its whole life, so a new conversation answers `''` and then an id without ever becoming a different tab |
-| `onDidFocus` | `vscode.Event<{ sessionId }>` when a conversation comes to front outside an editor tab |
+| `onDidFocus` | `vscode.Event<{ sessionId }>` when a conversation comes to front outside an editor tab, and when the tab in front has a conversation at last: see below |
 | `isFocused(sessionId)` | Whether that conversation is still in front; the core asks before taking an `onDidFocus` report |
 | `listConversations()` | `Promise<Conversation[]>`; the array may carry a string `problem`, shown above the source's rows |
 | `onDidChangeConversations` | `vscode.Event<void>` |
@@ -110,6 +110,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 
 | Item | Rule |
 | --- | --- |
+| Authority | This section. `src/workplan.js` is the core's reading of it, and a source reading its own plans keeps to the same states, the same `waitingOn` values and the same limits |
 | Shape | The contract at the top of `src/workplan.js` |
 | `format` | Plan format version, `1`; absent means 1. A higher one is drawn as far as format 1 goes, with a row saying the plan is newer |
 | Row states | `discussing`, `todo`, `doing`, `waiting`, `parked`, `done`, `dropped`; no state reads as `todo` |
@@ -128,6 +129,18 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 - A source unregistering gives up the focus, and the tab is offered again to the sources that are left, never back to the one going away.
 - `onDidFocus` moves the view a moment later, if `isFocused` (when present) still says so. An empty `sessionId` clears the view only when it shows that source.
 - The latest signal wins, counted in the order the signals arrived: a focus report acted on after the reader has changed tabs is dropped.
+
+### `isFocused`
+
+- A source with no reliable signal for a conversation in its own sidebar may answer from the last focus signal it saw: whether that signal was for this conversation.
+- It must answer false once the active editor tab is a tab that is not its own. Otherwise the core, asking a moment after a report, pulls the view back to a conversation the reader has left.
+- Answering false is never wrong in itself: the core then leaves the view where it is.
+
+### Telling the core a tab's conversation is known now
+
+- `sessionForTab` answers `''` for a tab of this source with no conversation yet, such as a new one before its first message.
+- When that tab does have a conversation, the source fires `onDidFocus` with the new `sessionId`. The core offers the tab in front to every source again before it acts on the report, so the tab is picked up whether or not `isFocused` says yes.
+- There may be no tab event to carry this: a tab keeps one object for its whole life, and VS Code fires nothing when only the conversation behind it changed. The core also asks a tab again on any tab event while the last answer for it was `''`, so a source that cannot fire this is not stuck.
 
 ## Answers
 
@@ -181,11 +194,13 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 
 | Case | What the core does |
 | --- | --- |
-| No installed extension lists the core in `extensionDependencies`, none ever did on this profile | No view, no status bar entry, nothing written; one notice with Install Claude Code Extras and Install Codex Extras |
+| No installed extension lists the core in `extensionDependencies`, none ever did on this profile | No view, no status bar entry, nothing written; one notice with a button for each extension known to use the core, named as the Extensions view names it |
 | One did before, none does now | One notice saying it does nothing alone and can be uninstalled in the Extensions view; no uninstall button |
 | One is installed later | The views appear (`vscode.extensions.onDidChange`) |
+| Restricted Mode | Nothing is concluded and nothing said: VS Code disables an extension whose own dependency is disabled, so an untrusted window cannot see a dependent that is installed. The views are drawn, read only. Worked out again on `onDidGrantWorkspaceTrust` |
 
-- Being alone is decided in `activate()` from the installed manifests, before any source registers, so restored panels find their views.
+- Being alone is read from the installed manifests, synchronously, needing no other extension to have activated.
+- The notice waits a few seconds, and waits again on every `vscode.extensions.onDidChange`: a remote installs extensions one at a time, and this one can arrive first. A window that then finds a dependent takes back a notice already recorded as said.
 - A disabled extension, or one installed on the other side of a remote connection, is not seen; hence no uninstall button.
 
 ## Versions and compatibility

@@ -1,6 +1,6 @@
 # Agent Work Plan
 
-A dependency of Claude Code Extras and Codex Extras: installing either one installs this too. Installed on its own it does nothing.
+A dependency of Work Plan for Claude Code and Codex Extras: installing either one installs this too. Installed on its own it does nothing.
 
 | Feature | Where |
 | --- | --- |
@@ -19,7 +19,7 @@ A dependency of Claude Code Extras and Codex Extras: installing either one insta
 
 ## Install
 
-- From the marketplace: install Claude Code Extras or Codex Extras; VS Code installs this with it.
+- From the marketplace: install Work Plan for Claude Code or Codex Extras; VS Code installs this with it.
 - From `.vsix` files, while this is not on the marketplace: install this one first, then the extension that uses it.
 
 ```sh
@@ -29,7 +29,7 @@ code --install-extension xnervwang.codex-extras-0.1.0.vsix
 ```
 
 - In a Remote SSH window, install both on the remote.
-- In Restricted Mode the views are read only: no answer is sent and nothing is written.
+- In Restricted Mode the views are read only: no answer is sent and nothing is written. An untrusted window also cannot tell whether anything uses this extension, since VS Code disables an extension whose own dependency is disabled, so it draws the views and says nothing.
 - `Agent Work Plan: Show Status` lists the extensions using it and the registered sources.
 
 ## For extension authors

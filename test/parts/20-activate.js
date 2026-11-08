@@ -72,8 +72,12 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     eq(b.control.state.context['agentWorkPlan.alone'], true, 'alone, the one key the views are hidden by is set');
     await wait(20);
     const said = b.control.state.said.map((s) => [s.message.slice(0, 40), s.buttons]);
-    eq(said, [['Agent Work Plan is used by Claude Code E', ['Install Claude Code Extras', 'Install Codex Extras']]],
-      'alone, it says once what it is for, with a button for each extension that uses it');
+    /* Each extension is called what it is called in the Extensions view, which for the Claude Code one is not its
+       package name: a reader told to look for something else finds nothing. */
+    const names = require(path.join(root, 'src', 'dependents.js')).KNOWN.map((k) => k.name);
+    eq(said, [[`Agent Work Plan is used by ${names[0]}, `.slice(0, 40), names.map((n) => 'Install ' + n)]],
+      'alone, it says once what it is for, with a button naming each extension as the Extensions view does');
+    eq(names, ['Work Plan for Claude Code', 'Codex Extras'], 'and those are the marketplace names');
     eq(fs.readdirSync(b.storage).concat(fs.existsSync(b.home) ? fs.readdirSync(b.home) : []), [], 'and writes nothing');
     b.close();
     const again = boot(root, tmp, { extensions: [], views: false, memento });
@@ -115,6 +119,22 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     eq(d.control.state.said.filter((s) => /does nothing on its own|is used by Claude Code Extras/.test(s.message)).length, 1,
       'a window with a dependent clears a notice that was said too early');
     d.close();
+  }
+
+  /* Restricted Mode: VS Code disables an extension whose own dependency is disabled, so an untrusted window cannot see
+     the extension that uses this one even when it is installed. Nothing is concluded from that. */
+  {
+    const memento = fake.memento();
+    const b = boot(root, tmp, { extensions: [], trusted: false, views: false, memento, noticeDelayMs: 0 });
+    await wait(20);
+    const untrusted = [b.control.state.context['agentWorkPlan.alone'], b.control.state.said.length];
+    b.control.grantTrust();
+    await wait(20);
+    eq([untrusted, b.control.state.context['agentWorkPlan.alone'],
+      b.control.state.said.some((s) => /is used by/.test(s.message))],
+    [[false, 0], true, true],
+    'in Restricted Mode being alone is neither concluded nor said, and trusting the workspace works it out');
+    b.close();
   }
 
   /* The install buttons. */

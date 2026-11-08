@@ -75,15 +75,29 @@ function start(context, log, opts = {}) {
   /* ── Whether anything uses this extension ── */
   let deps = [];
   let active = null;
+  let aloneKey = null;
+  /*
+   * Being alone cannot be told in Restricted Mode. Claude Code does not run there, and VS Code disables an extension
+   * whose own dependency is disabled, so vscode.extensions.all in an untrusted window does not list the extension that
+   * uses this one even when it is installed. Nothing is concluded from that: the key stays unset, so the views keep
+   * showing, and nothing is said. It is worked out again if the reader trusts the workspace.
+   */
+  const paintAlone = () => {
+    const alone = active === false && host.trusted();
+    if (alone === aloneKey) return;
+    aloneKey = alone;
+    Promise.resolve(vscode.commands.executeCommand('setContext', ALONE_KEY, alone)).catch(() => {});
+  };
   const setActive = (on) => {
-    if (on === active) return;
-    active = on;
-    Promise.resolve(vscode.commands.executeCommand('setContext', ALONE_KEY, !on)).catch(() => {});
-    if (on && !views && typeof opts.views === 'function' && !closing) {
-      try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
-      if (views) for (const entry of registry.list()) attachSafely(entry);
+    if (on !== active) {
+      active = on;
+      if (on && !views && typeof opts.views === 'function' && !closing) {
+        try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
+        if (views) for (const entry of registry.list()) attachSafely(entry);
+      }
+      if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
     }
-    if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
+    paintAlone();
   };
   const attachSafely = (entry) => { try { views.attach(entry); } catch (e) { say(`could not show ${entry.id}: ${(e && e.message) || e}`); } };
   const rescan = () => {
@@ -98,16 +112,19 @@ function start(context, log, opts = {}) {
         Promise.resolve(memento.update(TOLD_KEY, rest)).catch(() => {});
       }
     }
-    setActive(deps.length > 0 || registry.size > 0);
+    /* While it cannot be told, the views are built and shown: an empty view container with no provider behind it is
+       worse than a view saying there is no plan, and in Restricted Mode they read and draw only. */
+    setActive(deps.length > 0 || registry.size > 0 || !host.trusted());
     return deps;
   };
   rescan();
   say(`started ${core.version}, protocol ${core.protocol}, accepting ${core.accepts.join(', ')}; `
     + (deps.length ? `used by ${deps.map((d) => `${d.id} ${d.version}`).join(', ')}` : 'nothing installed uses it'));
 
-  /* Once per kind: alone since it was installed, or left alone by the extensions that used it. */
+  /* Once per kind: alone since it was installed, or left alone by the extensions that used it. Nothing is said in
+     Restricted Mode, where a missing dependent may only be a disabled one (see paintAlone). */
   const tellIfAlone = async () => {
-    if (closing) return;
+    if (closing || !host.trusted()) return;
     const told = (memento && memento.get(TOLD_KEY, {})) || {};
     const kind = dependents.notice({ dependents: rescan(), hadDependents: !!(memento && memento.get(HAD_KEY)), told });
     if (!kind) return;
@@ -118,7 +135,8 @@ function start(context, log, opts = {}) {
       return;
     }
     const buttons = dependents.KNOWN.map((k) => `Install ${k.name}`);
-    const pick = await vscode.window.showInformationMessage('Agent Work Plan is used by Claude Code Extras and Codex Extras, '
+    const used = dependents.nameList(dependents.KNOWN.map((k) => k.name));
+    const pick = await vscode.window.showInformationMessage(`Agent Work Plan is used by ${used}, `
       + 'which install it themselves. On its own it does nothing.', ...buttons);
     const chosen = dependents.KNOWN[buttons.indexOf(pick)];
     if (chosen) await vscode.commands.executeCommand('workbench.extensions.installExtension', chosen.id);
@@ -149,6 +167,11 @@ function start(context, log, opts = {}) {
   armNotice();
   later(() => checkDeclared(), noticeWait);
   context.subscriptions.push(vscode.extensions.onDidChange(() => { rescan(); checkDeclared(); armNotice(); }));
+  /* Trusting the workspace is when an extension disabled with the agent it extends comes back, and the first point at
+     which being alone means anything. */
+  if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
+    context.subscriptions.push(vscode.workspace.onDidGrantWorkspaceTrust(() => { rescan(); armNotice(); }));
+  }
 
   /* ── Registration ── */
   const unhook = (subs) => { for (const d of subs) { try { d.dispose(); } catch (_) { /* already disposed */ } } subs.length = 0; };

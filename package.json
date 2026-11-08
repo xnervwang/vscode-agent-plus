@@ -1,7 +1,7 @@
 {
   "name": "agent-work-plan",
   "displayName": "Agent Work Plan",
-  "description": "Work plan sidebar, Conversations panel and Answer view shared by Claude Code Extras and Codex Extras.",
+  "description": "Work plan sidebar, Conversations panel and Answer view shared by Work Plan for Claude Code and Codex Extras.",
   "version": "1.0.0",
   "publisher": "xnervwang",
   "license": "BSD-3-Clause",

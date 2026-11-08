@@ -215,6 +215,26 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     eq([tabWon, view.description], [['Four', 'other'], 'Five'],
       'a focus report queued before the reader switched tabs is dropped, and one with nothing after it is taken');
 
+    /* The tab in front answered '' when it was claimed, and its source now knows which conversation it is. There is no
+       tab event to go with that, so the source says so with onDidFocus and the tab is claimed again. */
+    const lateTab = { label: 'Late', input: new vscode.TabInputWebview('late-panel') };
+    const lateFocus = new vscode.EventEmitter();
+    let lateAnswer = '';
+    b.api.registerSource({ protocol: 1, id: 'six', label: 'Six', planPath: (id) => path.join(dir, id + '.json'), planDir: () => dir,
+      sessionForTab: (t) => (t.input === lateTab.input ? lateAnswer : null), onDidFocus: lateFocus.event,
+      isFocused: () => false, listConversations: async () => [] });
+    control.setTabs([lateTab]);
+    control.fireTabs();
+    await wait(40);
+    const beforeItKnew = [view.description, titleNow()];
+    lateAnswer = D2;
+    /* isFocused says no, as a source with no reliable signal for a sidebar may: the claim of the tab is what carries
+       this, and the report itself is dropped. */
+    lateFocus.fire({ sessionId: D2 });
+    await wait(40);
+    eq([beforeItKnew, view.description, titleNow()], [['Six', 'none'], 'Six', 'other'],
+      'a source saying its front tab now has a conversation gets the tab claimed again, with no tab event');
+
     /* Plans are read again only when their file has changed. */
     control.setTabs([tab]);
     control.fireTabs();

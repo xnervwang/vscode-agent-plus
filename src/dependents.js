@@ -15,11 +15,18 @@
  * of a remote connection, or disabled, is not seen. That is why being alone is only ever said, never acted on.
  */
 const SELF = 'xnervwang.agent-work-plan';
-/* The extensions known to use this one, offered when it is installed alone. */
+/*
+ * The extensions known to use this one, offered when it is installed alone. `name` is the name each one goes by in the
+ * marketplace and in the Extensions view, which for the Claude Code one is not its package name: a reader told to look
+ * for something else finds nothing. These are the only place the names are written, so a marketplace name changing is
+ * one line here.
+ */
 const KNOWN = [
-  { id: 'xnervwang.claude-code-extras', name: 'Claude Code Extras' },
+  { id: 'xnervwang.claude-code-extras', name: 'Work Plan for Claude Code' },
   { id: 'xnervwang.codex-extras', name: 'Codex Extras' },
 ];
+/** "A, B and C" for a list of names. */
+const nameList = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
 const field = (o, k) => { try { return o == null ? undefined : o[k]; } catch (_) { return undefined; } };
 
@@ -57,4 +64,4 @@ function notice({ dependents, hadDependents, told }) {
   return told && told[kind] ? '' : kind;
 }
 
-module.exports = { SELF, KNOWN, dependentsOf, notice };
+module.exports = { SELF, KNOWN, nameList, dependentsOf, notice };

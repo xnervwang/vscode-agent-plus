@@ -459,6 +459,10 @@ function create(host, opts = {}) {
       if (!registry.has(entry)) return;
       const sessionId = sources.get(e, 'sessionId');
       if (sessionId !== undefined && sessionId !== '' && !sources.usableId(sessionId)) return;
+      /* The tab in front is offered round again first. A source fires this when a tab that answered '' has a
+         conversation at last, and there may be no tab event to go with it. The report is taken after, so a source
+         reporting a conversation of its own that is not in a tab still has the last word. */
+      claimTab(true);
       const mine = focus.mark();
       after(() => {
         if (closing || !registry.has(entry)) return;
