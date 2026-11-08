@@ -1,0 +1,220 @@
+{
+  "name": "agent-work-plan",
+  "displayName": "Agent Work Plan",
+  "description": "Work plan sidebar, Conversations panel and Answer view shared by Claude Code Extras and Codex Extras.",
+  "version": "1.0.0",
+  "publisher": "xnervwang",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xnervwang/vscode-agent-work-plan"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "keywords": [
+    "work-plan",
+    "plan",
+    "conversations",
+    "claude-code",
+    "codex"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In Restricted Mode the views are read only: answers are not sent and nothing is written to disk."
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "agentWorkPlan": {
+    "protocol": 1,
+    "accepts": [
+      1
+    ],
+    "planFormat": 1,
+    "answerFormat": 1
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentWorkPlan.refreshWorkPlan",
+        "title": "Agent Work Plan: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentWorkPlan.openWorkPlanFile",
+        "title": "Agent Work Plan: Open the Work Plan File",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "agentWorkPlan.showConversations",
+        "title": "Agent Work Plan: Show Conversations",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "agentWorkPlan.showStatus",
+        "title": "Agent Work Plan: Show Status"
+      },
+      {
+        "command": "agentWorkPlan.restoreWebviewRequestLimit",
+        "title": "Agent Work Plan: Put Back VS Code's Request Limit"
+      },
+      {
+        "command": "agentWorkPlan.showWorkPlanDetail",
+        "title": "Agent Work Plan: Show a Row of the Work Plan"
+      },
+      {
+        "command": "agentWorkPlan.answerQuestion",
+        "title": "Agent Work Plan: Answer a Question"
+      },
+      {
+        "command": "agentWorkPlan.openConversation",
+        "title": "Agent Work Plan: Go to a Conversation"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentWorkPlan",
+          "title": "Agent Work Plan",
+          "icon": "images/workplan.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "agentWorkPlanPanel",
+          "title": "Conversations",
+          "icon": "images/workplan.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentWorkPlan": [
+        {
+          "id": "agentWorkPlan.workPlan",
+          "name": "Work plan",
+          "when": "agentWorkPlan.active && config.agentWorkPlan.workPlanView"
+        }
+      ],
+      "agentWorkPlanPanel": [
+        {
+          "id": "agentWorkPlan.conversations",
+          "name": "Conversations",
+          "when": "agentWorkPlan.active && config.agentWorkPlan.conversationsView"
+        },
+        {
+          "type": "webview",
+          "id": "agentWorkPlan.answer",
+          "name": "Answer",
+          "when": "agentWorkPlan.active && config.agentWorkPlan.conversationsView"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "agentWorkPlan.workPlan",
+        "contents": "No work plan for the conversation in front."
+      },
+      {
+        "view": "agentWorkPlan.conversations",
+        "contents": "No conversation of this workspace is running or has open rows."
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentWorkPlan.showConversations",
+          "when": "view == agentWorkPlan.workPlan",
+          "group": "navigation@0"
+        },
+        {
+          "command": "agentWorkPlan.openWorkPlanFile",
+          "when": "view == agentWorkPlan.workPlan",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentWorkPlan.refreshWorkPlan",
+          "when": "view == agentWorkPlan.workPlan",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "agentWorkPlan.openWorkPlanFile",
+          "when": "view == agentWorkPlan.workPlan && viewItem == agentWorkPlanNode",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agentWorkPlan.refreshWorkPlan",
+          "when": "agentWorkPlan.active"
+        },
+        {
+          "command": "agentWorkPlan.openWorkPlanFile",
+          "when": "agentWorkPlan.active"
+        },
+        {
+          "command": "agentWorkPlan.showConversations",
+          "when": "agentWorkPlan.active"
+        },
+        {
+          "command": "agentWorkPlan.restoreWebviewRequestLimit",
+          "when": "agentWorkPlan.active"
+        },
+        {
+          "command": "agentWorkPlan.showWorkPlanDetail",
+          "when": "false"
+        },
+        {
+          "command": "agentWorkPlan.answerQuestion",
+          "when": "false"
+        },
+        {
+          "command": "agentWorkPlan.openConversation",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agent Work Plan",
+      "properties": {
+        "agentWorkPlan.workPlanView": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the **Work plan** view: the plan of the conversation in front."
+        },
+        "agentWorkPlan.conversationsView": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the **Conversations** and **Answer** views in the panel, and the status bar entry."
+        },
+        "agentWorkPlan.webviewRequestLimit": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "raise",
+            "leave"
+          ],
+          "enumDescriptions": [
+            "Ask once per VS Code version",
+            "Raise it without asking, again after each update. On Linux it still asks",
+            "Do not change it"
+          ],
+          "default": "ask",
+          "markdownDescription": "VS Code's limit on requests in flight for all webview tabs together (32). Raising it to 1000000 edits VS Code's `service-worker.js`. Takes effect after VS Code is restarted; VS Code updates reset it. `Agent Work Plan: Put Back VS Code's Request Limit` returns it to 32."
+        }
+      }
+    }
+  }
+}
