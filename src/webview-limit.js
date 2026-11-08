@@ -18,9 +18,11 @@
  * that text appears exactly once. An update replaces the whole application and brings 32 back, so this is checked at
  * every start. The new value is read by VS Code only after it has been quit completely and opened again.
  *
- * Three files are made beside it, all named after this extension:
+ * Three files are made beside it while a change is under way, all named after this extension, and none of them outlives
+ * it: a change that goes through leaves the VS Code application with nothing of this extension's in it.
  *   .lock       which window is changing the file (see withLock)
- *   .backup     the file as it was before the first change, so a replacement that failed part-way can be undone
+ *   .backup     the file as it was before this change, kept until the new text is read back; a replacement that failed
+ *               part-way leaves it, and find({ repair }) is what uses it
  *   .*.tmp      the new text, before it is renamed over the original; removed on the way out
  *
  * None of this can be made atomic from here. Every window of every remote reaches the client's files through
@@ -171,9 +173,9 @@ async function withLock(fs, uri, fn, { wait = sleep } = {}) {
 }
 
 /*
- * Keeps `text` beside `uri` as the file was before this extension first changed it. '' when there is a copy to restore
- * from afterwards, the error's code when there is not. An existing copy is left as it is: it is the older, and
- * therefore the more original, of the two.
+ * Keeps `text` beside `uri` as the file is now, before this change replaces it. '' when there is a copy to restore from
+ * afterwards, the error's code when there is not. An existing copy is left as it is: it was made before a change that
+ * has not been read back, so it is the one that still has something to protect.
  */
 async function keepCopy(fs, uri, text) {
   const backup = sibling(uri, BACKUP_SUFFIX);
@@ -279,7 +281,12 @@ async function setLimit(fs, install, from, to, timing) {
     }
     const back = await readText(fs, install.uri);
     if (back === null) return 'unreadable';
-    return back.includes(want) ? '' : 'not-written';
+    if (!back.includes(want)) return 'not-written';
+    /* The file is there with the value asked for, so the copy has nothing left to protect, and nothing of this
+       extension's is left in the VS Code application. The next change makes a copy of its own before it touches the
+       file, so removing this one costs no protection. */
+    try { await fs.delete(sibling(install.uri, BACKUP_SUFFIX)); } catch (_) { /* another window removed it */ }
+    return '';
   }, timing);
 }
 

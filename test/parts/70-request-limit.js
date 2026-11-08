@@ -11,12 +11,14 @@
  * `clock` is the client's own clock, which a remote window's does not have to agree with. `slowRename` makes
  * rename(..., { overwrite: false }) what VS Code really does: a look at the target, and then a move that replaces
  * whatever is there (fileService.ts doValidateMoveCopy, diskFileSystemProvider.ts validateMoveCopy). With it, two
- * windows can both find the lock free and the second one's move lands on top of the first one's.
+ * windows can both find the lock free and the second one's move lands on top of the first one's. `tornRename` is the
+ * other half of what VS Code really does: an overwriting rename deletes the target first (fileService.ts doMoveCopy),
+ * so one that fails after that leaves no file at the target at all.
  */
 const path = require('path');
 const fake = require('../fake-vscode');
 
-function client(files, { refuse = '', clock = Date.now, slowRename = false, onRead } = {}) {
+function client(files, { refuse = '', clock = Date.now, slowRename = false, tornRename = null, onRead } = {}) {
   const meta = new Map(Object.keys(files).map((k) => [k, { mtime: clock() }]));
   const has = (p) => Object.prototype.hasOwnProperty.call(files, p);
   const dirs = (p) => [...new Set(Object.keys(files).filter((f) => f.startsWith(p + '/')).map((f) => f.slice(p.length + 1).split('/')[0]))];
@@ -42,6 +44,10 @@ function client(files, { refuse = '', clock = Date.now, slowRename = false, onRe
         const blocked = has(b.path);
         if (slowRename) await tick();
         if (blocked && !(opts && opts.overwrite)) throw err('EEXIST');
+        if (tornRename && tornRename(b.path)) {
+          delete files[b.path]; meta.delete(b.path);
+          throw err('EIO');
+        }
         files[b.path] = files[a.path]; meta.set(b.path, meta.get(a.path));
         delete files[a.path]; meta.delete(a.path);
       },
@@ -67,8 +73,8 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   const [install] = await wl.find({ fs: c.fs, at: c.at, local: true, appRoot: APP });
   eq([install && install.limit, install && install.root], [32, APP], 'find() reads the limit of the running installation');
   eq(await wl.setLimit(c.fs, install, 32, wl.NEW, fast), '', 'setLimit() changes it');
-  eq([c.files[SW], leftovers(c), c.files[BACKUP]], [text(wl.NEW), [BACKUP], text(32)],
-    'the file holds the new value, the original is kept beside it, and no lock or temporary file is left');
+  eq([c.files[SW], leftovers(c)], [text(wl.NEW), []],
+    'the file holds the new value, and nothing of this extension\'s is left beside it: no copy, no lock, no temporary file');
   /* Another window can raise it between the pass that read 32 and this call. Sending the reader off to a shell then
      would be telling them to make a change that has already been made. */
   eq(await wl.setLimit(c.fs, install, 32, wl.NEW, fast), '', 'a file that already holds the new value counts as done');
@@ -87,7 +93,7 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   const stale = fresh(32, { [LOCK]: JSON.stringify({ holder: 'a-window-that-died' }) });
   stale.meta.set(LOCK, { mtime: Date.now() - wl.LOCK_STALE_MS - 1000 });
   eq([await wl.setLimit(stale.fs, { root: APP, uri: stale.at(SW) }, 32, wl.NEW, fast), stale.files[SW], leftovers(stale)],
-    ['', text(wl.NEW), [BACKUP]], 'a lock left by a window that died is removed');
+    ['', text(wl.NEW), []], 'a lock left by a window that died is removed');
 
   /* The extension host can be minutes away from the client whose files these are, so the age of a lock is measured
      against the client's own clock, taken from a file written in the same folder. */
@@ -130,7 +136,7 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   const target = { root: APP, uri: race.at(SW) };
   const slow = { wait: () => new Promise((r) => setTimeout(r, 2)) };
   const both = await Promise.all([wl.setLimit(race.fs, target, 32, wl.NEW, slow), wl.setLimit(race.fs, target, 32, wl.NEW, slow)]);
-  eq([both, race.files[SW], leftovers(race)], [['', ''], text(wl.NEW), [BACKUP]],
+  eq([both, race.files[SW], leftovers(race)], [['', ''], text(wl.NEW), []],
     'two windows at once: one changes it, the other finds it already changed and says so too');
 
   /* With the rename VS Code really performs, both windows find the lock free and the second one's move replaces the
@@ -150,6 +156,17 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   const roClient = client(ro.files, { refuse: 'EACCES' });
   eq([await wl.setLimit(roClient.fs, { root: APP, uri: roClient.at(SW) }, 32, wl.NEW, fast), ro.files[SW], leftovers(roClient)],
     ['EACCES', text(32), []], 'a file that cannot be written gives the error\'s code and leaves nothing behind');
+
+  /* An overwriting rename deletes the original before moving the new file over it, so one that fails in between leaves
+     no file at all. The copy made just before it is what puts it back, and it is only kept for as long as that can
+     still be needed. */
+  const torn = fresh(32, {}, { tornRename: (p) => p === SW });
+  const tornWhy = await wl.setLimit(torn.fs, { root: APP, uri: torn.at(SW) }, 32, wl.NEW, fast);
+  const nothingThere = torn.files[SW];
+  const [fixed] = await wl.find({ fs: torn.fs, at: torn.at, local: true, appRoot: APP, repair: true, timing: fast });
+  eq([tornWhy, nothingThere, leftovers(torn), fixed && fixed.limit, fixed && fixed.restored, torn.files[SW]],
+    ['EIO', undefined, [BACKUP], 32, true, text(32)],
+    'a replacement that fails once the original is gone keeps the copy, and the next pass puts the file back from it');
 
   /* A replacement deletes the original before moving the new file over it, so an interruption in between leaves no file
      at all. That is what the copy is for. */

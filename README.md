@@ -32,8 +32,14 @@ code --install-extension xnervwang.codex-extras-0.1.0.vsix --force
 - A new build needs VS Code quit and opened again, not only the window reloaded, when it changes what a view's `when` reads.
 
 - In a Remote SSH window, install both on the remote.
-- In Restricted Mode the views are read only: no answer is sent and nothing is written. An untrusted window also cannot tell whether anything uses this extension, since VS Code disables an extension whose own dependency is disabled, so it draws the views and says nothing.
+- In Restricted Mode the views are read only: no answer is sent and nothing is written. An untrusted window also cannot see the extension that uses this one, since VS Code disables an extension whose own dependency is disabled, so it hides the views and says nothing until the workspace is trusted.
 - `Agent Work Plan: Show Status` lists the extensions using it and the registered sources.
+
+## Known limits
+
+| Limit | Detail |
+| --- | --- |
+| The request limit is only changed in a VS Code installed where VS Code installs itself | A portable or ZIP copy, or one in a directory of your own, is not found: the client's application directory is searched in the places each platform puts it, and a remote window cannot ask the client where it was started from. `Agent Work Plan: Show Status` then logs `no installation found`, nothing is asked and no file is touched. To raise it anyway, replace `maxActiveHostResourceResponseBodies=32,` with `maxActiveHostResourceResponseBodies=1000000,` in `out/vs/workbench/contrib/webview/browser/pre/service-worker.js` under that copy of VS Code, and quit and reopen it |
 
 ## For extension authors
 

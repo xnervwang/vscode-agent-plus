@@ -197,7 +197,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | No installed extension lists the core in `extensionDependencies`, none ever did on this profile | No view, no status bar entry, nothing written; one notice with a button for each extension known to use the core, named as the Extensions view names it |
 | One did before, none does now | One notice saying it does nothing alone and can be uninstalled in the Extensions view; no uninstall button |
 | One is installed later | The views appear (`vscode.extensions.onDidChange`) |
-| Restricted Mode | Nothing is concluded and nothing said: VS Code disables an extension whose own dependency is disabled, so an untrusted window cannot see a dependent that is installed. The views are drawn, read only. Worked out again on `onDidGrantWorkspaceTrust` |
+| Restricted Mode | The views are hidden the same way, but nothing is said and nothing recorded as said: VS Code disables an extension whose own dependency is disabled, so an untrusted window cannot see a dependent that is installed, and a notice is said once for good. Worked out again on `onDidGrantWorkspaceTrust` |
 
 - Being alone is read from the installed manifests, synchronously, needing no other extension to have activated.
 - The notice waits a few seconds, and waits again on every `vscode.extensions.onDidChange`: a remote installs extensions one at a time, and this one can arrive first. A window that then finds a dependent takes back a notice already recorded as said.

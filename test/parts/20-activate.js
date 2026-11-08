@@ -121,20 +121,30 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     d.close();
   }
 
-  /* Restricted Mode: VS Code disables an extension whose own dependency is disabled, so an untrusted window cannot see
-     the extension that uses this one even when it is installed. Nothing is concluded from that. */
+  /*
+   * Restricted Mode: VS Code disables an extension whose own dependency is disabled, so an untrusted window cannot see
+   * the extension that uses this one even when it is installed. The views are hidden all the same, since they would be
+   * empty either way, but nothing is said and nothing is written down: a notice is said once for good, and a dependent
+   * that is only disabled would make it wrong.
+   */
   {
     const memento = fake.memento();
     const b = boot(root, tmp, { extensions: [], trusted: false, views: false, memento, noticeDelayMs: 0 });
     await wait(20);
-    const untrusted = [b.control.state.context['agentWorkPlan.alone'], b.control.state.said.length];
+    const untrusted = [b.control.state.context['agentWorkPlan.alone'], b.control.state.said.length,
+      memento.get('agentWorkPlan.toldAlone', null)];
     b.control.grantTrust();
     await wait(20);
-    eq([untrusted, b.control.state.context['agentWorkPlan.alone'],
-      b.control.state.said.some((s) => /is used by/.test(s.message))],
-    [[false, 0], true, true],
-    'in Restricted Mode being alone is neither concluded nor said, and trusting the workspace works it out');
+    eq([untrusted, b.control.state.said.some((s) => /is used by/.test(s.message))],
+      [[true, 0, null], true],
+      'in Restricted Mode the views are hidden but nothing is said or written down, and trusting the workspace says it');
     b.close();
+    /* A dependent an untrusted window can see is a dependent: the views show. */
+    const c = boot(root, tmp, { extensions: [CODEX()], trusted: false, views: false, noticeDelayMs: 0 });
+    await wait(20);
+    eq([c.control.state.context['agentWorkPlan.alone'], c.control.state.said.length], [false, 0],
+      'an untrusted window that can see a dependent shows the views, and still says nothing');
+    c.close();
   }
 
   /* The install buttons. */

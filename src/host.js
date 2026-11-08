@@ -27,6 +27,12 @@ const FAMILY = 'agent-work-plan';
  * come up with nothing in it, and the panel the window had open would be replaced by another. Reading the key the other
  * way round means an unset key shows the views, which is what a window with a dependent installed wants. The price is
  * that a window which really is alone draws them for a moment before the key is set.
+ *
+ * The key is set the same way in Restricted Mode, where nothing that uses this extension can be seen at all: Claude
+ * Code does not run there, and VS Code disables an extension whose own dependency is disabled. The views would be empty
+ * either way, and what the reader asked for is that nothing is shown without a feature extension. What an untrusted
+ * window does not do is say anything or write down that it has: a dependent that is only disabled, not missing, would
+ * make that notice wrong, and once said it is said for good. It is worked out again on onDidGrantWorkspaceTrust.
  */
 const ALONE_KEY = 'agentWorkPlan.alone';
 const HAD_KEY = 'agentWorkPlan.hadDependents';
@@ -75,29 +81,15 @@ function start(context, log, opts = {}) {
   /* ── Whether anything uses this extension ── */
   let deps = [];
   let active = null;
-  let aloneKey = null;
-  /*
-   * Being alone cannot be told in Restricted Mode. Claude Code does not run there, and VS Code disables an extension
-   * whose own dependency is disabled, so vscode.extensions.all in an untrusted window does not list the extension that
-   * uses this one even when it is installed. Nothing is concluded from that: the key stays unset, so the views keep
-   * showing, and nothing is said. It is worked out again if the reader trusts the workspace.
-   */
-  const paintAlone = () => {
-    const alone = active === false && host.trusted();
-    if (alone === aloneKey) return;
-    aloneKey = alone;
-    Promise.resolve(vscode.commands.executeCommand('setContext', ALONE_KEY, alone)).catch(() => {});
-  };
   const setActive = (on) => {
-    if (on !== active) {
-      active = on;
-      if (on && !views && typeof opts.views === 'function' && !closing) {
-        try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
-        if (views) for (const entry of registry.list()) attachSafely(entry);
-      }
-      if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
+    if (on === active) return;
+    active = on;
+    Promise.resolve(vscode.commands.executeCommand('setContext', ALONE_KEY, !on)).catch(() => {});
+    if (on && !views && typeof opts.views === 'function' && !closing) {
+      try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
+      if (views) for (const entry of registry.list()) attachSafely(entry);
     }
-    paintAlone();
+    if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
   };
   const attachSafely = (entry) => { try { views.attach(entry); } catch (e) { say(`could not show ${entry.id}: ${(e && e.message) || e}`); } };
   const rescan = () => {
@@ -112,17 +104,16 @@ function start(context, log, opts = {}) {
         Promise.resolve(memento.update(TOLD_KEY, rest)).catch(() => {});
       }
     }
-    /* While it cannot be told, the views are built and shown: an empty view container with no provider behind it is
-       worse than a view saying there is no plan, and in Restricted Mode they read and draw only. */
-    setActive(deps.length > 0 || registry.size > 0 || !host.trusted());
+    setActive(deps.length > 0 || registry.size > 0);
     return deps;
   };
   rescan();
   say(`started ${core.version}, protocol ${core.protocol}, accepting ${core.accepts.join(', ')}; `
     + (deps.length ? `used by ${deps.map((d) => `${d.id} ${d.version}`).join(', ')}` : 'nothing installed uses it'));
 
-  /* Once per kind: alone since it was installed, or left alone by the extensions that used it. Nothing is said in
-     Restricted Mode, where a missing dependent may only be a disabled one (see paintAlone). */
+  /* Once per kind: alone since it was installed, or left alone by the extensions that used it. An untrusted window says
+     nothing and writes nothing down: a dependent it cannot see may only be a disabled one (see the comment on
+     ALONE_KEY), and a notice is said once for good. */
   const tellIfAlone = async () => {
     if (closing || !host.trusted()) return;
     const told = (memento && memento.get(TOLD_KEY, {})) || {};
