@@ -88,14 +88,14 @@
         {
           "id": "agentWorkPlan",
           "title": "Agent Work Plan",
-          "icon": "images/workplan.svg"
+          "icon": "images/sidebar.svg"
         }
       ],
       "panel": [
         {
           "id": "agentWorkPlanPanel",
           "title": "Conversations",
-          "icon": "images/workplan.svg"
+          "icon": "images/sidebar.svg"
         }
       ]
     },
