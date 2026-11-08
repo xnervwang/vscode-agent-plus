@@ -156,5 +156,12 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     b.control.fireExtensions();
     eq([Object.keys(b.control.state.views).length, b.control.state.status.length], [2, 1], 'they are created when an extension that uses it is installed');
     b.close();
+    /* A source registering in a window where nothing declared the dependency builds the views, and is attached once. */
+    const c = boot(root, tmp, { extensions: [], viewOptions: timing });
+    const r = c.api.registerSource({ protocol: 1, id: 'stray', planDir: () => codexDir, listConversations: async () => [] });
+    await wait(20);
+    eq([r.accepted, c.control.state.context['agentWorkPlan.active'], c.control.state.watchers.length], [true, true, 1],
+      'a source registering without a declared dependency turns the views on, with one watcher for its plans');
+    c.close();
   }
 };

@@ -143,8 +143,10 @@ function start(context, log, opts = {}) {
       registry.release(entry);
       return fail(sources.REFUSED.failed, 'it could not be attached: ' + ((e && e.message) || e));
     }
+    /* Building the views attaches every registered source, this one included. */
+    const built = !!views;
     setActive(true);
-    if (views) attachSafely(entry);
+    if (views && built) attachSafely(entry);
     let gone = false;
     const registration = disposable(() => {
       if (gone) return;
