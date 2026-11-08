@@ -24,9 +24,12 @@ A dependency of Work Plan for Claude Code and Codex Extras: installing either on
 
 ```sh
 bash build/pack.sh
-code --install-extension build/xnervwang.agent-work-plan-1.0.0.vsix
-code --install-extension xnervwang.codex-extras-0.1.0.vsix
+code --install-extension build/xnervwang.agent-work-plan-1.0.0.vsix --force
+code --install-extension xnervwang.codex-extras-0.1.0.vsix --force
 ```
+
+- `--force` installs a `.vsix` whose version number is already installed, which a rebuilt one is.
+- A new build needs VS Code quit and opened again, not only the window reloaded, when it changes what a view's `when` reads.
 
 - In a Remote SSH window, install both on the remote.
 - In Restricted Mode the views are read only: no answer is sent and nothing is written. An untrusted window also cannot tell whether anything uses this extension, since VS Code disables an extension whose own dependency is disabled, so it draws the views and says nothing.
