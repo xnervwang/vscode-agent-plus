@@ -1,0 +1,170 @@
+// BSD 3-Clause License
+// Copyright (c) 2026, Xnerv Wang
+// All rights reserved.
+
+'use strict';
+/*
+ * Starting up: activate() returns the interface at once and never throws; whether anything uses this extension is read
+ * from the installed manifests before any source registers; registration results say what happened; installed alone it
+ * shows nothing, writes nothing and says so once.
+ */
+const fs = require('fs');
+const path = require('path');
+const fake = require('../fake-vscode');
+const { boot, CODEX, CLAUDE } = require('../boot');
+
+const source = (over = {}) => Object.assign({ protocol: 1, id: 'codex', label: 'Codex', extensionId: 'xnervwang.codex-extras' }, over);
+
+module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
+  /* extension.js itself, with a host that throws. */
+  {
+    const { vscode } = fake.create();
+    const undo = fake.install(vscode);
+    fake.fresh(root);
+    const hostPath = require.resolve(path.join(root, 'src', 'host.js'));
+    const real = require(hostPath);
+    require.cache[hostPath].exports = Object.assign({}, real, { start: () => { throw new Error('boom'); } });
+    const ext = require(path.join(root, 'extension.js'));
+    let r, threw = '';
+    try { r = ext.activate({ subscriptions: [], globalState: fake.memento() }); } catch (e) { threw = e.message; }
+    const refused = r && r.agentWorkPlan && r.agentWorkPlan.registerSource(source());
+    eq([threw, typeof (r && r.then), refused && refused.accepted, refused && refused.code, /boom/.test(refused && refused.reason)],
+      ['', 'undefined', false, 'failed', true], 'activate() returns synchronously and, when start() throws, an interface that refuses with the reason');
+    delete require.cache[hostPath];
+    undo();
+  }
+
+  /* With Codex Extras installed. */
+  {
+    const b = boot(root, tmp, { views: false });
+    const api = b.api;
+    eq([api.family, api.protocol, api.accepts, api.features, api.version, Object.isFrozen(api)],
+      ['agent-work-plan', 1, [1], [], '1.0.0', true], 'the interface: family, protocol 1, accepted majors, features, version');
+    eq(b.control.state.context['agentWorkPlan.active'], true, 'a dependent in the installed manifests turns the views on at once');
+    const r = api.registerSource(source());
+    eq([r.accepted, r.code, r.reason, typeof (r.registration && r.registration.dispose), Object.isFrozen(r)], [true, '', '', 'function', true],
+      'an accepted registration says so and carries a Disposable');
+    const dup = api.registerSource(source());
+    eq([dup.accepted, dup.code, dup.registration], [false, 'duplicate', null], 'a second source with the same id is refused, with no Disposable');
+    const bad1 = api.registerSource(source({ id: 'x', protocol: 'one' }));
+    const bad2 = api.registerSource(null);
+    const bad3 = api.registerSource({ protocol: 1, get id() { throw new Error('getter'); } });
+    eq([bad1.code, bad2.code, bad3.code], ['shape', 'shape', 'id'], 'malformed sources are refused with a code, never thrown at');
+    r.registration.dispose(); r.registration.dispose();
+    const again = api.registerSource(source());
+    eq(again.accepted, true, 'after disposing, the same id can register again');
+    eq(b.control.state.said.length, 0, 'nothing is said when everything fits');
+    b.close();
+    const late = api.registerSource(source({ id: 'late' }));
+    eq([late.accepted, late.code], [false, 'closing'], 'after the window closes, registrations are refused');
+  }
+
+  /* Installed alone, never used. */
+  {
+    const memento = fake.memento();
+    const b = boot(root, tmp, { extensions: [], views: false, memento });
+    eq(b.control.state.context['agentWorkPlan.active'], false, 'alone, the views stay hidden');
+    await wait(20);
+    const said = b.control.state.said.map((s) => [s.message.slice(0, 40), s.buttons]);
+    eq(said, [['Agent Work Plan is used by Claude Code E', ['Install Claude Code Extras', 'Install Codex Extras']]],
+      'alone, it says once what it is for, with a button for each extension that uses it');
+    eq(fs.readdirSync(b.storage).concat(fs.existsSync(b.home) ? fs.readdirSync(b.home) : []), [], 'and writes nothing');
+    b.close();
+    const again = boot(root, tmp, { extensions: [], views: false, memento });
+    await wait(20);
+    eq(again.control.state.said.length, 0, 'the next window does not say it again');
+    /* Codex Extras is installed while the window is open. */
+    again.control.state.extensions.push(CODEX());
+    again.control.fireExtensions();
+    eq(again.control.state.context['agentWorkPlan.active'], true, 'an extension that uses it turns the views on when it is installed');
+    again.close();
+    /* Then it is gone again. */
+    const left = boot(root, tmp, { extensions: [], views: false, memento });
+    await wait(20);
+    const told = left.control.state.said.map((s) => [/uninstall it in the Extensions view/.test(s.message), s.buttons]);
+    eq(told, [[true, []]], 'left alone by the extensions that used it, it says it can be uninstalled, with no uninstall button');
+    left.close();
+  }
+
+  /* The install buttons. */
+  {
+    const b = boot(root, tmp, { extensions: [], views: false });
+    b.control.answer('Agent Work Plan is used by', 'Install Codex Extras');
+    await wait(20);
+    const asked = b.control.state.commands.filter((c) => c[0] === 'workbench.extensions.installExtension');
+    eq(asked, [['workbench.extensions.installExtension', 'xnervwang.codex-extras']], 'the button installs that extension');
+    b.close();
+  }
+
+  /* A dependent speaking a newer protocol than this build. */
+  {
+    const fetched = [];
+    const gallery = { version: '2.0.0', protocol: 2, accepts: [2, 1] };
+    const fetchFn = async (url, init) => {
+      fetched.push(url);
+      if (/extensionquery/.test(url)) {
+        return { ok: true, json: async () => ({ results: [{ extensions: [{ versions: [{ version: gallery.version,
+          properties: [{ key: 'Microsoft.VisualStudio.Code.Engine', value: '^1.96.0' }],
+          files: [{ assetType: 'Microsoft.VisualStudio.Code.Manifest', source: 'https://gallery/manifest' }] }] }] }] }) };
+      }
+      return { ok: true, json: async () => ({ agentWorkPlan: { protocol: gallery.protocol, accepts: gallery.accepts } }) };
+    };
+    const memento = fake.memento();
+    const b = boot(root, tmp, { extensions: [CODEX({ version: '0.2.0', agentWorkPlan: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
+    b.control.answer('needs a newer Agent Work Plan', 'Update Agent Work Plan');
+    await wait(30);
+    const said = b.control.state.said.map((s) => s.message);
+    const r = b.api.registerSource(source({ protocol: 2 }));
+    await wait(30);
+    const installs = b.control.state.commands.filter((c) => c[0] === 'workbench.extensions.installExtension');
+    if (said.length >= 1 && /Codex Extras needs a newer Agent Work Plan: it uses protocol 2/.test(said[0])
+      && r.code === 'core-too-old' && JSON.stringify(installs) === JSON.stringify([['workbench.extensions.installExtension', 'xnervwang.agent-work-plan', { enable: true }]])
+      && b.control.state.said.filter((s) => /needs a newer/.test(s.message)).length === 1 && fetched.length === 2) {
+      ok('a newer dependent is told about once, and the button installs the gallery\'s Agent Work Plan when that accepts it');
+    } else bad(`core too old: ${JSON.stringify([said, r, installs, fetched])}`);
+    b.close();
+    /* The gallery has nothing newer. */
+    gallery.version = '1.0.0'; gallery.protocol = 1; gallery.accepts = [1];
+    const c = boot(root, tmp, { extensions: [CODEX({ version: '0.3.0', agentWorkPlan: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
+    c.control.answer('needs a newer Agent Work Plan', 'Update Agent Work Plan');
+    await wait(30);
+    const opened = c.control.state.commands.filter((x) => x[0] === 'extension.open' || x[0] === 'workbench.extensions.installExtension');
+    const why = c.control.state.said.map((s) => s.message).find((m) => /cannot be updated from here/.test(m)) || '';
+    eq([opened, /the newest release, 1\.0\.0, is the one installed/.test(why)], [[['extension.open', 'xnervwang.agent-work-plan']], true],
+      'when the gallery has no fix, the button opens the extension\'s page and says why');
+    c.close();
+  }
+
+  /* A dependent this build has left behind, and the gallery is unreachable. */
+  {
+    const b = boot(root, tmp, { extensions: [CLAUDE({ version: '1.0.30', agentWorkPlan: { protocol: 0 } })], views: false,
+      fetch: async () => { throw new Error('offline'); } });
+    b.control.answer('is too old for Agent Work Plan', (m, buttons) => buttons[0]);
+    const r = b.api.registerSource(source({ id: 'claude-code', protocol: 0, extensionId: 'xnervwang.claude-code-extras' }));
+    eq(r.code, 'shape', 'protocol 0 is not a protocol');
+    b.close();
+    const accepts = require(path.join(root, 'src', 'sources.js')).ACCEPTS;
+    const compat = require(path.join(root, 'src', 'compat.js'));
+    eq([compat.behind(1, accepts), compat.behind(2, [2]), compat.behind(1, [3, 2]), compat.behind(0, [1])], ['', '', 'source', ''],
+      'behind() names the side to update');
+    const { vscode, control } = fake.create();
+    control.answer('is too old for Agent Work Plan', (m, buttons) => buttons[0]);
+    const out = await compat.offer({ vscode, memento: fake.memento(), who: 'source',
+      ext: { id: 'xnervwang.claude-code-extras', name: 'Claude Code Extras', version: '1.0.30', protocol: 1 },
+      core: { version: '2.0.0', accepts: [2] }, fetch: async () => { throw new Error('offline'); } });
+    const msgs = control.state.said.map((s) => s.message);
+    if (out === 'page' && /Claude Code Extras 1\.0\.30 is too old for Agent Work Plan 2\.0\.0/.test(msgs[0]) && /Update Claude Code Extras/.test(JSON.stringify(control.state.said[0].buttons))
+      && /could not be reached \(offline\)/.test(msgs[1])
+      && JSON.stringify(control.state.commands) === JSON.stringify([['extension.open', 'xnervwang.claude-code-extras']])) {
+      ok('a dependent left behind is told to update itself; with the gallery unreachable its page opens with the reason');
+    } else bad(`source too old: ${JSON.stringify([out, msgs, control.state.commands])}`);
+  }
+
+  /* engines.vscode */
+  const gallery = require(path.join(root, 'src', 'gallery.js'));
+  eq([gallery.engineAllows('^1.96.0', '1.145.2'), gallery.engineAllows('^1.150.0', '1.145.2'), gallery.engineAllows('>=1.90.0', '1.96.0'),
+    gallery.engineAllows('^2.0.0', '1.145.2'), gallery.engineAllows('*', '1.0.0'), gallery.engineAllows('weird', '1.0.0')],
+  [true, false, true, false, true, true], 'engineAllows() reads the ranges extensions use');
+  eq([gallery.galleryOf('vscode'), gallery.galleryOf('vscode-insiders'), gallery.galleryOf('cursor'), gallery.galleryOf('kiro')],
+    ['marketplace', 'marketplace', 'open-vsx', 'open-vsx'], 'editors other than VS Code look in Open VSX');
+};
