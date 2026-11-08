@@ -69,8 +69,10 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       && status && status.shown && status.text.endsWith('1 to decide')) {
       ok('both sources\' conversations are drawn, the one with a logo carries it, and the status bar counts the question');
     } else bad(`rows ${JSON.stringify([r, status && status.text])}`);
-    eq(control.state.watchers.map((w) => w.pattern.pattern), [path.basename(codexDir) + '/*.json', path.basename(claudeDir) + '/*.json'],
-      'each source\'s plan folder is watched');
+    /* The base is the plan folder itself and the pattern has no '/' in it: a pattern with one makes VS Code watch the
+       base recursively, and the base would then be a whole conversation store. */
+    eq(control.state.watchers.map((w) => [w.pattern.base.fsPath, w.pattern.pattern]), [[codexDir, '*.json'], [claudeDir, '*.json']],
+      'each source\'s plan folder is watched, without a path separator that would make the watch recursive');
 
     const shown = () => [plan.provider.shown() && plan.provider.shown().file, plan.description];
     const at = (tab) => { control.setTabs([tab]); control.fireTabs(); };
@@ -160,8 +162,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const c = boot(root, tmp, { extensions: [], viewOptions: timing });
     const r = c.api.registerSource({ protocol: 1, id: 'stray', planDir: () => codexDir, listConversations: async () => [] });
     await wait(20);
-    eq([r.accepted, c.control.state.context['agentWorkPlan.active'], c.control.state.watchers.length], [true, true, 1],
-      'a source registering without a declared dependency turns the views on, with one watcher for its plans');
+    eq([r.accepted, c.control.state.context['agentWorkPlan.alone'], c.control.state.watchers.length], [true, false, 1],
+      'a source registering without a declared dependency brings the views back, with one watcher for its plans');
     c.close();
   }
 };

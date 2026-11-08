@@ -29,7 +29,7 @@ How an extension shows its agent's conversations in Agent Work Plan (`xnervwang.
 | Activity bar container | `agentWorkPlan` |
 | Panel container | `agentWorkPlanPanel` |
 | Views | `agentWorkPlan.workPlan`, `agentWorkPlan.conversations`, `agentWorkPlan.answer` |
-| Context key | `agentWorkPlan.active`: true while an installed extension depends on the core, or a source is registered |
+| Context key | `agentWorkPlan.alone`: set to true only once the core finds nothing installed that depends on it and no source registered. The views, the status bar entry and the commands are hidden by `!agentWorkPlan.alone`, so an unset key shows them: the key does not exist until the core has activated, and a window's panel is put back before that |
 | Commands | `agentWorkPlan.*` |
 | Settings | `agentWorkPlan.workPlanView`, `agentWorkPlan.conversationsView`, `agentWorkPlan.webviewRequestLimit` |
 
@@ -78,7 +78,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `extensionId` | The extension that registered it, such as `'xnervwang.codex-extras'`; used for update notices |
 | `logo` | `{ light, dark }` SVG `vscode.Uri` values, read from the agent's own extension; drawn with a state dot when more than one source is registered |
 | `planPath(sessionId)` | Absolute path of the conversation's plan file, or `null` |
-| `planDir()` | Folder of the plan files; the core watches it and never writes or deletes in it |
+| `planDir()` | Folder of the plan files; the core watches it, with the folder itself as the watcher's base and `*.json` as the pattern, and never writes or deletes in it. A folder that does not exist yet is watched once it appears |
 | `sessionForTab(tab)` | A session id for a tab showing that conversation; `''` for this source's tab with no conversation yet; anything else for a tab not its own |
 | `onDidFocus` | `vscode.Event<{ sessionId }>` when a conversation comes to front outside an editor tab |
 | `isFocused(sessionId)` | Whether that conversation is still in front; the core asks before taking an `onDidFocus` report |
@@ -131,7 +131,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Folder | `~/.agent-work-plan/answers`, mode 0700, the same for every VS Code product and window of this user; made once a source is registered in a trusted window |
 | Record | `<id>.json` with `format: 1`, `id`, `sourceId`, `sessionId`, `row`, `text`, `at`; one record per answer |
 | Taking | Renaming `<id>.json` to `<id>.taken` in the same folder; only one window succeeds |
-| Withdrawing | The sender renames an answer nobody took after 15 seconds |
+| Withdrawing | The sender renames an answer nobody took after 15 seconds, and on the way out renames back every one it sent that no window had taken |
+| Too late to deliver | A receiving window throws away a record more than 15 seconds plus 5 seconds old rather than delivering it, and writes `notReceived` as its outcome |
 | `deliveryId` | The record's `id`, passed to `deliverAnswer`; a source asked twice with one id types it once |
 | Newer `format`, no `sourceId` | Not taken |
 
@@ -144,6 +145,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 
 - A timeout is `uncertain`, never a failure: the answer may still arrive.
 - Send is disabled for a question while its answer is on the way.
+- The folder is read when it changes, on a 2 second interval of its own while a registered source could take an answer, and on `onDidFocus` and `onDidChangeConversations` from any source.
 
 ## Timing and limits
 
@@ -154,6 +156,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Change during a list call | One more call after it |
 | Answer waiting to be taken | 15 seconds |
 | Taken answer waiting for its outcome | 20 seconds |
+| Answers folder read on its own interval | 2 seconds |
+| Plan folder and conversation list events gathered up for | 250 ms |
 | Conversations per list | 2000 |
 | Plan file | 8 MB, regular files only |
 | Logo file | 256 KB, regular files only |

@@ -27,6 +27,16 @@ const { sharedHome } = require('./files');
 
 const CONFIG = 'agentWorkPlan';
 const REFRESH_MS = 30000;
+/*
+ * How often the answers folder is read when nothing has told this window to look. It has to be well under the 15
+ * seconds a sender waits (src/answers.js TAKE_MS) or an answer is withdrawn as undelivered while a window that could
+ * have delivered it sits waiting for its next turn. fs.watch() is the normal way this window hears about one, and this
+ * is what covers the cases where it hears nothing: the server out of inotify watches, the folder removed and made
+ * again, a home folder on a network file system, or a file that arrived while no conversation it could go to was open.
+ */
+const ANSWER_POLL_MS = 2000;
+/* How long events that each ask for the same redraw are gathered up for. */
+const DEBOUNCE_MS = 250;
 /* How long a pass of the Conversations tree waits for a source's list before drawing that source's previous one, and
    after how long a list still outstanding is shown as a problem. */
 const LIST_WAIT_MS = 3000;
@@ -227,6 +237,22 @@ function create(host, opts = {}) {
     if (workplan.refresh() || moved) paintBadge();
     refreshConversations(false);
   };
+  /*
+   * One write of one plan file arrives as several create and change events, and a source that keeps its conversation
+   * list current can fire onDidChangeConversations as fast as it likes. Each pass reads the plan file of every
+   * conversation of this workspace, on the extension host thread the Claude Code and Codex panels share, so the events
+   * are gathered up first and the work is done once.
+   */
+  const soon = Number.isFinite(opts.debounceMs) ? opts.debounceMs : DEBOUNCE_MS;
+  let plansTimer = 0, convTimer = 0;
+  const plansSoon = () => {
+    if (closing || plansTimer) return;
+    plansTimer = setTimeout(() => { plansTimer = 0; refreshPlans(); }, soon);
+  };
+  const convSoon = () => {
+    if (closing || convTimer) return;
+    convTimer = setTimeout(() => { convTimer = 0; refreshConversations(false); }, soon);
+  };
 
   /* ── Answers ── */
   const answersDir = () => path.join(opts.home || sharedHome(), 'answers');
@@ -264,7 +290,8 @@ function create(host, opts = {}) {
   keep(vscode.window.registerWebviewViewProvider('agentWorkPlan.answer', answerView, { webviewOptions: { retainContextWhenHidden: true } }));
 
   /* Created only once a source is registered and the window is trusted, which is also when the folder is made. */
-  let courier = null, answersWatch = null, answersSoon = 0;
+  let courier = null, answersWatch = null, answersSoon = 0, answersPoll = 0;
+  const answerPollMs = Number.isFinite(opts.answerPollMs) ? opts.answerPollMs : ANSWER_POLL_MS;
   const delivery = answers.throughSources((id) => registry.get(id));
   const pumpSoon = () => {
     if (answersSoon || !courier) return;
@@ -272,6 +299,39 @@ function create(host, opts = {}) {
       answersSoon = 0;
       try { if (courier) courier.pump(); } catch (e) { say('answer: ' + ((e && e.message) || e)); }
     }, 50);
+  };
+  /* Whether any registered source could take an answer at all. canDeliver() needs a conversation to ask about, so this
+     is as close as this window can get without one: no source that can be handed an answer, nothing to poll for. */
+  const mayDeliver = () => {
+    for (const s of registry.all()) if (typeof sources.get(s, 'deliverAnswer') === 'function') return true;
+    return false;
+  };
+  const dropWatch = () => {
+    if (!answersWatch) return;
+    try { answersWatch.close(); } catch (_) { /* closed already */ }
+    answersWatch = null;
+  };
+  const watchAnswers = (dir) => {
+    dropWatch();
+    try {
+      const w = fs.watch(dir, pumpSoon);
+      answersWatch = w;
+      /* A watcher that errors is gone for good; the poll makes a new one. */
+      w.on('error', () => { if (answersWatch === w) dropWatch(); });
+    } catch (e) { say('answer folder: ' + ((e && e.message) || e)); }
+  };
+  const pollAnswers = () => {
+    if (closing || !courier) return;
+    if (!answersWatch) {
+      try { require('./files').privateDir(answersDir()); } catch (_) { /* tried again next time */ }
+      watchAnswers(answersDir());
+    }
+    try { courier.pump(); } catch (e) { say('answer: ' + ((e && e.message) || e)); }
+  };
+  const tuneAnswerPoll = () => {
+    const want = !!courier && !closing && mayDeliver();
+    if (want && !answersPoll) answersPoll = setInterval(pollAnswers, answerPollMs);
+    else if (!want && answersPoll) { clearInterval(answersPoll); answersPoll = 0; }
   };
   const courierNow = () => {
     if (courier) return courier;
@@ -290,10 +350,10 @@ function create(host, opts = {}) {
     });
     try {
       require('./files').privateDir(dir);
-      answers.sweep(dir);
-      answersWatch = fs.watch(dir, pumpSoon);
-      answersWatch.on('error', () => { try { answersWatch.close(); } catch (_) { /* closed */ } answersWatch = null; });
+      courier.sweep();
+      watchAnswers(dir);
     } catch (e) { say('answer folder: ' + ((e && e.message) || e)); }
+    tuneAnswerPoll();
     return courier;
   };
 
@@ -327,13 +387,17 @@ function create(host, opts = {}) {
 
   /* ── Sources coming and going ── */
   const changed = (e) => {
-    let again = !focus.sourceId;
+    /* A source that registers late is offered the tab already in front even when another source has the focus: that
+       tab may be its own, opened before its extension had finished starting, and nothing else would offer it again
+       until the reader switched tabs and back. */
+    let again = !focus.sourceId || !!e.added;
     if (e.removed && focus.drop(e.removed)) { showFocus(); again = true; }
     if (again) claimTab(true);
     if (e.added) listState(e.entry).askNext = true;
     paintPlanView();
     refreshConversations(false);
     if (e.added) { courierNow(); pumpSoon(); }
+    tuneAnswerPoll();
   };
   const attach = (entry) => {
     const { id, source } = entry;
@@ -350,24 +414,34 @@ function create(host, opts = {}) {
           && sources.call(source, 'isFocused', [sessionId], false) !== true) return;
         if (focus.report(id, sessionId || '')) showFocus();
       }, 0);
+      /* A conversation coming to the front is the usual reason this window can now deliver an answer that arrived
+         while it could not. */
+      pumpSoon();
     }));
     hold(sources.listen(source, 'onDidChangeConversations', () => {
       if (!registry.has(entry)) return;
       const st = listState(entry);
       if (st.pending) st.askAgain = true; else st.askNext = true;
-      refreshConversations(false);
+      convSoon();
+      pumpSoon();
     }));
     hold(sources.listen(source, 'onDidChangePlanNotice', () => { if (registry.has(entry)) paintPlanView(); }));
-    /* The watcher's base is the parent directory because a plan directory may not exist yet. Watchers outside the
-       workspace are not guaranteed to fire; the tick refreshes too. */
+    /*
+     * The plan directory itself is the base and the pattern has no path separator in it. A pattern that has one, as
+     * `<directory>/*.json` relative to the parent would, makes VS Code watch the base recursively
+     * (extHostFileSystemEventService.ts ensureWatching turns `recursive` on for a pattern containing GLOB_SPLIT, which
+     * is '/'), and the parent of a plan directory is a conversation store holding a transcript per conversation. A
+     * directory that does not exist yet is not a reason to watch the parent: a non-recursive request for a missing path
+     * is suspended and polled until it appears, then resumed (baseWatcher.ts suspendWatchRequest). Watchers outside the
+     * workspace are not guaranteed to fire at all, which is what the tick is for.
+     */
     const dir = sources.planDirOf(source);
     if (dir) {
       try {
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(vscode.Uri.file(path.dirname(dir)), path.basename(dir) + '/*.json'));
-        watcher.onDidCreate(refreshPlans);
-        watcher.onDidChange(refreshPlans);
-        watcher.onDidDelete(refreshPlans);
+        const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(dir), '*.json'));
+        watcher.onDidCreate(plansSoon);
+        watcher.onDidChange(plansSoon);
+        watcher.onDidDelete(plansSoon);
         hold(watcher);
       } catch (e) { say('work plan watcher not available: ' + ((e && e.message) || e)); }
     }
@@ -441,7 +515,7 @@ function create(host, opts = {}) {
   const tick = setInterval(() => {
     askAll();
     refreshPlans();
-    try { if (courier) courier.pump(); } catch (e) { say('answer: ' + ((e && e.message) || e)); }
+    try { if (courier) { courier.sweep(); courier.pump(); } } catch (e) { say('answer: ' + ((e && e.message) || e)); }
   }, Number.isFinite(opts.refreshMs) ? opts.refreshMs : REFRESH_MS);
   if (opts.limit && trusted()) opts.limit.start();
   claimTab(true);
@@ -458,9 +532,12 @@ function create(host, opts = {}) {
     dispose() {
       closing = true;
       clearInterval(tick);
+      if (answersPoll) { clearInterval(answersPoll); answersPoll = 0; }
+      if (plansTimer) clearTimeout(plansTimer);
+      if (convTimer) clearTimeout(convTimer);
       if (drawTimer) clearTimeout(drawTimer);
       if (answersSoon) clearTimeout(answersSoon);
-      if (answersWatch) { try { answersWatch.close(); } catch (_) { /* closed */ } }
+      dropWatch();
       if (courier) courier.dispose();
       for (const [t, fn] of waits) { clearTimeout(t); try { fn(); } catch (_) { /* closing anyway */ } }
       waits.clear();

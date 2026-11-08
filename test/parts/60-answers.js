@@ -77,6 +77,37 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   advance(answers.TAKE_MS + answers.SEND_MS + 5200);
   eq(orphanSender.finished, [['gone', 'uncertain', '']], 'an answer taken by a window that never settles it is uncertain');
 
+  /* A window that closed before anyone could take its answer leaves the file behind. Another window opening that
+     conversation an hour later must not deliver it: the reader was told nothing was sent, and may have typed it again
+     by hand. */
+  const old = answers.post(dir, { sourceId: 'codex', sessionId: 'S', row: '9', text: 'from a window that closed' },
+    clock - answers.TAKE_MS - answers.LATE_MS - 1);
+  const wasDelivered = delivered.length;
+  const late = window({ codex: source('submitted') });
+  late.courier.pump(); await settle(); await settle();
+  eq([delivered.length - wasDelivered, fs.existsSync(path.join(dir, old + '.json')), fs.existsSync(path.join(dir, old + '.taken')),
+    JSON.parse(fs.readFileSync(path.join(dir, old + '.result'), 'utf8')).outcome],
+    [0, false, false, 'notReceived'], 'an answer older than the time it had to be taken is thrown away, not delivered');
+  fs.unlinkSync(path.join(dir, old + '.result'));
+
+  /* Closing a window takes back what it sent and nobody took. */
+  const leaving = window({});
+  const untaken = leaving.courier.send({ sourceId: 'codex', sessionId: 'T', row: '10', text: 'on its way out' }, { key: 'untaken' });
+  const there = fs.existsSync(path.join(dir, untaken + '.json'));
+  leaving.courier.dispose();
+  eq([there, fs.existsSync(path.join(dir, untaken + '.json'))], [true, false],
+    'a window closing takes back the answers it sent that no window had taken');
+
+  /* One already taken is left alone: the window that took it is still working on it. */
+  const handedOver = window({});
+  const working = window({ codex: { canDeliver: () => true, deliverAnswer: () => new Promise(() => {}) } });
+  const busyId = handedOver.courier.send({ sourceId: 'codex', sessionId: 'S', row: '11', text: 'in hand' }, { key: 'inhand' });
+  working.courier.pump(); await settle();
+  handedOver.courier.dispose();
+  eq(fs.existsSync(path.join(dir, busyId + '.taken')), true, 'one a window has taken is left with it');
+  working.courier.dispose();
+  fs.unlinkSync(path.join(dir, busyId + '.taken'));
+
   /* Newer formats, malformed files, Restricted Mode. */
   fs.writeFileSync(path.join(dir, 'aa-00000002.json'), JSON.stringify({ id: 'aa-00000002', sourceId: 'codex', sessionId: 'S', text: 'newer', at: clock, format: answers.FORMAT + 1 }));
   fs.writeFileSync(path.join(dir, 'aa-00000003.json'), JSON.stringify({ id: 'aa-00000003', sessionId: 'S', text: 'no source', at: clock, format: 1 }));
@@ -123,4 +154,26 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq(second, { state: 'submitted', draft: false }, 'a submitted answer clears its draft');
   eq(key, 'codex/S/1', 'the question is keyed by source, session and row');
   b.close();
+
+  /*
+   * The answers folder is read on its own short interval as well as when the folder changes. An answer that arrives
+   * while no conversation it could go to is open leaves nothing further for the watcher to report, and the sender gives
+   * up on it after 15 seconds, so waiting for the 30 second tick loses it about half the time.
+   */
+  {
+    const p = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 1e9, refreshMs: 1e9, answerPollMs: 25 } });
+    const taken2 = [];
+    let ready = false;
+    p.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', listConversations: async () => [],
+      canDeliver: () => ready, deliverAnswer: async (id, text) => { taken2.push(text); return { outcome: 'submitted' }; } });
+    await wait(40);
+    answers.post(path.join(p.home, 'answers'), { sourceId: 'codex', sessionId: 'S', row: '1', text: 'waited for' });
+    await wait(80);
+    const whileClosed = taken2.length;
+    ready = true;
+    await wait(120);
+    eq([whileClosed, taken2], [0, ['waited for']],
+      'an answer nothing could take yet is delivered once a source can take it, with no further change to the folder');
+    p.close();
+  }
 };

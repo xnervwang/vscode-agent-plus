@@ -39,6 +39,10 @@ const OUTCOMES = ['submitted', 'drafted', 'notReceived', 'uncertain'];
 const TAKE_MS = 15000;
 const SEND_MS = 20000;
 const KEEP_MS = 3600e3;
+/* Added to TAKE_MS before a receiving window calls an answer too late to deliver. The sender withdraws its own at
+   TAKE_MS, so this only ever applies to one left behind by a window that closed or lost its connection, and the few
+   seconds are there so a record is never thrown away over a rounding difference. */
+const LATE_MS = 5000;
 const NAME = /^[0-9a-z]+-[0-9a-f]{8}$/;
 const MAX_REASON = 200;
 
@@ -167,12 +171,24 @@ class Courier {
     return id;
   }
 
+  /** Removes the files left behind by windows that closed: see sweep(). Called on the tick as well as at the start. */
+  sweep() {
+    return sweep(this.dir, this.now());
+  }
+
   pump() {
     if (this.closed) return;
     let claim = false;
     try { claim = this.claiming() === true; } catch (_) { claim = false; }
     for (const a of claim ? waiting(this.dir) : []) {
       if (this.handing.has(a.id)) continue;
+      /* The window that sent this one gave up on it long ago, or died before it could. Delivering it now would put a
+         message into a conversation the reader has given up on and may have answered by hand already. The record is
+         taken first, so of several windows showing that conversation exactly one disposes of it. */
+      if (this.now() - Number(a.at) > TAKE_MS + LATE_MS) {
+        if (take(this.dir, a.id)) settle(this.dir, a.id, { outcome: 'notReceived', reason: 'it was too late to deliver' });
+        continue;
+      }
       let shows = false;
       try { shows = this.canShow(a.sessionId, a.sourceId) === true; } catch (_) { shows = false; }
       if (!shows || !take(this.dir, a.id)) continue;
@@ -209,6 +225,13 @@ class Courier {
     for (const t of this.checks) this.cancel(t);
     this.handing.clear();
     this.checks.clear();
+    /* A window closing takes back the answers it sent that no window has taken: nobody is left to hear the outcome, so
+       one delivered after this would arrive with nothing on screen to say it had. One already taken is left alone, the
+       window that took it is still working on it. */
+    for (const id of [...this.outgoing.keys()]) {
+      this.outgoing.delete(id);
+      if (!taken(this.dir, id)) withdraw(this.dir, id);
+    }
   }
 }
 
@@ -236,5 +259,5 @@ function message(row, question, answer) {
   return t.answerMessage(row, String(question || '').trim(), String(answer || '').trim());
 }
 
-module.exports = { FORMAT, OUTCOMES, TAKE_MS, SEND_MS, KEEP_MS, post, waiting, take, settle, outcome, withdraw, taken, sweep,
-  normalize, message, throughSources, Courier };
+module.exports = { FORMAT, OUTCOMES, TAKE_MS, SEND_MS, KEEP_MS, LATE_MS, post, waiting, take, settle, outcome, withdraw,
+  taken, sweep, normalize, message, throughSources, Courier };

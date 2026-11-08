@@ -104,20 +104,20 @@
         {
           "id": "agentWorkPlan.workPlan",
           "name": "Work plan",
-          "when": "agentWorkPlan.active && config.agentWorkPlan.workPlanView"
+          "when": "!agentWorkPlan.alone && config.agentWorkPlan.workPlanView"
         }
       ],
       "agentWorkPlanPanel": [
         {
           "id": "agentWorkPlan.conversations",
           "name": "Conversations",
-          "when": "agentWorkPlan.active && config.agentWorkPlan.conversationsView"
+          "when": "!agentWorkPlan.alone && config.agentWorkPlan.conversationsView"
         },
         {
           "type": "webview",
           "id": "agentWorkPlan.answer",
           "name": "Answer",
-          "when": "agentWorkPlan.active && config.agentWorkPlan.conversationsView"
+          "when": "!agentWorkPlan.alone && config.agentWorkPlan.conversationsView"
         }
       ]
     },
@@ -159,19 +159,19 @@
       "commandPalette": [
         {
           "command": "agentWorkPlan.refreshWorkPlan",
-          "when": "agentWorkPlan.active"
+          "when": "!agentWorkPlan.alone"
         },
         {
           "command": "agentWorkPlan.openWorkPlanFile",
-          "when": "agentWorkPlan.active"
+          "when": "!agentWorkPlan.alone"
         },
         {
           "command": "agentWorkPlan.showConversations",
-          "when": "agentWorkPlan.active"
+          "when": "!agentWorkPlan.alone"
         },
         {
           "command": "agentWorkPlan.restoreWebviewRequestLimit",
-          "when": "agentWorkPlan.active"
+          "when": "!agentWorkPlan.alone"
         },
         {
           "command": "agentWorkPlan.showWorkPlanDetail",
@@ -202,6 +202,7 @@
         },
         "agentWorkPlan.webviewRequestLimit": {
           "type": "string",
+          "scope": "application",
           "enum": [
             "ask",
             "raise",

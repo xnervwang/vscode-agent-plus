@@ -18,7 +18,17 @@ const compat = require('./compat');
 const PACKAGE = require('../package.json');
 
 const FAMILY = 'agent-work-plan';
-const ACTIVE_KEY = 'agentWorkPlan.active';
+/*
+ * The views, the status bar entry and the commands are hidden by one context key, and it reads the other way round:
+ * they show unless agentWorkPlan.alone says this extension is installed with nothing that uses it. A key this extension
+ * sets does not exist until activate() has run, and VS Code puts a window's panel back while extensions are still
+ * starting: a view whose `when` wants a key of ours would be inactive at that moment (viewContainerModel.ts sets
+ * state.active from the `when` when the view is added, which happens as the manifests are read), its container would
+ * come up with nothing in it, and the panel the window had open would be replaced by another. Reading the key the other
+ * way round means an unset key shows the views, which is what a window with a dependent installed wants. The price is
+ * that a window which really is alone draws them for a moment before the key is set.
+ */
+const ALONE_KEY = 'agentWorkPlan.alone';
 const HAD_KEY = 'agentWorkPlan.hadDependents';
 const TOLD_KEY = 'agentWorkPlan.toldAlone';
 /* How long after start the one-off notices wait, so they do not compete with the window opening. */
@@ -60,7 +70,7 @@ function start(context, log, opts = {}) {
   };
 
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
-  const limit = typeof opts.limit === 'function' ? opts.limit(host) : null;
+  const limit = typeof opts.limit === 'function' ? opts.limit(host, { home: opts.home }) : null;
 
   /* ── Whether anything uses this extension ── */
   let deps = [];
@@ -68,7 +78,7 @@ function start(context, log, opts = {}) {
   const setActive = (on) => {
     if (on === active) return;
     active = on;
-    Promise.resolve(vscode.commands.executeCommand('setContext', ACTIVE_KEY, on)).catch(() => {});
+    Promise.resolve(vscode.commands.executeCommand('setContext', ALONE_KEY, !on)).catch(() => {});
     if (on && !views && typeof opts.views === 'function' && !closing) {
       try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
       if (views) for (const entry of registry.list()) attachSafely(entry);
@@ -215,4 +225,4 @@ function start(context, log, opts = {}) {
   return agentWorkPlan;
 }
 
-module.exports = { start, unavailable, FAMILY, ACTIVE_KEY, HAD_KEY, TOLD_KEY, NOTICE_DELAY_MS, COMMANDS };
+module.exports = { start, unavailable, FAMILY, ALONE_KEY, HAD_KEY, TOLD_KEY, NOTICE_DELAY_MS, COMMANDS };

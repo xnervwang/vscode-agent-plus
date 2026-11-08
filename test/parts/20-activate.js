@@ -40,7 +40,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const api = b.api;
     eq([api.family, api.protocol, api.accepts, api.features, api.version, Object.isFrozen(api)],
       ['agent-work-plan', 1, [1], [], '1.0.0', true], 'the interface: family, protocol 1, accepted majors, features, version');
-    eq(b.control.state.context['agentWorkPlan.active'], true, 'a dependent in the installed manifests turns the views on at once');
+    eq(b.control.state.context['agentWorkPlan.alone'], false, 'a dependent in the installed manifests leaves the views showing');
     const r = api.registerSource(source());
     eq([r.accepted, r.code, r.reason, typeof (r.registration && r.registration.dispose), Object.isFrozen(r)], [true, '', '', 'function', true],
       'an accepted registration says so and carries a Disposable');
@@ -63,7 +63,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   {
     const memento = fake.memento();
     const b = boot(root, tmp, { extensions: [], views: false, memento });
-    eq(b.control.state.context['agentWorkPlan.active'], false, 'alone, the views stay hidden');
+    eq(b.control.state.context['agentWorkPlan.alone'], true, 'alone, the one key the views are hidden by is set');
     await wait(20);
     const said = b.control.state.said.map((s) => [s.message.slice(0, 40), s.buttons]);
     eq(said, [['Agent Work Plan is used by Claude Code E', ['Install Claude Code Extras', 'Install Codex Extras']]],
@@ -76,7 +76,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     /* Codex Extras is installed while the window is open. */
     again.control.state.extensions.push(CODEX());
     again.control.fireExtensions();
-    eq(again.control.state.context['agentWorkPlan.active'], true, 'an extension that uses it turns the views on when it is installed');
+    eq(again.control.state.context['agentWorkPlan.alone'], false, 'installing an extension that uses it brings the views back');
     again.close();
     /* Then it is gone again. */
     const left = boot(root, tmp, { extensions: [], views: false, memento });

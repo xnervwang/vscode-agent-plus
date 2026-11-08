@@ -5,8 +5,11 @@
 'use strict';
 /*
  * Which installed extensions depend on this one, read from their manifests. This is synchronous and needs none of them
- * to have activated, so the views can be shown or hidden the moment this extension starts: VS Code restores the panel
- * a window last had open while extensions start, and a view that is hidden then stays hidden.
+ * to have activated, so being alone is settled on the first turn this extension gets rather than seconds later, when
+ * whichever extension uses it happens to register. That is what src/host.js needs to set agentWorkPlan.alone, the one
+ * key the views are hidden by, and that key is read the other way round for a reason the comment above it in
+ * src/host.js gives: the panel a window had open is put back before any of this runs, so hiding the views can only ever
+ * be something done after the fact, never something they start out as.
  *
  * vscode.extensions.all lists the extensions of this extension host that are enabled, so one installed on the other side
  * of a remote connection, or disabled, is not seen. That is why being alone is only ever said, never acted on.
