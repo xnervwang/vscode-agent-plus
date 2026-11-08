@@ -16,7 +16,8 @@ const CLAUDE = (over = {}) => ({ id: 'xnervwang.claude-code-extras', packageJSON
   displayName: 'Claude Code Extras', version: '1.1.0', extensionDependencies: ['xnervwang.agent-work-plan'], agentWorkPlan: { protocol: 1 }, ...over } });
 const SELF = () => ({ id: 'xnervwang.agent-work-plan', packageJSON: { name: 'agent-work-plan', version: '1.0.0' } });
 
-function boot(root, tmp, { extensions = [CODEX()], trusted = true, config = {}, fetch, noticeDelayMs = 0, version, views, memento, home } = {}) {
+function boot(root, tmp, { extensions = [CODEX()], trusted = true, config = {}, fetch, noticeDelayMs = 0, version, views, memento, home,
+  viewOptions, limit } = {}) {
   const { vscode, control } = fake.create({ trusted, version });
   const undo = fake.install(vscode);
   fake.fresh(root);
@@ -28,7 +29,7 @@ function boot(root, tmp, { extensions = [CODEX()], trusted = true, config = {}, 
     globalStorageUri: vscode.Uri.file(storage), extensionPath: root, extensionUri: vscode.Uri.file(root) };
   const host = require(path.join(root, 'src', 'host.js'));
   const log = { appendLine: (l) => control.state.log.push(l), dispose() {} };
-  const opts = { fetch, noticeDelayMs, home: home || tmp('shared') };
+  const opts = { fetch, noticeDelayMs, home: home || tmp('shared'), viewOptions, limit };
   if (views !== false) {
     try { opts.views = views || require(path.join(root, 'src', 'views.js')).create; } catch (_) { /* before the views exist */ }
   }

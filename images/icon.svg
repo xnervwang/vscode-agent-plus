@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="slate" x1="100" y1="70" x2="920" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#79838F"/>
+      <stop offset="0.54" stop-color="#626B77"/>
+      <stop offset="1" stop-color="#4B525D"/>
+    </linearGradient>
+  </defs>
+  <!-- Brand-neutral app tile; transparent outside the rounded square. -->
+  <rect width="1024" height="1024" rx="226" fill="url(#slate)"/>
+  <!-- The shared checklist frame has no folded corner. -->
+  <rect x="151" y="151" width="722" height="722" rx="91" stroke="#FFFFFF" stroke-width="42"/>
+  <g stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M269 352 L302 385 L372 315" stroke-width="39"/>
+    <circle cx="309" cy="516" r="42" stroke-width="28"/>
+    <circle cx="309" cy="681" r="42" stroke-width="28"/>
+    <path d="M456 352 H753 M456 516 H753 M456 681 H753" stroke-width="40"/>
+  </g>
+</svg>

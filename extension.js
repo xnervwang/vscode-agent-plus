@@ -6,10 +6,19 @@
 /*
  * Claude Code Extras and Codex Extras list this extension in extensionDependencies, and VS Code starts neither until
  * this activate() has returned. So it returns the registration interface at once, waits for no other extension, and
- * never throws: anything that fails is logged and the interface still comes back, refusing registrations with a reason.
+ * never throws: anything that fails, loading the modules included, is logged and an interface still comes back,
+ * refusing registrations with the reason.
  */
 const vscode = require('vscode');
-const { start, unavailable } = require('./src/host');
+
+/* Kept here rather than in src/ so that it exists even when a module under src/ fails to load. */
+function refusing(error) {
+  const reason = 'Agent Work Plan could not start: ' + String((error && error.message) || error || 'unknown error');
+  return Object.freeze({
+    family: 'agent-work-plan', protocol: 1, accepts: [1], features: [],
+    registerSource: () => Object.freeze({ accepted: false, code: 'failed', reason, registration: null }),
+  });
+}
 
 function activate(context) {
   let log = null;
@@ -18,13 +27,16 @@ function activate(context) {
     context.subscriptions.push(log);
   } catch (_) { log = null; }
   try {
-    return { agentWorkPlan: start(context, log) };
+    const host = require('./src/host');
+    const views = require('./src/views');
+    const limit = require('./src/request-limit');
+    return { agentWorkPlan: host.start(context, log, { views: views.create, limit: limit.create }) };
   } catch (e) {
     try { if (log) log.appendLine(`could not start: ${(e && e.stack) || e}`); } catch (_) { /* nothing left to report to */ }
-    return { agentWorkPlan: unavailable(e) };
+    return { agentWorkPlan: refusing(e) };
   }
 }
 
 function deactivate() {}
 
-module.exports = { activate, deactivate };
+module.exports = { activate, deactivate, refusing };

@@ -27,6 +27,11 @@ const eq = (got, want, msg) => {
   if (g === w) ok(msg); else bad(`${msg}: got ${g}, want ${w}`);
 };
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-work-plan-check-')));
+/* Nothing a check runs may reach the real home folder: the shared folder (src/files.js) and every other path derived
+   from the home folder point into the scratch folder. */
+process.env.AGENT_WORK_PLAN_HOME = path.join(scratch, 'shared-home');
+process.env.HOME = process.env.USERPROFILE = path.join(scratch, 'home');
+fs.mkdirSync(process.env.HOME, { recursive: true });
 let n = 0;
 /** A fresh empty directory for one check, removed with the rest when the suite ends. */
 const tmp = (name = 'd') => { const d = path.join(scratch, `${++n}-${name}`); fs.mkdirSync(d, { recursive: true }); return d; };

@@ -41,7 +41,7 @@ module.exports = async ({ ok, bad, eq, root }) => {
   if (sources.ACCEPTS.includes(sources.PROTOCOL)) ok('the host accepts its own protocol major'); else bad('ACCEPTS leaves out PROTOCOL');
   eq([pkg.extensionKind, pkg.activationEvents], [['workspace'], ['onStartupFinished']], 'it runs beside its sources and starts after startup');
   eq(pkg.capabilities && pkg.capabilities.untrustedWorkspaces && pkg.capabilities.untrustedWorkspaces.supported, 'limited', 'it runs, limited, in Restricted Mode');
-  eq(pkg.icon, undefined, 'no marketplace icon yet');
+  eq([pkg.icon, fs.existsSync(path.join(root, 'images', 'icon.png')), fs.existsSync(path.join(root, 'images', 'icon.svg'))], ['images/icon.png', true, true], 'the marketplace icon is images/icon.png, with its source beside it');
   const ids = JSON.stringify(pkg.contributes).match(/"(?:command|id|view)":"[^"]+"/g) || [];
   const foreign = ids.filter((s) => !/"(agentWorkPlan[.A-Za-z]*)"/.test(s));
   eq(foreign, [], 'every container, view and command id is in the agentWorkPlan namespace');

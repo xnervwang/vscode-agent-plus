@@ -23,6 +23,10 @@ const HAD_KEY = 'agentWorkPlan.hadDependents';
 const TOLD_KEY = 'agentWorkPlan.toldAlone';
 /* How long after start the one-off notices wait, so they do not compete with the window opening. */
 const NOTICE_DELAY_MS = 4000;
+/* Every command the manifest declares. They are registered at once, so none is ever missing, and handed to the views
+   once those exist. */
+const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
+  'openConversation', 'showStatus', 'restoreWebviewRequestLimit'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {
@@ -38,7 +42,7 @@ const disposable = (fn) => (typeof vscode.Disposable === 'function' ? new vscode
 /*
  * `opts.views(host)` builds the views and returns { attach(entry), detach(entry), dispose() } (src/views.js); without
  * it, sources register and nothing is drawn. `opts.fetch` replaces fetch() for the gallery lookups and
- * `opts.noticeDelayMs` the wait before the one-off notices, in tests.
+ * `opts.noticeDelayMs` the wait before the one-off notices, in tests; `opts.viewOptions` is passed on to the views.
  */
 function start(context, log, opts = {}) {
   const say = (m) => { try { if (log) log.appendLine(`${new Date().toISOString()} ${m}`); } catch (_) { /* no log */ } };
@@ -55,6 +59,9 @@ function start(context, log, opts = {}) {
     closing: () => closing,
   };
 
+  /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
+  const limit = typeof opts.limit === 'function' ? opts.limit(host) : null;
+
   /* ── Whether anything uses this extension ── */
   let deps = [];
   let active = null;
@@ -63,7 +70,7 @@ function start(context, log, opts = {}) {
     active = on;
     Promise.resolve(vscode.commands.executeCommand('setContext', ACTIVE_KEY, on)).catch(() => {});
     if (on && !views && typeof opts.views === 'function' && !closing) {
-      try { views = opts.views(host); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
+      try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
       if (views) for (const entry of registry.list()) attachSafely(entry);
     }
     if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
@@ -165,17 +172,45 @@ function start(context, log, opts = {}) {
     },
   });
 
+  /* ── Commands ── */
+  const status = () => {
+    const lines = [
+      `Agent Work Plan ${core.version}: protocol ${core.protocol}, accepts ${core.accepts.join(', ')}`,
+      `Workspace trusted: ${host.trusted() ? 'yes' : 'no (Restricted Mode: read only)'}`,
+      `Extensions using it: ${deps.map((d) => `${d.id} ${d.version} (protocol ${d.protocol || 'not declared'})`).join(', ') || 'none'}`,
+      ...(views ? views.commands.statusLines() : ['The views are not built: nothing here uses this extension.']),
+    ];
+    if (log) { for (const l of lines) log.appendLine(l); try { log.show(true); } catch (_) { /* no panel */ } }
+    return lines;
+  };
+  const run = (name, args) => {
+    if (name === 'showStatus') return status();
+    if (name === 'restoreWebviewRequestLimit') return limit ? limit.putBack() : undefined;
+    const fn = views && views.commands[name];
+    return typeof fn === 'function' ? fn(...args) : undefined;
+  };
+  for (const name of COMMANDS) {
+    try {
+      context.subscriptions.push(vscode.commands.registerCommand(`agentWorkPlan.${name}`, (...args) => {
+        try { return Promise.resolve(run(name, args)).catch((e) => say(`${name}: ${(e && e.message) || e}`)); }
+        catch (e) { say(`${name}: ${(e && e.message) || e}`); return undefined; }
+      }));
+    } catch (e) { say(`could not register agentWorkPlan.${name}: ${(e && e.message) || e}`); }
+  }
+
   context.subscriptions.push({ dispose: () => {
     closing = true;
     for (const t of timers) clearTimeout(t);
     timers.clear();
     if (views) { try { views.dispose(); } catch (_) { /* closing anyway */ } views = null; }
+    if (limit) { try { limit.dispose(); } catch (_) { /* closing anyway */ } }
     for (const entry of registry.list()) unhook(entry.subs);
     registry.clear();
   } });
   host.dependents = () => deps.slice();
   host.api = agentWorkPlan;
+  host.views = () => views;
   return agentWorkPlan;
 }
 
-module.exports = { start, unavailable, FAMILY, ACTIVE_KEY, HAD_KEY, TOLD_KEY, NOTICE_DELAY_MS };
+module.exports = { start, unavailable, FAMILY, ACTIVE_KEY, HAD_KEY, TOLD_KEY, NOTICE_DELAY_MS, COMMANDS };

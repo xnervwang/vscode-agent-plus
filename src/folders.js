@@ -1,0 +1,43 @@
+// BSD 3-Clause License
+// Copyright (c) 2026, Xnerv Wang
+// All rights reserved.
+
+'use strict';
+/*
+ * The two parts of src/waiting.js in vscode-claude-code-extras bb28f51 that are not about Claude Code: whether a
+ * conversation's folder is in this window's workspace, and which rows of a plan wait on the user.
+ */
+const fs = require('fs');
+const path = require('path');
+
+/* So that /home/x and /local/home/x match when one is a symbolic link to the other. */
+const realPath = (p) => { try { return fs.realpathSync.native(p); } catch (_) { return path.resolve(p); } };
+const caseOf = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
+
+/* A test for "is this directory one of `folders` or under one", comparing real paths. */
+function folderTest(folders) {
+  const roots = (folders || []).filter(Boolean).map((f) => caseOf(realPath(f)));
+  return (dir) => {
+    if (!dir || !roots.length) return false;
+    const cwd = caseOf(realPath(dir));
+    return roots.some((root) => {
+      const rel = path.relative(root, cwd);
+      return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+    });
+  };
+}
+
+/** The rows of a plan that wait on the user, each with the number shown in front of it. */
+function planQuestions(nodes, prefix = '', out = []) {
+  (nodes || []).forEach((n, i) => {
+    const num = (prefix ? prefix + '.' : '') + (i + 1);
+    if (n.waitingOn === 'user' && (n.state === 'waiting' || n.state === 'discussing')) {
+      out.push({ num, title: n.title, question: n.question || n.title, since: n.asked || n.since || 0, state: n.state,
+        note: n.note || '', detail: n.detail || '' });
+    }
+    planQuestions(n.children, num, out);
+  });
+  return out;
+}
+
+module.exports = { folderTest, planQuestions };
