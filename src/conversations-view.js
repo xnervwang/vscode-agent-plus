@@ -25,6 +25,18 @@ const LOOK = {
   idle: ['circle-outline', 'descriptionForeground'],
 };
 
+/*
+ * The question a row is asking, in the shape the Answer view is handed it in. Built in one place, so the question the
+ * reader clicked and the one handed back on a later pass (AnswerView.revise) cannot differ in shape.
+ */
+function questionOf(c, q, from = (c.source && c.source.id) || c.sourceId || '') {
+  return {
+    sourceId: from, sessionId: c.sessionId, row: q.row, rowTitle: q.title, question: q.question, note: q.note,
+    detail: q.detail, since: q.since, conversation: c.title, running: c.running,
+    open: { sourceId: from, sessionId: c.sessionId, cwd: c.cwd, title: c.title },
+  };
+}
+
 class ConversationsProvider {
   constructor() {
     this._emitter = new vscode.EventEmitter();
@@ -111,13 +123,7 @@ class ConversationsProvider {
       item.iconPath = new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.orange'));
       item.description = t.asked(ageSince(q.since));
       item.tooltip = `${q.question}\n\n${q.row}. ${q.title}`;
-      item.command = {
-        command: 'agentWorkPlan.answerQuestion', title: 'Answer it',
-        arguments: [{
-          sourceId, sessionId: c.sessionId, row: q.row, rowTitle: q.title, question: q.question, note: q.note, detail: q.detail,
-          since: q.since, conversation: c.title, running: c.running, open: target,
-        }],
-      };
+      item.command = { command: 'agentWorkPlan.answerQuestion', title: 'Answer it', arguments: [questionOf(c, q, sourceId)] };
       return item;
     }
     const d = element.d;
@@ -133,4 +139,4 @@ class ConversationsProvider {
   }
 }
 
-module.exports = { ConversationsProvider, LOOK };
+module.exports = { ConversationsProvider, questionOf, LOOK };

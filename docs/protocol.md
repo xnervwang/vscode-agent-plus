@@ -79,7 +79,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `logo` | `{ light, dark }` SVG `vscode.Uri` values, read from the agent's own extension; drawn with a state dot when more than one source is registered |
 | `planPath(sessionId)` | Absolute path of the conversation's plan file, or `null` |
 | `planDir()` | Folder of the plan files; the core watches it, with the folder itself as the watcher's base and `*.json` as the pattern, and never writes or deletes in it. A folder that does not exist yet is watched once it appears |
-| `sessionForTab(tab)` | A session id for a tab showing that conversation; `''` for this source's tab with no conversation yet; anything else for a tab not its own |
+| `sessionForTab(tab)` | A session id for a tab showing that conversation; `''` for this source's tab with no conversation yet; anything else for a tab not its own. Asked again for the same tab object once its label changes, and on every tab event while the last answer was `''`: a tab keeps one object for its whole life, so a new conversation answers `''` and then an id without ever becoming a different tab |
 | `onDidFocus` | `vscode.Event<{ sessionId }>` when a conversation comes to front outside an editor tab |
 | `isFocused(sessionId)` | Whether that conversation is still in front; the core asks before taking an `onDidFocus` report |
 | `listConversations()` | `Promise<Conversation[]>`; the array may carry a string `problem`, shown above the source's rows |
@@ -116,13 +116,18 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Unknown state | Drawn with its name and "this version of Agent Work Plan does not know this state"; counted nowhere, and the Conversations row says how many |
 | `waitingOn` | `user`, `build`, `someone`, `session`, `other` |
 | Changes | Fields are only added; a changed meaning takes a new `format` |
+| Writing | Nothing is asked of how a plan file is written. A file read halfway through a write does not parse, and the core shows the plan that last parsed while that file was written in the past 2 seconds; after that the row says it could not be read |
+| Reading again | A file whose modification time and size are both unchanged is not parsed again. `Agent Work Plan: Refresh` parses every plan afresh |
 
 ## The conversation in front
 
 - Every change of editor tabs offers the active tab to each source's `sessionForTab`.
 - A session id moves the work plan view to that conversation; `''` shows that source with no plan; anything else from every source leaves the view where it was.
+- The sources are asked in the order they registered, and the first with an answer has it.
+- A source registering is offered the tab in front there and then, whether or not another source holds the focus: that tab may be its own, opened before its extension had finished starting.
+- A source unregistering gives up the focus, and the tab is offered again to the sources that are left, never back to the one going away.
 - `onDidFocus` moves the view a moment later, if `isFocused` (when present) still says so. An empty `sessionId` clears the view only when it shows that source.
-- The latest signal wins.
+- The latest signal wins, counted in the order the signals arrived: a focus report acted on after the reader has changed tabs is dropped.
 
 ## Answers
 
@@ -142,6 +147,9 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `drafted` | It is in the conversation's input box, not sent | Keeps the draft; says to press Enter there |
 | `notReceived` | It did not get there; `reason` says why | Keeps the draft; copies the answer to the clipboard |
 | `uncertain` | Handed over with no outcome in time, or the source cannot tell | Keeps the draft; says to look before sending again; no clipboard copy |
+
+- `submitted` clears the draft only while the box still holds the text that was sent; anything typed while the answer was on its way is kept.
+- A row that stopped asking, or whose conversation stopped, takes no answer: the view says so instead. A row now asking something else keeps its draft and drops the outcome of the question before it.
 
 - A timeout is `uncertain`, never a failure: the answer may still arrive.
 - Send is disabled for a question while its answer is on the way.

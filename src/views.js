@@ -17,11 +17,12 @@ const path = require('path');
 const sources = require('./sources');
 const { readPlanAt, countOpen, countUnknown, MAX_PLAN_BYTES } = require('./workplan');
 const { WorkPlanProvider, ageSince } = require('./workplan-view');
-const { ConversationsProvider } = require('./conversations-view');
+const { ConversationsProvider, questionOf } = require('./conversations-view');
 const conversations = require('./conversations');
 const conversationsText = require('./conversations-text');
+const folders = require('./folders');
 const sourceIcons = require('./sourceicons');
-const { AnswerView } = require('./answer-view');
+const { AnswerView, questionKey } = require('./answer-view');
 const answers = require('./answers');
 const { sharedHome } = require('./files');
 
@@ -37,6 +38,8 @@ const REFRESH_MS = 30000;
 const ANSWER_POLL_MS = 2000;
 /* How long events that each ask for the same redraw are gathered up for. */
 const DEBOUNCE_MS = 250;
+/* A plan file that does not parse and was written this recently is taken to be half-written rather than broken. */
+const WRITING_MS = 2000;
 /* How long a pass of the Conversations tree waits for a source's list before drawing that source's previous one, and
    after how long a list still outstanding is shown as a problem. */
 const LIST_WAIT_MS = 3000;
@@ -67,11 +70,36 @@ function create(host, opts = {}) {
 
   /* ── The work plan of the conversation in front ── */
   const focus = new sources.Focus();
+  /*
+   * Plans are read again for every conversation of this workspace on every pass, and a plan file can be 8 MB. A file
+   * whose modification time and size are both what they were last time is the same file, so the parse is kept. The
+   * modification time is in milliseconds, so a writer that replaced a file within the same millisecond and kept its
+   * size exactly would not be noticed; the refresh command drops the whole cache for that.
+   */
+  const plans = new Map();
+  const statOf = (file) => { try { return fs.statSync(file); } catch (_) { return null; } };
   const planOf = (sourceId, session) => {
     const source = registry.get(sourceId);
     const file = source ? sources.planFileOf(source, session) : '';
-    return { file, plan: file ? readPlanAt(file, session, MAX_PLAN_BYTES) : null };
+    if (!file) return { file: '', plan: null };
+    const st = statOf(file);
+    const had = plans.get(file);
+    if (st && had && had.session === session && had.mtimeMs === st.mtimeMs && had.size === st.size) return { file, plan: had.plan };
+    const plan = readPlanAt(file, session, MAX_PLAN_BYTES);
+    /*
+     * The protocol asks nothing of how a plan file is written, so a reader can land in the middle of one. A file that
+     * does not parse and was written moments ago is being written right now: the plan that last parsed is shown for a
+     * little longer rather than a warning row that will be gone by the next pass, and a conversation that has stopped
+     * does not drop out of the list and come back. A file that still does not parse after that says so.
+     */
+    if (plan && plan.error && had && had.plan && !had.plan.error && st && Date.now() - st.mtimeMs < WRITING_MS) {
+      return { file, plan: had.plan };
+    }
+    if (st) plans.set(file, { session, mtimeMs: st.mtimeMs, size: st.size, plan });
+    else plans.delete(file);
+    return { file, plan };
   };
+  const planMtime = (file) => { const had = plans.get(file); if (had) return had.mtimeMs; const st = statOf(file); return st ? st.mtimeMs : 0; };
   const workplan = new WorkPlanProvider({ read: (session, sourceId) => planOf(sourceId, session).plan });
   workplan.setScoped(true);
   const view = keep(vscode.window.createTreeView('agentWorkPlan.workPlan', { treeDataProvider: workplan }));
@@ -177,6 +205,17 @@ function create(host, opts = {}) {
     });
   };
   const askAll = () => { for (const entry of registry.list()) listState(entry).askNext = true; };
+  /*
+   * The folder test resolves symbolic links, and it is asked about the folder of every conversation on every pass, so
+   * the answers are kept. It is built again, with nothing kept, whenever the workspace folders change; a symbolic link
+   * repointed while the window stays open is not noticed.
+   */
+  let folderKey = null, folderIn = null;
+  const folderTestFor = (list) => {
+    const key = JSON.stringify(list);
+    if (key !== folderKey || !folderIn) { folderKey = key; folderIn = folders.folderTest(list, new Map()); }
+    return folderIn;
+  };
   const rowIcons = new Map(), rowIconUris = new Map();
   const iconsDir = () => path.join(context.globalStorageUri.fsPath, 'conversation-icons');
   const rowIcon = (source, state) => {
@@ -202,8 +241,9 @@ function create(host, opts = {}) {
       const asked = registry.list();
       const got = await Promise.all(asked.map((entry) => listFor(entry, cachedOnly)));
       if (closing) return;
-      const folders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
+      const roots = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
       const lists = [], problems = [];
+      const inFolder = folderTestFor(roots);
       asked.forEach((entry, i) => {
         if (!registry.has(entry)) return;
         lists.push({ sourceId: entry.id, conversations: got[i].list });
@@ -211,7 +251,7 @@ function create(host, opts = {}) {
         if (listState(entry).slow) problems.push([entry.source, `it has not listed its conversations for ${Math.round(slowAfter / 1000)} seconds; still waiting`]);
       });
       const several = registry.size > 1;
-      const data = conversations.assemble({ lists, folders, planOf });
+      const data = conversations.assemble({ lists, folders: roots, planOf, modified: planMtime, inFolder });
       for (const c of data.running.concat(data.stopped)) {
         const source = registry.get(c.sourceId);
         c.source = { id: c.sourceId, label: sources.labelOf(source) || c.sourceId };
@@ -220,6 +260,9 @@ function create(host, opts = {}) {
       const problem = problems.map(([source, what]) => (several ? sources.labelOf(source) + ': ' + what : what)).join('\n');
       conversationsTree.set(data, problem, conversationsLang());
       answerView.setLanguage(conversationsLang());
+      /* The question on screen is only as good as the last pass: the row it is on may have been reworded, finished, or
+         its conversation stopped. */
+      answerView.revise((key) => questionNow(data, key));
       paintConversations();
     } catch (e) {
       say('conversations: ' + ((e && e.message) || e));
@@ -227,6 +270,14 @@ function create(host, opts = {}) {
       convBusy = false;
       if (convAgain !== null && !closing) { const cached = convAgain; convAgain = null; refreshConversations(false, cached); }
     }
+  };
+
+  /* The question named `key` as the latest list has it, or null when no row is asking it any more. */
+  const questionNow = (data, key) => {
+    for (const c of data.running.concat(data.stopped)) {
+      for (const q of c.questions) if (questionKey(c.sourceId, c.sessionId, q.row) === key) return questionOf(c, q);
+    }
+    return null;
   };
 
   const refreshPlans = () => {
@@ -408,8 +459,11 @@ function create(host, opts = {}) {
       if (!registry.has(entry)) return;
       const sessionId = sources.get(e, 'sessionId');
       if (sessionId !== undefined && sessionId !== '' && !sources.usableId(sessionId)) return;
+      const mine = focus.mark();
       after(() => {
         if (closing || !registry.has(entry)) return;
+        /* The reader has switched tabs since this report was made, and that is the later signal. */
+        if (focus.newerThan(mine)) return;
         if (sessionId && typeof sources.get(source, 'isFocused') === 'function'
           && sources.call(source, 'isFocused', [sessionId], false) !== true) return;
         if (focus.report(id, sessionId || '')) showFocus();
@@ -451,7 +505,7 @@ function create(host, opts = {}) {
 
   /* ── Commands, called through src/host.js ── */
   const commands = {
-    refreshWorkPlan: () => { workplan.signature = ''; refreshPlans(); refreshConversations(true); },
+    refreshWorkPlan: () => { plans.clear(); workplan.signature = ''; refreshPlans(); refreshConversations(true); },
     openWorkPlanFile: async (element) => {
       const file = (element && element.plan && element.plan.file) || (workplan.shown() && workplan.shown().file);
       if (!file) { vscode.window.showInformationMessage('Agent Work Plan: the conversation in front is not keeping a work plan.'); return; }

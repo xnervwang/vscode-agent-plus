@@ -88,7 +88,16 @@ function start(context, log, opts = {}) {
   const attachSafely = (entry) => { try { views.attach(entry); } catch (e) { say(`could not show ${entry.id}: ${(e && e.message) || e}`); } };
   const rescan = () => {
     deps = dependents.dependentsOf(vscode.extensions.all);
-    if (deps.length && memento && !memento.get(HAD_KEY)) Promise.resolve(memento.update(HAD_KEY, true)).catch(() => {});
+    if (deps.length && memento) {
+      if (!memento.get(HAD_KEY)) Promise.resolve(memento.update(HAD_KEY, true)).catch(() => {});
+      /* Something uses it after all, so a notice that it was alone is taken back: it was said too early, and the next
+         time it really is alone it has to be free to say so. */
+      const told = memento.get(TOLD_KEY, {}) || {};
+      if (told.alone) {
+        const { alone, ...rest } = told;
+        Promise.resolve(memento.update(TOLD_KEY, rest)).catch(() => {});
+      }
+    }
     setActive(deps.length > 0 || registry.size > 0);
     return deps;
   };
@@ -125,9 +134,21 @@ function start(context, log, opts = {}) {
     if (closing) return;
     for (const ext of rescan()) offerFor(ext).catch((e) => say(`update notice for ${ext.id}: ${(e && e.message) || e}`));
   };
-  later(() => { tellIfAlone().catch((e) => say(`alone notice: ${(e && e.message) || e}`)); checkDeclared(); },
-    Number.isFinite(opts.noticeDelayMs) ? opts.noticeDelayMs : NOTICE_DELAY_MS);
-  context.subscriptions.push(vscode.extensions.onDidChange(() => { rescan(); checkDeclared(); }));
+  /*
+   * The notice waits, and every change to the installed extensions makes it wait again. A remote installs extensions
+   * one at a time, and this one can be in place for several seconds before whichever extension pulled it in: saying it
+   * is alone then would be wrong, and it is said once for good.
+   */
+  const noticeWait = Number.isFinite(opts.noticeDelayMs) ? opts.noticeDelayMs : NOTICE_DELAY_MS;
+  let noticeTimer = 0;
+  const armNotice = () => {
+    if (closing) return;
+    if (noticeTimer) { clearTimeout(noticeTimer); timers.delete(noticeTimer); }
+    noticeTimer = later(() => { noticeTimer = 0; tellIfAlone().catch((e) => say(`alone notice: ${(e && e.message) || e}`)); }, noticeWait);
+  };
+  armNotice();
+  later(() => checkDeclared(), noticeWait);
+  context.subscriptions.push(vscode.extensions.onDidChange(() => { rescan(); checkDeclared(); armNotice(); }));
 
   /* ── Registration ── */
   const unhook = (subs) => { for (const d of subs) { try { d.dispose(); } catch (_) { /* already disposed */ } } subs.length = 0; };
@@ -158,13 +179,20 @@ function start(context, log, opts = {}) {
     setActive(true);
     if (views && built) attachSafely(entry);
     let gone = false;
+    /*
+     * Order matters. Listening stops first and the registry drops the entry next, so that when the views work out which
+     * conversation is in front again they cannot offer the tab back to the source that is going away: it is still in
+     * the registry while views.detach() runs, and the tab in front may well be its own. Whether anything still uses
+     * this extension is worked out last, once the registry is as it will be.
+     */
     const registration = disposable(() => {
       if (gone) return;
       gone = true;
-      try { if (views) views.detach(entry); } catch (_) { /* already gone */ }
       unhook(entry.subs);
       remove();
+      try { if (views) views.detach(entry); } catch (_) { /* already gone */ }
       say(`conversation source removed: ${entry.id}`);
+      if (!closing) rescan();
     });
     return { accepted: true, code: '', reason: '', registration };
   };

@@ -11,11 +11,17 @@
  */
 const vscode = require('vscode');
 
-/* Kept here rather than in src/ so that it exists even when a module under src/ fails to load. */
+/*
+ * Kept here rather than in src/ so that it exists even when a module under src/ fails to load. It carries every member
+ * of the interface, `version` included: a dependent reads that to work out what to tell the user, and undefined there
+ * would read as a version older than any release.
+ */
 function refusing(error) {
   const reason = 'Agent Work Plan could not start: ' + String((error && error.message) || error || 'unknown error');
+  let version = '';
+  try { version = String(require('./package.json').version || ''); } catch (_) { version = ''; }
   return Object.freeze({
-    family: 'agent-work-plan', protocol: 1, accepts: [1], features: [],
+    family: 'agent-work-plan', version, protocol: 1, accepts: [1], features: [],
     registerSource: () => Object.freeze({ accepted: false, code: 'failed', reason, registration: null }),
   });
 }

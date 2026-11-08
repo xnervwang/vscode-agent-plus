@@ -9,13 +9,27 @@
  * window showing that conversation. What was typed and not sent is kept for each question while the window is open.
  * From src/answer-view.js of vscode-claude-code-extras bb28f51.
  *
- * Only an answer known to have been submitted clears its draft. While one is on its way, Send is disabled for that
- * question, so a second click cannot send it twice. The page also reports the reader's time zone, which it alone knows
- * in a remote window.
+ * Only an answer known to have been submitted clears its draft, and only while the box still holds exactly what was
+ * sent: the reader can keep typing while one is on its way, and what they typed next is theirs. While one is on its
+ * way, Send is disabled for that question, so a second click cannot send it twice. The page also reports the reader's
+ * time zone, which it alone knows in a remote window.
+ *
+ * The question itself is not this view's to keep. The row it is on belongs to a plan another process writes, so the
+ * wording can change, the row can be finished and the conversation can stop while the question sits here. revise() is
+ * how the Conversations tree says what the row looks like now, and a row that is no longer asking is shown as one that
+ * cannot be answered rather than quietly taking an answer to a question nobody is asking.
  */
 const crypto = require('crypto');
 const { textFor } = require('./conversations-text');
 const { keyPart } = require('./sources');
+
+/* How many questions' drafts are kept. A draft is only ever dropped to keep this from growing without end in a window
+   left open for days, and the oldest goes first. */
+const KEEP_DRAFTS = 200;
+
+/* How a question is named: its source, its conversation and its row. Encoded so that two different triples cannot
+   give the same name. */
+const questionKey = (sourceId, sessionId, row) => keyPart(sourceId || '') + '/' + keyPart(sessionId) + '/' + row;
 
 class AnswerView {
   /** `send(question, text)` sends an answer, `open(target)` goes to a conversation, `age(ms)` says how long ago,
@@ -32,6 +46,22 @@ class AnswerView {
     this.restricted = false;
     this.drafts = new Map();
     this.states = new Map();
+    /* What was sent for each question, so a draft is cleared only if it is still that text. */
+    this.sent = new Map();
+    /* The wording each state was recorded against: a row asked something else now is a different question, and the
+       outcome of the last one does not belong to it. */
+    this.asked = new Map();
+  }
+
+  /* Remembers the keys whose drafts and states may be kept, oldest first. */
+  trim() {
+    for (const map of [this.drafts, this.states, this.sent, this.asked]) {
+      while (map.size > KEEP_DRAFTS) {
+        const oldest = map.keys().next();
+        if (oldest.done) break;
+        map.delete(oldest.value);
+      }
+    }
   }
 
   resolveWebviewView(view) {
@@ -48,12 +78,25 @@ class AnswerView {
       try { this.onTimeZone(m.timeZone); } catch (_) { /* the host's own zone stays */ }
       return;
     }
-    if (!m || !this.current || m.key !== this.current.key) return;
+    if (!m) return;
+    /*
+     * A draft is kept for whichever question it names, not only for the one on screen. In a remote window the page's
+     * last keystrokes can still be on their way when the reader clicks the next question, and a draft thrown away
+     * because it arrived a moment late is text the reader typed and would not find again.
+     */
+    if (m.type === 'draft' && typeof m.text === 'string' && typeof m.key === 'string' && this.drafts.has(m.key)) {
+      this.drafts.set(m.key, m.text);
+      return;
+    }
+    if (!this.current || m.key !== this.current.key) return;
     if (m.type === 'draft' && typeof m.text === 'string') {
       this.drafts.set(m.key, m.text);
+      this.trim();
     } else if (m.type === 'send' && typeof m.text === 'string' && m.text.trim() && this.current.running && !this.restricted
       && !this.sending(m.key)) {
       this.drafts.set(m.key, m.text);
+      this.sent.set(m.key, m.text);
+      this.trim();
       this.send(this.current, m.text);
     } else if (m.type === 'open' && this.current.open) {
       this.open(this.current.open);
@@ -63,9 +106,47 @@ class AnswerView {
   /** Shows `q`, a question from the Conversations tree, ready to be answered. */
   show(q) {
     if (!q || !q.sessionId || !q.row) return;
-    const key = keyPart(q.sourceId || '') + '/' + keyPart(q.sessionId) + '/' + q.row;
+    const key = questionKey(q.sourceId, q.sessionId, q.row);
     this.current = Object.assign({}, q, { key });
+    /* A row asks one question at a time, and the key is the row. A row that has gone on to ask something else is a
+       question of its own, so the outcome recorded against the last one is dropped; the draft stays, since the reader
+       typed it and only they can say whether it still fits. */
+    if (this.asked.has(key) && this.asked.get(key) !== (q.question || '')) {
+      this.states.delete(key);
+      this.sent.delete(key);
+    }
+    this.asked.set(key, q.question || '');
+    if (!this.drafts.has(key)) this.drafts.set(key, '');
+    this.trim();
     this.paint(true);
+  }
+
+  /*
+   * What the Conversations tree now says about the question on screen. `find(key)` gives the question as it stands, or
+   * nothing when that row is no longer asking: the agent reworded it, finished the row, or the conversation stopped.
+   */
+  revise(find) {
+    if (!this.current) return;
+    let fresh = null;
+    try { fresh = find(this.current.key); } catch (_) { fresh = null; }
+    if (!fresh) {
+      if (!this.current.gone) {
+        this.current = Object.assign({}, this.current, { running: false, gone: true });
+        this.paint();
+      }
+      return;
+    }
+    const next = Object.assign({}, fresh, { key: this.current.key, gone: false });
+    const was = this.current;
+    const same = ['question', 'rowTitle', 'note', 'detail', 'running', 'since', 'conversation']
+      .every((k) => next[k] === was[k]) && !was.gone;
+    this.current = next;
+    if (this.asked.get(next.key) !== (next.question || '')) {
+      this.states.delete(next.key);
+      this.sent.delete(next.key);
+      this.asked.set(next.key, next.question || '');
+    }
+    if (!same) this.paint();
   }
 
   setLanguage(lang) {
@@ -86,13 +167,21 @@ class AnswerView {
     return !!(st && st.kind === 'waiting');
   }
 
-  /** Shows the outcome of the answer to question `key`, and clears its draft once it was submitted. */
+  /**
+   * Shows the outcome of the answer to question `key`, and clears its draft once it was submitted and the box still
+   * holds the text that was sent. Anything typed while the answer was on its way is a draft of its own and is kept.
+   */
   setState(key, state) {
     this.states.set(key, Object.assign({ at: Date.now() }, state));
     if (state.kind === 'submitted') {
-      this.drafts.delete(key);
-      if (this.view && this.current && this.current.key === key) this.view.webview.postMessage({ type: 'clear', key });
+      const text = this.sent.get(key);
+      this.sent.delete(key);
+      if (text !== undefined && this.drafts.get(key) === text) {
+        this.drafts.set(key, '');
+        if (this.view && this.current && this.current.key === key) this.view.webview.postMessage({ type: 'clear', key, text });
+      }
     }
+    this.trim();
     if (this.current && this.current.key === key) this.paint();
   }
 
@@ -115,7 +204,7 @@ class AnswerView {
       draft: this.drafts.get(q.key) || '',
       running: !!q.running && !this.restricted,
       busy: !!(state && state.kind === 'waiting'),
-      notRunning: this.restricted ? t.answerRestricted : t.answerNotRunning,
+      notRunning: this.restricted ? t.answerRestricted : q.gone ? t.answerGone : t.answerNotRunning,
       status: state ? t.answerState(state.kind, this.clock(state.at), state.reason || '') : '',
       failed: !!(state && !['submitted', 'drafted', 'waiting'].includes(state.kind)),
     });
@@ -178,7 +267,8 @@ class AnswerView {
   $('open').addEventListener('click', () => vscode.postMessage({ type: 'open', key }));
   window.addEventListener('message', (e) => {
     const m = e.data || {};
-    if (m.type === 'clear') { if (m.key === key) { $('text').value = ''; ready(); } return; }
+    /* Cleared only while the box still holds what was sent: anything typed since belongs to the reader. */
+    if (m.type === 'clear') { if (m.key === key && $('text').value === m.text) { $('text').value = ''; ready(); } return; }
     if (m.type === 'empty') { $('main').style.display = 'none'; $('empty').style.display = ''; $('empty').textContent = m.text; return; }
     if (m.type !== 'show') return;
     $('empty').style.display = 'none';
@@ -205,4 +295,4 @@ class AnswerView {
   }
 }
 
-module.exports = { AnswerView };
+module.exports = { AnswerView, questionKey };

@@ -14,12 +14,19 @@ const path = require('path');
 const realPath = (p) => { try { return fs.realpathSync.native(p); } catch (_) { return path.resolve(p); } };
 const caseOf = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
 
-/* A test for "is this directory one of `folders` or under one", comparing real paths. */
-function folderTest(folders) {
-  const roots = (folders || []).filter(Boolean).map((f) => caseOf(realPath(f)));
+/*
+ * A test for "is this directory one of `folders` or under one", comparing real paths. With a `memo`, each path is
+ * resolved once: the test is asked about the folder of every conversation on every pass, and resolving one is a system
+ * call per level of it. The caller owns the memo and so decides how long an answer stays good for.
+ */
+function folderTest(folders, memo) {
+  const resolve = memo
+    ? (p) => { if (!memo.has(p)) memo.set(p, caseOf(realPath(p))); return memo.get(p); }
+    : (p) => caseOf(realPath(p));
+  const roots = (folders || []).filter(Boolean).map(resolve);
   return (dir) => {
     if (!dir || !roots.length) return false;
-    const cwd = caseOf(realPath(dir));
+    const cwd = resolve(dir);
     return roots.some((root) => {
       const rel = path.relative(root, cwd);
       return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));

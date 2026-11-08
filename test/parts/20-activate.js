@@ -28,8 +28,14 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     let r, threw = '';
     try { r = ext.activate({ subscriptions: [], globalState: fake.memento() }); } catch (e) { threw = e.message; }
     const refused = r && r.agentWorkPlan && r.agentWorkPlan.registerSource(source());
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     eq([threw, typeof (r && r.then), refused && refused.accepted, refused && refused.code, /boom/.test(refused && refused.reason)],
       ['', 'undefined', false, 'failed', true], 'activate() returns synchronously and, when start() throws, an interface that refuses with the reason');
+    /* A dependent reads these to work out what to tell the reader, so the refusing interface carries all of them. */
+    const started = require(path.join(root, 'src', 'host.js'));
+    eq(Object.keys(ext.refusing(new Error('x'))).sort(), Object.keys(started.unavailable(new Error('x'))).sort(),
+      'the interface returned when nothing could start has the same members as the one the host returns');
+    eq(ext.refusing(new Error('x')).version, pkg.version, 'including the version');
     delete require.cache[hostPath];
     undo();
   }
@@ -84,6 +90,31 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const told = left.control.state.said.map((s) => [/uninstall it in the Extensions view/.test(s.message), s.buttons]);
     eq(told, [[true, []]], 'left alone by the extensions that used it, it says it can be uninstalled, with no uninstall button');
     left.close();
+  }
+
+  /* A remote installs extensions one at a time, and this one can arrive seconds before whatever pulled it in. */
+  {
+    const memento = fake.memento();
+    const b = boot(root, tmp, { extensions: [], views: false, memento, noticeDelayMs: 60 });
+    await wait(20);
+    b.control.state.extensions.push(CODEX());
+    b.control.fireExtensions();
+    await wait(120);
+    const said = b.control.state.said.map((s) => s.message);
+    eq([said, b.control.state.context['agentWorkPlan.alone']], [[], false],
+      'the extension that uses it arriving before the notice is due keeps the notice from being said at all');
+    b.close();
+    /* And a notice said too early is taken back, so the next window that really is alone still says it. */
+    const early = fake.memento();
+    await early.update('agentWorkPlan.toldAlone', { alone: true });
+    const c = boot(root, tmp, { extensions: [CODEX()], views: false, memento: early, noticeDelayMs: 0 });
+    await wait(20);
+    c.close();
+    const d = boot(root, tmp, { extensions: [], views: false, memento: early, noticeDelayMs: 0 });
+    await wait(20);
+    eq(d.control.state.said.filter((s) => /does nothing on its own|is used by Claude Code Extras/.test(s.message)).length, 1,
+      'a window with a dependent clears a notice that was said too early');
+    d.close();
   }
 
   /* The install buttons. */

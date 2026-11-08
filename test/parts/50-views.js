@@ -129,6 +129,125 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     b.close();
   }
 
+  /*
+   * Which conversation is in front: one tab object for a tab's whole life, a source registering when its own tab is
+   * already in front, a source going away while it has the focus, and a focus report that lost to a later tab change.
+   */
+  {
+    const b = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 1e9, refreshMs: 1e9, debounceMs: 10 } });
+    const { vscode, control } = b;
+    vscode.workspace.workspaceFolders = [{ uri: vscode.Uri.file(ws) }];
+    const dir = tmp('one-plans');
+    const S = 'cccccccc-1111-4222-8333-444444444444';
+    const D2 = 'dddddddd-1111-4222-8333-444444444444';
+    const file = path.join(dir, S + '.json');
+    const plan = (title) => JSON.stringify({ nodes: [{ title, state: 'todo' }] });
+    fs.writeFileSync(file, plan('first'));
+    fs.writeFileSync(path.join(dir, D2 + '.json'), plan('other'));
+    /* The extension host hands out one object per tab for its whole life and updates it in place, so a tab that has no
+       conversation yet is the same object as the tab that has one a moment later. The stand-in does the same: the tab a
+       source is shown is made when the tabs are set, and firing the event again shows it that same object. */
+    const tab = { label: 'New', input: new vscode.TabInputWebview('one-panel') };
+    const otherTab = { label: 'Other', input: new vscode.TabInputWebview('other-panel') };
+    const view = control.state.views['agentWorkPlan.workPlan'];
+    const titleNow = () => {
+      const p = view.provider.shown();
+      if (!p) return 'none';
+      return p.error ? 'error' : p.nodes.length ? p.nodes[0].title : 'empty';
+    };
+    let answerForTab = '';
+    const one = { protocol: 1, id: 'one', label: 'One', planPath: () => file, planDir: () => dir,
+      sessionForTab: (t) => (t.input === tab.input ? answerForTab : null), listConversations: async () => [] };
+    const rOne = b.api.registerSource(one);
+    await wait(30);
+    control.setTabs([tab]);
+    control.fireTabs();
+    await wait(30);
+    const waitingForOne = [view.provider.shown(), view.description];
+    answerForTab = S;
+    control.fireTabs();
+    await wait(30);
+    eq([waitingForOne[0], waitingForOne[1], titleNow()], [null, 'One', 'first'],
+      'a tab with no conversation yet shows nothing, and the same tab object is asked again once it has one');
+
+    /* A source registering while a tab only it answers for is already in front. Nothing else will offer it that tab:
+       the reader has not touched the tabs since, and another source already has the focus. */
+    const four = { protocol: 1, id: 'four', label: 'Four', planPath: (id) => path.join(dir, id + '.json'), planDir: () => dir,
+      sessionForTab: (t) => (t.input === otherTab.input ? D2 : null), listConversations: async () => [] };
+    control.setTabs([otherTab]);
+    control.fireTabs();
+    await wait(30);
+    const beforeFour = [view.description, titleNow()];
+    b.api.registerSource(four);
+    await wait(40);
+    eq([beforeFour, view.description, titleNow()], [['One', 'first'], 'Four', 'other'],
+      'a source registering while its own tab is already in front is offered it, even though another source has the focus');
+
+    /* Two sources that both answer for one tab: the one registered first keeps it, and when it goes away the other
+       takes it rather than the tab going back to the source on its way out. */
+    const three = { protocol: 1, id: 'three', label: 'Three', planPath: () => file, planDir: () => dir,
+      sessionForTab: (t) => (t.input === tab.input ? S : null), listConversations: async () => [] };
+    b.api.registerSource(three);
+    control.setTabs([tab]);
+    control.fireTabs();
+    await wait(40);
+    const whileBoth = view.description;
+    rOne.registration.dispose();
+    await wait(40);
+    eq([whileBoth, view.description], ['One', 'Three'],
+      'the source registered first answers for a tab both know, and a source unregistering does not take the tab back');
+
+    /* A focus report is acted on a moment after it was made, and by then the reader may have switched tabs. The tab is
+       the later signal and wins. */
+    const fourFocus = new vscode.EventEmitter();
+    const five = { protocol: 1, id: 'five', label: 'Five', planPath: (id) => path.join(dir, id + '.json'), planDir: () => dir,
+      sessionForTab: () => null, onDidFocus: fourFocus.event, isFocused: () => true, listConversations: async () => [] };
+    b.api.registerSource(five);
+    await wait(30);
+    fourFocus.fire({ sessionId: D2 });
+    control.setTabs([otherTab]);
+    control.fireTabs();
+    await wait(40);
+    const tabWon = [view.description, titleNow()];
+    /* With no tab change after it, the same report is taken. */
+    fourFocus.fire({ sessionId: D2 });
+    await wait(40);
+    eq([tabWon, view.description], [['Four', 'other'], 'Five'],
+      'a focus report queued before the reader switched tabs is dropped, and one with nothing after it is taken');
+
+    /* Plans are read again only when their file has changed. */
+    control.setTabs([tab]);
+    control.fireTabs();
+    await wait(40);
+    const backOnThree = titleNow();
+    const fire = (kind) => { for (const w of control.state.watchers) if (!w.disposed) w.fire(kind); };
+    const reallyRead = fs.readFileSync;
+    let reads = 0;
+    fs.readFileSync = (p, ...rest) => { if (p === file) reads++; return reallyRead.call(fs, p, ...rest); };
+    try {
+      fire('change'); await wait(40);
+      fire('change'); await wait(40);
+      const unchanged = [reads, titleNow()];
+      await control.state.handlers['agentWorkPlan.refreshWorkPlan']();
+      await wait(40);
+      const afterRefresh = [reads, titleNow()];
+      fs.writeFileSync(file, plan('third'));
+      fire('change'); await wait(40);
+      const afterWrite = [reads, titleNow()];
+      /* Half a file, as a reader lands on while another process is writing it. */
+      fs.writeFileSync(file, '{"nodes": [');
+      fire('change'); await wait(40);
+      const halfWritten = titleNow();
+      const longAgo = Date.now() / 1000 - 5;
+      fs.utimesSync(file, longAgo, longAgo);
+      fire('change'); await wait(40);
+      eq([backOnThree, unchanged, afterRefresh, afterWrite, halfWritten, titleNow()],
+        ['first', [0, 'first'], [1, 'first'], [2, 'third'], 'third', 'error'],
+        'a plan file that has not changed is not read again, the refresh command reads it anyway, and one being written keeps the last plan that parsed until it is no longer fresh');
+    } finally { fs.readFileSync = reallyRead; }
+    b.close();
+  }
+
   /* Restricted Mode. */
   {
     const b = boot(root, tmp, { trusted: false, viewOptions: timing });

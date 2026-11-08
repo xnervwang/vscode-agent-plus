@@ -147,11 +147,37 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   next = 'submitted';
   view.receive({ type: 'send', key, text: 'Yes, merge.' });
   await wait(150);
-  const second = { state: view.states.get(key).kind, draft: view.drafts.has(key) };
+  const second = { state: view.states.get(key).kind, draft: view.drafts.get(key) };
   eq([first.got, first.state.kind, first.state.reason, first.draft, /Merge it\?/.test(first.clipboard) && first.clipboard.endsWith('Yes, merge.')],
     [[['Yes, merge.', true]], 'notReceived', 'busy', 'Yes, merge.', true],
     'a second click while one is on its way sends nothing; not received keeps the draft and copies the answer');
-  eq(second, { state: 'submitted', draft: false }, 'a submitted answer clears its draft');
+  eq(second, { state: 'submitted', draft: '' }, 'a submitted answer clears its draft');
+
+  /* The box is not disabled while an answer is on its way, so the reader can type the next one. Clearing on
+     "submitted" clears what was sent, not what they have written since. */
+  view.receive({ type: 'draft', key, text: 'and one more thing' });
+  next = 'submitted';
+  view.receive({ type: 'send', key, text: 'and one more thing' });
+  view.receive({ type: 'draft', key, text: 'typed while it was on its way' });
+  await wait(150);
+  eq(view.drafts.get(key), 'typed while it was on its way', 'what was typed while an answer was on its way is kept when it is submitted');
+
+  /* The page's last keystrokes for one question can arrive after the reader has clicked another. */
+  view.drafts.set('codex/other/2', 'half a sent');
+  view.receive({ type: 'draft', key: 'codex/other/2', text: 'all of it' });
+  eq(view.drafts.get('codex/other/2'), 'all of it', 'a draft that names a question other than the one on screen is still kept');
+
+  /* The row the question is on belongs to a plan another process writes. */
+  const stillAsking = view.current.question;
+  view.revise(() => null);
+  const afterGone = { running: view.current.running, gone: !!view.current.gone };
+  view.receive({ type: 'send', key, text: 'too late' });
+  const sentAfter = got.length;
+  await wait(60);
+  view.revise((k) => Object.assign({}, question, { key: k, question: 'Merge it, really?' }));
+  eq([stillAsking, afterGone, got.length, view.states.has(key), view.current.question],
+    ['Merge it?', { running: false, gone: true }, sentAfter, false, 'Merge it, really?'],
+    'a row that stopped asking takes no answer, and a row asking something else drops the last outcome');
   eq(key, 'codex/S/1', 'the question is keyed by source, session and row');
   b.close();
 

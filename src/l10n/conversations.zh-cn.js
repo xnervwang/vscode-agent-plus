@@ -30,6 +30,7 @@ module.exports = {
   answerOpen: '去对话',
   answerSend: '发送',
   answerNotRunning: '没在运行。去那个对话里回答。',
+  answerGone: '这一行已经不问这个了。去那个对话看它现在要什么。',
   answerRestricted: '受限模式：这个窗口不发送回答。信任这个工作区之后才能发。',
   answerState: (kind, time, reason) => ({
     waiting: '正在发送……',

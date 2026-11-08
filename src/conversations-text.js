@@ -34,6 +34,7 @@ const TEXT = {
     answerOpen: 'Go to the conversation',
     answerSend: 'Send',
     answerNotRunning: 'Not running. Open the conversation to answer it.',
+    answerGone: 'This row is no longer asking this. Look at the conversation to see what it needs now.',
     answerRestricted: 'Restricted Mode: this window does not send answers. Trust the workspace to send one.',
     answerState: (kind, time, reason) => ({
       waiting: 'Sending...',

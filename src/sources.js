@@ -299,6 +299,21 @@ class Focus {
     this.sourceId = '';
     this.sessionId = '';
     this.tab = undefined;
+    this.tabLabel = '';
+    /* Set when the tab in front is a source's but has no conversation yet, so it is asked about again. */
+    this.waiting = false;
+    /* Every signal in the order it arrived. A focus report a source makes is taken a moment later, by which time a tab
+       change may have happened, and the older report must not win. */
+    this.signals = 0;
+  }
+
+  /** The number of the signal arriving now. Pass it to newerThan() when acting on it later. */
+  mark() {
+    return ++this.signals;
+  }
+
+  newerThan(n) {
+    return this.signals !== n;
   }
 
   set(sourceId, sessionId) {
@@ -316,15 +331,28 @@ class Focus {
     return this.set(sourceId, sessionId);
   }
 
-  /* VS Code fires onDidChangeTabs for every label and state change. Offering the same tab each time would pull the focus
-     back to it after the user had switched to a sidebar conversation, so a tab is offered again only with `again`. */
+  /*
+   * VS Code fires onDidChangeTabs for every label and state change. Offering the same tab each time would pull the focus
+   * back to it after the user had switched to a sidebar conversation, so a tab is offered again only with `again`, or
+   * when something about it says there is a new answer to be had.
+   *
+   * "The same tab" cannot stand on its own as "nothing to ask about": the extension host keeps one object per tab and
+   * updates it in place, so a tab is the same object for its whole life (extHostEditorTabs.ts acceptTabOperation finds
+   * the existing tab by id and only hands it a new dto; its frozen apiObject is built once). A new conversation's tab
+   * answers '' until its first message and an id after it, without ever becoming a different object. So a tab is asked
+   * again when its label has changed, and whenever the last answer about it was ''.
+   */
   claim(tab, entries, again = false) {
-    if (!again && tab === this.tab) return false;
+    const label = (() => { const l = get(tab, 'label'); return typeof l === 'string' ? l : ''; })();
+    if (!again && tab === this.tab && label === this.tabLabel && !this.waiting) return false;
     this.tab = tab;
+    this.tabLabel = label;
+    this.waiting = false;
+    this.mark();
     if (!tab) return false;
     for (const { id: sourceId, source } of entries) {
       const id = call(source, 'sessionForTab', [tab], null);
-      if (id === '') return this.set(sourceId, '');
+      if (id === '') { this.waiting = true; return this.set(sourceId, ''); }
       if (usableId(id)) return this.set(sourceId, id);
     }
     return false;
