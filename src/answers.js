@@ -149,6 +149,8 @@ class Courier {
     Object.assign(this, { dir, canShow, hand, finish, claiming, now, later, cancel });
     this.outgoing = new Map();
     this.handing = new Map();
+    this.checks = new Set();
+    this.closed = false;
   }
 
   /** Sends `answer` and returns its id; `extra` comes back to finish() with the outcome. */
@@ -157,13 +159,16 @@ class Courier {
     this.outgoing.set(id, Object.assign({ id, at: this.now(), text: answer.text }, extra));
     /* Checked again when the time to take it is up, and when a window that took it has had time to report, even if
        no change in the folder is seen. */
-    this.later(() => this.pump(), TAKE_MS + 100);
-    this.later(() => this.pump(), TAKE_MS + SEND_MS + 5100);
+    for (const ms of [TAKE_MS + 100, TAKE_MS + SEND_MS + 5100]) {
+      const t = this.later(() => { this.checks.delete(t); this.pump(); }, ms);
+      this.checks.add(t);
+    }
     this.pump();
     return id;
   }
 
   pump() {
+    if (this.closed) return;
     let claim = false;
     try { claim = this.claiming() === true; } catch (_) { claim = false; }
     for (const a of claim ? waiting(this.dir) : []) {
@@ -199,8 +204,11 @@ class Courier {
   }
 
   dispose() {
+    this.closed = true;
     for (const t of this.handing.values()) this.cancel(t);
+    for (const t of this.checks) this.cancel(t);
     this.handing.clear();
+    this.checks.clear();
   }
 }
 
