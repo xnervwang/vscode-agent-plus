@@ -6,10 +6,10 @@
 /*
  * VS Code's limit on the requests webview tabs can have in flight (src/webview-limit.js), looked at a few seconds after
  * the views start so the window is not held up, and only in a trusted window. It asks once for each new VS Code build
- * or, if agentPlus.webviewRequestLimit says so, raises the limit again without asking. On Linux it never raises on
- * its own: VS Code added the limit there because too many open files can crash a window. From the request limit part of
- * extension.js in vscode-claude-code-extras bb28f51, and src/request-limit.js of vscode-codex-extras, which this
- * replaces in both.
+ * on each client or, if agentPlus.webviewRequestLimit says so, raises the limit again without asking. On Linux it never
+ * raises on its own: VS Code added the limit there because too many open files can crash a window. From the request
+ * limit part of extension.js in vscode-claude-code-extras bb28f51, and src/request-limit.js of vscode-codex-extras,
+ * which this replaces in both.
  *
  * Raising and putting back are the same kind of operation and run one at a time, each carrying the number of the
  * decision it belongs to. Putting back, or turning the setting off, raises that number, so a raise still waiting on the
@@ -110,15 +110,25 @@ function place(vscode) {
 }
 
 /*
- * Whether this window is the one to ask about VS Code build `commit`. True for the window that creates the marker, and
- * for every window when the folder cannot be written at all: a question nobody asks leaves a reader with blank webview
- * tabs and nothing said about why.
+ * What being asked is recorded under: the VS Code build, and which client and which installations on it. The marker is
+ * in this machine's shared folder, which every client connected to this machine finds, so the build alone would let
+ * the first client asked stand for all of them. Windows of one client coming back at once still share one.
  */
-function claimAsk(commit, home) {
+function askKeyOf(commit, machineId, roots) {
+  const who = crypto.createHash('sha256').update(String(machineId || '') + '\n' + roots.slice().sort().join('\n')).digest('hex').slice(0, 16);
+  return `${commit || 'unknown'}.${who}`;
+}
+
+/*
+ * Whether this window is the one to ask under `key` (askKeyOf). True for the window that creates the marker, and for
+ * every window when the folder cannot be written at all: a question nobody asks leaves a reader with blank webview tabs
+ * and nothing said about why.
+ */
+function claimAsk(key, home) {
   const dir = path.join(home || sharedHome(), 'asked');
   try { privateDir(dir); } catch (_) { return true; }
   try {
-    fs.closeSync(fs.openSync(path.join(dir, encodeURIComponent(commit || 'unknown')), 'wx', 0o600));
+    fs.closeSync(fs.openSync(path.join(dir, encodeURIComponent(key || 'unknown')), 'wx', 0o600));
     return true;
   } catch (e) {
     return !e || e.code !== 'EEXIST';
@@ -207,13 +217,17 @@ function create(host, opts = {}) {
     if (!low.length) return;
     const linux = low.every((i) => webviewLimit.platformOf(i.root, process.platform) === 'linux');
     if (mode !== 'raise' || linux) {
-      if (context.globalState.get(ASKED_KEY, '') === at.commit) return;
-      if (!claimAsk(at.commit, opts.home)) {
-        say('webview request limit: another window of this machine is asking about this VS Code build');
-        await context.globalState.update(ASKED_KEY, at.commit);
+      const asked = askKeyOf(at.commit, vscode.env.machineId, low.map((i) => i.root));
+      /* globalState is kept by the client, so a value an earlier version wrote, the build alone, still means that this
+         client was asked about this build. */
+      const had = context.globalState.get(ASKED_KEY, '');
+      if (had === asked || (had && had === at.commit)) return;
+      if (!claimAsk(asked, opts.home)) {
+        say('webview request limit: another window of this client is asking about this VS Code build');
+        await context.globalState.update(ASKED_KEY, asked);
         return;
       }
-      await context.globalState.update(ASKED_KEY, at.commit);
+      await context.globalState.update(ASKED_KEY, asked);
       const always = 'Raise it, now and after updates', once = 'Raise it this time', no = 'Leave it';
       const pick = await vscode.window.showInformationMessage(
         'Agent Plus: VS Code lets webview tabs, Claude Code\'s and Codex\'s among them, have 32 requests in flight at once '
@@ -306,4 +320,4 @@ function create(host, opts = {}) {
   };
 }
 
-module.exports = { create, claimAsk, holdMachine, SETTING, ASKED_KEY, START_DELAY_MS, HOLD_FILE, HOLD_STALE_MS };
+module.exports = { create, claimAsk, askKeyOf, holdMachine, SETTING, ASKED_KEY, START_DELAY_MS, HOLD_FILE, HOLD_STALE_MS };

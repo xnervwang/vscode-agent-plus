@@ -380,14 +380,19 @@ function byHand(install, platformHint, from = OLD, to = NEW) {
     const win = file.replace(/\//g, '\\');
     return `$f = '${win}'; [IO.File]::WriteAllText($f, [IO.File]::ReadAllText($f).Replace('${was}', '${want}'))`;
   }
-  const sed = platformHint === 'darwin' || file.startsWith('/Applications/') || file.startsWith('/Users/') ? "sed -i ''" : 'sed -i';
+  const mac = platformOf(install.root, platformHint) === 'darwin' || file.startsWith('/Applications/') || file.startsWith('/Users/');
+  const sed = mac ? "sed -i ''" : 'sed -i';
   return `sudo ${sed} 's/${was}/${want}/' '${file}'`;
 }
 
-/** 'darwin', 'win32' or 'linux' for an installation root. */
+/*
+ * 'darwin', 'win32' or 'linux' for an installation root. `localPlatform` is the extension host's, which in a remote
+ * window is the remote's and says nothing about the client; the paths a Linux package installs VS Code in say Linux.
+ */
 function platformOf(root, localPlatform) {
   if (/^\/?[a-z]:/i.test(root)) return 'win32';
   if (/\.app\/Contents\/Resources\/app$/.test(root)) return 'darwin';
+  if (/^\/(usr|opt|snap)\//.test(root)) return 'linux';
   if (root.startsWith('/')) return localPlatform === 'darwin' ? 'darwin' : (localPlatform === 'win32' ? 'win32' : 'linux');
   return localPlatform;
 }
