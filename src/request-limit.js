@@ -156,10 +156,15 @@ function create(host, opts = {}) {
   const change = async (at, installs, from, to, mine) => {
     const failed = [];
     let done = 0;
+    const gone = () => { say(`webview request limit: ${from} -> ${to} dropped, it is no longer wanted`); return { failed, done }; };
+    /* Asked again inside the change, right up to the rename: a raise can spend seconds waiting on the lock and on the
+       client's file system, and the reader can turn the setting off or close the window in that time. */
+    const own = Object.assign({}, timing, { wanted: () => !dropped(mine) });
     for (const i of installs) {
-      if (dropped(mine)) { say(`webview request limit: ${from} -> ${to} dropped, it is no longer wanted`); return { failed, done }; }
-      const why = await webviewLimit.setLimit(at.fs, i, from, to, timing);
+      if (dropped(mine)) return gone();
+      const why = await webviewLimit.setLimit(at.fs, i, from, to, own);
       say(`webview request limit: ${i.root} ${from} -> ${to}: ${why || 'done'}`);
+      if (why === 'dropped') return gone();
       if (why) failed.push({ install: i, why }); else done++;
     }
     return { failed, done };
@@ -290,7 +295,10 @@ function create(host, opts = {}) {
         try { await putBackOnce(mine); } catch (e) { say(`webview request limit: ${(e && e.message) || e}`); }
       });
     },
+    /* A raise under way stops before it replaces the file: nobody is left to tell about it. A put-back goes on, since
+       the reader asked for it and `leave` is already written. */
     dispose() {
+      cancelRaise();
       for (const t of timers) clearTimeout(t);
       timers.clear();
       for (const d of subs.splice(0)) { try { d.dispose(); } catch (_) { /* gone */ } }

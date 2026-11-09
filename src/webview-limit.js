@@ -319,10 +319,13 @@ async function find({ fs, at, local, appRoot, commit, repair = false, timing }) 
 /**
  * Changes the limit in one installation from `from` to `to`, then reads the file back to confirm. Returns '' when done,
  * 'changed' when the file no longer contains `from` exactly once and does not already say `to`, or changed after it was
- * read, 'locked' when another window kept the lock, or the error's code (EPERM, EACCES, ...).
+ * read, 'locked' when another window kept the lock, 'dropped' when `timing.wanted()` said no before the file was
+ * replaced, or the error's code (EPERM, EACCES, ...).
  */
-async function setLimit(fs, install, from, to, timing) {
+async function setLimit(fs, install, from, to, timing = {}) {
+  const wanted = () => typeof timing.wanted !== 'function' || timing.wanted() !== false;
   return withLock(fs, install.uri, async () => {
+    if (!wanted()) return 'dropped';
     const text = await readText(fs, install.uri);
     if (text === null) return 'unreadable';
     const was = NAME + '=' + from + ',';
@@ -345,11 +348,12 @@ async function setLimit(fs, install, from, to, timing) {
       /* The last look before the original is deleted. An update of VS Code in place, or another window, may have
          changed the file since it was read, and replacing it now would put back text made from what it was. */
       const now = await readText(fs, install.uri);
-      if (now !== text) {
+      if (now !== text || !wanted()) {
         await dropTmp();
         /* With no file there, this copy may be the one thing to put it back from. */
         if (now !== null) await dropCopy();
-        return now === null ? 'unreadable' : outcome(now);
+        if (now === null) return 'unreadable';
+        return now !== text ? outcome(now) : 'dropped';
       }
       await fs.rename(tmp, install.uri, { overwrite: true });
     } catch (e) {

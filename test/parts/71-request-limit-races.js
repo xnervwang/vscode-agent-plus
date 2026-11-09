@@ -153,6 +153,35 @@ module.exports = async ({ eq, root, tmp }) => {
       'while another window of this machine holds it, nothing runs, and a put-back here leaves the file alone and says why');
     fs.unlinkSync(held);
   }
+  /* The setting turned to leave while the raise is making its copy: the file is not replaced, and nothing says it was. */
+  {
+    reset();
+    let turned = false;
+    const c = client({ [PRODUCT]: '{"commit":"abc"}', [SW]: text(32) }, {
+      gate: async (op, p) => {
+        if (op === 'writeFile' && p.includes(wl.BACKUP_SUFFIX) && !turned) { turned = true; control.state.config[KEY] = 'leave'; control.changeConfig([KEY]); }
+      } });
+    control.answer('Raise the limit to 1000000', 'Raise it this time');
+    const l = limit.create(host(), { where: () => ({ fs: c.fs, at: c.at, local: true, appRoot: APP, commit: 'cancel' }),
+      timing: fast, delayMs: 3600e3, home: tmp('races-home-3') });
+    l.start();
+    await l.check();
+    l.dispose();
+    eq([turned, c.files[SW], control.state.said.some((s) => /is now 1000000/.test(s.message))], [true, text(32), false],
+      'turning the setting to leave while a raise is making its copy stops it before the file is replaced');
+  }
+  /* The window closing while a raise is making its copy: nobody is left to be told, and the file is left as it was. */
+  {
+    reset();
+    let l = null, closed = false;
+    const c = client({ [PRODUCT]: '{"commit":"abc"}', [SW]: text(32) }, {
+      gate: async (op, p) => { if (op === 'writeFile' && p.includes(wl.BACKUP_SUFFIX) && !closed) { closed = true; l.dispose(); } } });
+    control.answer('Raise the limit to 1000000', 'Raise it this time');
+    l = limit.create(host(), { where: () => ({ fs: c.fs, at: c.at, local: true, appRoot: APP, commit: 'closing' }),
+      timing: fast, delayMs: 0, home: tmp('races-home-4') });
+    await l.check();
+    eq([closed, c.files[SW], leftovers(c.files)], [true, text(32), []], 'a window closing while a raise is under way stops it before the file is replaced');
+  }
   reset();
   undo();
 };
