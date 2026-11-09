@@ -18,12 +18,16 @@
  * that text appears exactly once. An update replaces the whole application and brings 32 back, so this is checked at
  * every start. The new value is read by VS Code only after it has been quit completely and opened again.
  *
- * Three files are made beside it while a change is under way, all named after this extension, and none of them outlives
- * it: a change that goes through leaves the VS Code application with nothing of this extension's in it.
+ * Three kinds of file are made beside it while a change is under way, all named after this extension, and none of them
+ * outlives it: a change that goes through leaves the VS Code application with nothing of this extension's in it.
  *   .lock       which window is changing the file (see withLock)
- *   .backup     the file as it was before this change, kept until the new text is read back; a replacement that failed
- *               part-way leaves it, and find({ repair }) is what uses it
+ *   .backup.*   the file as it was before this change, one per change and removed only by the change that made it, once
+ *               the new text is read back; a replacement that failed part-way leaves it, find({ repair }) puts the file
+ *               back from it, and a later pass removes it once it is too old to belong to a change still under way
  *   .*.tmp      the new text, before it is renamed over the original; removed on the way out
+ * A copy is never shared between two changes. Two windows can both believe they hold the lock (below), and a change
+ * that went ahead without a copy of its own, because another window's was there, is left with none once that window
+ * removes it.
  *
  * None of this can be made atomic from here. Every window of every remote reaches the client's files through
  * workspace.fs, which has no exclusive create and no atomic replace:
@@ -33,7 +37,8 @@
  *   - rename(a, b, { overwrite: true }) deletes b first and then renames (fileService.ts doMoveCopy), so there is a
  *     moment with no file at b at all.
  * So the lock is advisory: it says who, and every step that could destroy another window's work reads the file back
- * and acts only on what it still finds there.
+ * and acts only on what it still finds there. Windows of one machine also take turns through a lock of their own
+ * (`hold`, from src/request-limit.js), which is exclusive; this one is what is left for windows of different machines.
  */
 const SW = 'out/vs/workbench/contrib/webview/browser/pre/service-worker.js';
 const NAME = 'maxActiveHostResourceResponseBodies';
@@ -120,14 +125,16 @@ async function holderOf(fs, lock) {
 
 /*
  * Runs `fn` holding the lock beside `uri`. Resolves to fn()'s result, or 'locked' when another window held it
- * throughout, or the error's code when the lock file could not be made at all.
+ * throughout, or the error's code when the lock file could not be made at all. `hold(run)`, when given, is the lock
+ * of this machine's windows and is taken first.
  *
  * The lock file says which window holds it, and that is what every destructive step goes by: a lock is taken over only
  * while it is still the same too-old lock that was read, and released only while it is still this window's own. Without
  * that, two windows that both find one stale delete each other's replacement, and a window whose own work ran past
  * LOCK_STALE_MS deletes the lock of whoever took over from it.
  */
-async function withLock(fs, uri, fn, { wait = sleep } = {}) {
+async function withLock(fs, uri, fn, { wait = sleep, hold } = {}) {
+  if (typeof hold === 'function') return hold(() => withLock(fs, uri, fn, { wait }));
   const lock = sibling(uri, LOCK_SUFFIX);
   const me = token() + token();
   const mine = sibling(uri, `${LOCK_SUFFIX}.${me}`);
@@ -172,48 +179,103 @@ async function withLock(fs, uri, fn, { wait = sleep } = {}) {
   }
 }
 
+const dirOf = (uri) => uri.with({ path: uri.path.slice(0, uri.path.lastIndexOf('/')) || '/' });
+const escape = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /*
- * Keeps `text` beside `uri` as the file is now, before this change replaces it. '' when there is a copy to restore from
- * afterwards, the error's code when there is not. An existing copy is left as it is: it was made before a change that
- * has not been read back, so it is the one that still has something to protect.
+ * The copies beside `uri`: one per change that has not finished, named after it, and the single `.backup` an earlier
+ * version of this extension made.
  */
-async function keepCopy(fs, uri, text) {
-  const backup = sibling(uri, BACKUP_SUFFIX);
-  if (await exists(fs, backup)) return '';
-  const tmp = sibling(uri, `${BACKUP_SUFFIX}.${token()}.tmp`);
+async function copiesOf(fs, uri) {
+  const dir = dirOf(uri);
+  const base = uri.path.slice(uri.path.lastIndexOf('/') + 1) + BACKUP_SUFFIX;
+  const own = new RegExp('^' + escape(base) + '(\\.[0-9a-z]+)?$');
+  return (await names(fs, dir)).filter((n) => own.test(n)).map((n) => dir.with({ path: dir.path.replace(/\/$/, '') + '/' + n }));
+}
+
+/*
+ * Keeps `text` beside `uri` as the file is now, before the change called `name` replaces it. '' when there is a copy to
+ * restore from afterwards, the error's code when there is not. The copy is this change's alone, and it counts only once
+ * it has been read back whole.
+ */
+async function keepCopy(fs, uri, text, name = token() + token()) {
+  const backup = sibling(uri, `${BACKUP_SUFFIX}.${name}`);
+  const tmp = sibling(uri, `${BACKUP_SUFFIX}.${name}.tmp`);
   let why = '';
   try {
     await fs.writeFile(tmp, encode(text));
-    await fs.rename(tmp, backup, { overwrite: false });
-    return '';
+    if ((await readText(fs, tmp)) !== text) why = 'not-written';
+    else await fs.rename(tmp, backup, { overwrite: false });
   } catch (e) {
     why = codeOf(e, 'unwritable');
   }
-  try { await fs.delete(tmp); } catch (_) { /* never written */ }
-  /* Another window may have made the copy in between, which is as good as making it here. */
-  return (await exists(fs, backup)) ? '' : why;
+  try { await fs.delete(tmp); } catch (_) { /* renamed, or never written */ }
+  if (!why && (await readText(fs, backup)) !== text) why = 'not-written';
+  if (why) { try { await fs.delete(backup); } catch (_) { /* never made */ } }
+  return why;
 }
 
-/** The text of the copy beside `uri`, when it is one this extension could have made: it names the limit exactly once. */
+/** The text of the newest copy beside `uri` this extension could have made: one that names the limit exactly once. */
 async function copyText(fs, uri) {
-  const text = await readText(fs, sibling(uri, BACKUP_SUFFIX));
-  if (text === null) return null;
-  return [...text.matchAll(FOUND)].length === 1 ? text : null;
+  let best = null, at = -1;
+  for (const copy of await copiesOf(fs, uri)) {
+    const text = await readText(fs, copy);
+    if (text === null || [...text.matchAll(FOUND)].length !== 1) continue;
+    const st = await stat(fs, copy);
+    const when = st ? millis(st.mtime) : 0;
+    if (when > at) { best = text; at = when; }
+  }
+  return best;
 }
 
 /*
  * Puts the file back from the copy beside it. '' when it is there again, 'gone' when there is no copy to use, or the
  * error's code. Called for a file that could not be read at all, which is what a replacement interrupted between the
- * delete and the rename leaves behind.
+ * delete and the rename leaves behind. The copy stays: a change in another window may still be counting on it, and
+ * tidy() removes it once it is old enough not to be.
  */
 async function restore(fs, uri, timing) {
-  const copy = await copyText(fs, uri);
-  if (copy === null) return 'gone';
+  if ((await copyText(fs, uri)) === null) return 'gone';
   return withLock(fs, uri, async () => {
     if (await exists(fs, uri)) return '';
-    try { await fs.writeFile(uri, encode(copy)); } catch (e) { return codeOf(e, 'unwritable'); }
-    return (await exists(fs, uri)) ? '' : 'not-written';
+    const copy = await copyText(fs, uri);
+    if (copy === null) return 'gone';
+    const tmp = sibling(uri, `.agent-work-plan.${token()}.tmp`);
+    let why = '';
+    try {
+      await fs.writeFile(tmp, encode(copy));
+      if ((await readText(fs, tmp)) !== copy) why = 'not-written';
+      /* Not overwriting: a file that appeared meanwhile is another window's replacement landing, and it stays. */
+      else await fs.rename(tmp, uri, { overwrite: false });
+    } catch (e) {
+      why = codeOf(e, 'unwritable');
+    }
+    try { await fs.delete(tmp); } catch (_) { /* renamed, or never written */ }
+    if ((await readText(fs, uri)) !== null) return '';
+    return why || 'not-written';
   }, timing);
+}
+
+/*
+ * Removes the copies a change left behind, once the file names the limit again. A copy younger than LOCK_STALE_MS on
+ * the client's clock can belong to a change still under way in another window, and is kept. Returns how many went.
+ */
+async function tidy(fs, uri, timing) {
+  if (!(await copiesOf(fs, uri)).length) return 0;
+  const gone = await withLock(fs, uri, async () => {
+    const text = await readText(fs, uri);
+    if (text === null || [...text.matchAll(FOUND)].length !== 1) return 0;
+    const now = await clientNow(fs, uri);
+    if (!now) return 0;
+    let n = 0;
+    for (const copy of await copiesOf(fs, uri)) {
+      const st = await stat(fs, copy);
+      if (!st || now - millis(st.mtime) <= LOCK_STALE_MS) continue;
+      try { await fs.delete(copy); n++; } catch (_) { /* removed by another window */ }
+    }
+    return n;
+  }, timing);
+  return typeof gone === 'number' ? gone : 0;
 }
 
 /**
@@ -247,6 +309,7 @@ async function find({ fs, at, local, appRoot, commit, repair = false, timing }) 
       if (lost && lost !== 'gone') out.push({ root, uri, limit: null, lost });
       continue;
     }
+    if (repair) await tidy(fs, uri, timing);
     const hits = [...text.matchAll(FOUND)];
     out.push({ root, uri, limit: hits.length === 1 ? Number(hits[0][1]) : null, restored });
   }
@@ -255,8 +318,8 @@ async function find({ fs, at, local, appRoot, commit, repair = false, timing }) 
 
 /**
  * Changes the limit in one installation from `from` to `to`, then reads the file back to confirm. Returns '' when done,
- * 'changed' when the file no longer contains `from` exactly once and does not already say `to`, 'locked' when another
- * window kept the lock, or the error's code (EPERM, EACCES, ...).
+ * 'changed' when the file no longer contains `from` exactly once and does not already say `to`, or changed after it was
+ * read, 'locked' when another window kept the lock, or the error's code (EPERM, EACCES, ...).
  */
 async function setLimit(fs, install, from, to, timing) {
   return withLock(fs, install.uri, async () => {
@@ -266,15 +329,31 @@ async function setLimit(fs, install, from, to, timing) {
     const want = NAME + '=' + to + ',';
     /* Another window can make the same change between the pass that found `from` and this one. A file that already
        says `to` is this call's own outcome, not something to send the reader off to a shell for. */
-    if (text.split(was).length !== 2) return text.split(want).length === 2 ? '' : 'changed';
-    const kept = await keepCopy(fs, install.uri, text);
+    const outcome = (now) => (now.split(want).length === 2 ? '' : 'changed');
+    if (text.split(was).length !== 2) return outcome(text);
+    const next = text.replace(was, want);
+    const name = token() + token();
+    const kept = await keepCopy(fs, install.uri, text, name);
     if (kept) return kept;
+    const mine = sibling(install.uri, `${BACKUP_SUFFIX}.${name}`);
+    const dropCopy = async () => { try { await fs.delete(mine); } catch (_) { /* gone already */ } };
     const tmp = sibling(install.uri, `.agent-work-plan.${token()}.tmp`);
+    const dropTmp = async () => { try { await fs.delete(tmp); } catch (_) { /* renamed, or never written */ } };
     try {
-      await fs.writeFile(tmp, encode(text.replace(was, want)));
+      await fs.writeFile(tmp, encode(next));
+      if ((await readText(fs, tmp)) !== next) { await dropTmp(); await dropCopy(); return 'not-written'; }
+      /* The last look before the original is deleted. An update of VS Code in place, or another window, may have
+         changed the file since it was read, and replacing it now would put back text made from what it was. */
+      const now = await readText(fs, install.uri);
+      if (now !== text) {
+        await dropTmp();
+        /* With no file there, this copy may be the one thing to put it back from. */
+        if (now !== null) await dropCopy();
+        return now === null ? 'unreadable' : outcome(now);
+      }
       await fs.rename(tmp, install.uri, { overwrite: true });
     } catch (e) {
-      try { await fs.delete(tmp); } catch (_) { /* never written */ }
+      await dropTmp();
       /* The copy stays: the rename deletes the original before moving, so the file may be gone, and find({ repair })
          is what puts it back. */
       return codeOf(e, 'unwritable');
@@ -282,10 +361,9 @@ async function setLimit(fs, install, from, to, timing) {
     const back = await readText(fs, install.uri);
     if (back === null) return 'unreadable';
     if (!back.includes(want)) return 'not-written';
-    /* The file is there with the value asked for, so the copy has nothing left to protect, and nothing of this
-       extension's is left in the VS Code application. The next change makes a copy of its own before it touches the
-       file, so removing this one costs no protection. */
-    try { await fs.delete(sibling(install.uri, BACKUP_SUFFIX)); } catch (_) { /* another window removed it */ }
+    /* The file is there with the value asked for, so this change's copy has nothing left to protect. Copies other
+       changes made are theirs to remove. */
+    await dropCopy();
     return '';
   }, timing);
 }
@@ -311,4 +389,4 @@ function platformOf(root, localPlatform) {
 }
 
 module.exports = { SW, NAME, OLD, NEW, LOCK_SUFFIX, BACKUP_SUFFIX, LOCK_STALE_MS, candidates, clientNow, holderOf,
-  keepCopy, copyText, restore, find, withLock, setLimit, byHand, platformOf };
+  copiesOf, keepCopy, copyText, restore, tidy, find, withLock, setLimit, byHand, platformOf };

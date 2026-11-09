@@ -6,56 +6,11 @@
 /*
  * VS Code's webview request limit: found, changed under a lock beside the file, written through a temporary file with a
  * copy of the original kept, and left alone in Restricted Mode. The client's file system is held in memory,
- * asynchronous like the real one.
- *
- * `clock` is the client's own clock, which a remote window's does not have to agree with. `slowRename` makes
- * rename(..., { overwrite: false }) what VS Code really does: a look at the target, and then a move that replaces
- * whatever is there (fileService.ts doValidateMoveCopy, diskFileSystemProvider.ts validateMoveCopy). With it, two
- * windows can both find the lock free and the second one's move lands on top of the first one's. `tornRename` is the
- * other half of what VS Code really does: an overwriting rename deletes the target first (fileService.ts doMoveCopy),
- * so one that fails after that leaves no file at the target at all.
+ * asynchronous like the real one (test/limit-fs.js).
  */
 const path = require('path');
 const fake = require('../fake-vscode');
-
-function client(files, { refuse = '', clock = Date.now, slowRename = false, tornRename = null, onRead } = {}) {
-  const meta = new Map(Object.keys(files).map((k) => [k, { mtime: clock() }]));
-  const has = (p) => Object.prototype.hasOwnProperty.call(files, p);
-  const dirs = (p) => [...new Set(Object.keys(files).filter((f) => f.startsWith(p + '/')).map((f) => f.slice(p.length + 1).split('/')[0]))];
-  const err = (code) => Object.assign(new Error(code), { code });
-  const tick = () => new Promise((r) => setImmediate(r));
-  const uri = (p) => ({ path: p, with: (c) => uri(c.path) });
-  return {
-    at: uri,
-    files, meta,
-    fs: {
-      stat: async (u) => { await tick(); if (has(u.path)) return { mtime: meta.get(u.path).mtime }; if (dirs(u.path).length) return { mtime: 0 }; throw err('ENOENT'); },
-      readFile: async (u) => {
-        await tick();
-        if (!has(u.path)) throw err('ENOENT');
-        const bytes = new TextEncoder().encode(files[u.path]);
-        if (onRead) onRead(u.path);
-        return bytes;
-      },
-      writeFile: async (u, b) => { await tick(); if (refuse) throw err(refuse); files[u.path] = new TextDecoder().decode(b); meta.set(u.path, { mtime: clock() }); },
-      rename: async (a, b, opts) => {
-        await tick();
-        if (!has(a.path)) throw err('ENOENT');
-        const blocked = has(b.path);
-        if (slowRename) await tick();
-        if (blocked && !(opts && opts.overwrite)) throw err('EEXIST');
-        if (tornRename && tornRename(b.path)) {
-          delete files[b.path]; meta.delete(b.path);
-          throw err('EIO');
-        }
-        files[b.path] = files[a.path]; meta.set(b.path, meta.get(a.path));
-        delete files[a.path]; meta.delete(a.path);
-      },
-      delete: async (u) => { await tick(); if (!has(u.path)) throw err('ENOENT'); delete files[u.path]; meta.delete(u.path); },
-      readDirectory: async (u) => { await tick(); const d = dirs(u.path); if (!d.length) throw err('ENOENT'); return d.map((n) => [n, 2]); },
-    },
-  };
-}
+const { client } = require('../limit-fs');
 
 module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   const wl = require(path.join(root, 'src', 'webview-limit.js'));
@@ -164,8 +119,8 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   const tornWhy = await wl.setLimit(torn.fs, { root: APP, uri: torn.at(SW) }, 32, wl.NEW, fast);
   const nothingThere = torn.files[SW];
   const [fixed] = await wl.find({ fs: torn.fs, at: torn.at, local: true, appRoot: APP, repair: true, timing: fast });
-  eq([tornWhy, nothingThere, leftovers(torn), fixed && fixed.limit, fixed && fixed.restored, torn.files[SW]],
-    ['EIO', undefined, [BACKUP], 32, true, text(32)],
+  eq([tornWhy, nothingThere, leftovers(torn).map((f) => f.startsWith(BACKUP + '.')), fixed && fixed.limit, fixed && fixed.restored, torn.files[SW]],
+    ['EIO', undefined, [true], 32, true, text(32)],
     'a replacement that fails once the original is gone keeps the copy, and the next pass puts the file back from it');
 
   /* A replacement deletes the original before moving the new file over it, so an interruption in between leaves no file

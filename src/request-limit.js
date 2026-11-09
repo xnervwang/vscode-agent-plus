@@ -17,9 +17,15 @@
  *
  * Several windows of this machine come back at once after a VS Code update, which is the moment the limit is reset, so
  * the question is asked by whichever of them creates the marker file in the shared folder. That is a real exclusive
- * create: the shared folder is on the machine this extension runs on, not on the client.
+ * create: the shared folder is on the machine this extension runs on, not on the client. The same kind of file is the
+ * lock these windows take turns with before any of them writes beside the client's service worker (holdMachine).
+ *
+ * Every start looks at the file whatever the setting says, because a change that failed part way can leave it missing,
+ * and a setting of `leave` is often what that failed change had just written.
  */
+const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const webviewLimit = require('./webview-limit');
 const { sharedHome, privateDir } = require('./files');
@@ -27,6 +33,73 @@ const { sharedHome, privateDir } = require('./files');
 const SETTING = 'webviewRequestLimit';
 const ASKED_KEY = 'agentPlus.webviewLimitAsked';
 const START_DELAY_MS = 8000;
+const HOLD_FILE = 'webview-limit.lock';
+/* A hold older than this was left by a window that died holding it; one whose process is gone on this machine is
+   taken over at once. Holding it covers one change, which waits at most about ten seconds for the lock beside the
+   file. */
+const HOLD_STALE_MS = 120000;
+const HOLD_TRIES = 40;
+const HOLD_POLL_MS = 250;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const alive = (pid) => {
+  try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; }
+};
+
+/* Removes the hold in `file` when the window that made it is gone, and says whether it did. */
+function dropStale(file) {
+  let text, st;
+  try { text = fs.readFileSync(file, 'utf8'); st = fs.statSync(file); } catch (_) { return true; }
+  let who = null;
+  try { who = JSON.parse(text); } catch (_) { who = null; }
+  const age = Date.now() - (who && Number.isFinite(who.at) ? who.at : st.mtimeMs);
+  /* A file just created and not yet written reads as empty, and is someone's hold being taken. */
+  const gone = who && who.host === os.hostname() && Number.isInteger(who.pid) && !alive(who.pid);
+  if (!gone && age <= HOLD_STALE_MS) return false;
+  try {
+    if (fs.readFileSync(file, 'utf8') !== text) return false;
+    fs.unlinkSync(file);
+  } catch (_) { /* taken over meanwhile */ }
+  return true;
+}
+
+/*
+ * Runs `fn` holding the lock this machine's windows take turns with before writing beside the client's service worker.
+ * Resolves to fn()'s result, or 'locked' when another window kept it throughout. A shared folder that cannot be
+ * written means there is no such lock, and fn() runs with only the lock beside the file.
+ */
+async function holdMachine(home, fn, { wait = sleep } = {}) {
+  const dir = home || sharedHome();
+  const file = path.join(dir, HOLD_FILE);
+  const me = `${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+  try { privateDir(dir); } catch (_) { return fn(); }
+  let held = false;
+  for (let i = 0; i < HOLD_TRIES && !held; i++) {
+    let fd;
+    try {
+      fd = fs.openSync(file, 'wx', 0o600);
+    } catch (e) {
+      if (!e || e.code !== 'EEXIST') return fn();
+      if (!dropStale(file)) await wait(HOLD_POLL_MS);
+      continue;
+    }
+    try {
+      fs.writeSync(fd, JSON.stringify({ holder: me, pid: process.pid, host: os.hostname(), at: Date.now() }));
+      held = true;
+    } catch (_) {
+      try { fs.unlinkSync(file); } catch (__) { /* gone already */ }
+    } finally {
+      try { fs.closeSync(fd); } catch (_) { /* closed */ }
+    }
+    if (!held) return fn();
+  }
+  if (!held) return 'locked';
+  try {
+    return await fn();
+  } finally {
+    try { if (JSON.parse(fs.readFileSync(file, 'utf8')).holder === me) fs.unlinkSync(file); } catch (_) { /* gone already */ }
+  }
+}
 
 function place(vscode) {
   const local = !vscode.env.remoteName;
@@ -58,7 +131,8 @@ function create(host, opts = {}) {
   const { vscode, context, say } = host;
   const cfg = () => vscode.workspace.getConfiguration('agentPlus');
   const where = () => (opts.where ? opts.where() : place(vscode));
-  const look = (at) => webviewLimit.find(Object.assign({}, at, { repair: true, timing: opts.timing }));
+  const timing = Object.assign({}, opts.timing, { hold: (run) => holdMachine(opts.home, run, opts.timing) });
+  const look = (at) => webviewLimit.find(Object.assign({}, at, { repair: true, timing }));
   const timers = new Set();
   const subs = [];
   /*
@@ -84,7 +158,7 @@ function create(host, opts = {}) {
     let done = 0;
     for (const i of installs) {
       if (dropped(mine)) { say(`webview request limit: ${from} -> ${to} dropped, it is no longer wanted`); return { failed, done }; }
-      const why = await webviewLimit.setLimit(at.fs, i, from, to, opts.timing);
+      const why = await webviewLimit.setLimit(at.fs, i, from, to, timing);
       say(`webview request limit: ${i.root} ${from} -> ${to}: ${why || 'done'}`);
       if (why) failed.push({ install: i, why }); else done++;
     }
@@ -102,6 +176,13 @@ function create(host, opts = {}) {
     if (await vscode.window.showWarningMessage(`Agent Plus: could not change VS Code's request limit (${why}). To change it yourself: ${how}`,
       'Copy the command') === 'Copy the command') await vscode.env.clipboard.writeText(how);
   };
+  /* A failed replacement can leave the file missing, and nothing else puts it back until the next start, so that is
+     done before the reader is told; the command to make the change by hand also needs the file to be there. */
+  const recover = async (at, failed, from, to) => {
+    const again = await look(at);
+    if (again.some((i) => i.restored)) say('webview request limit: after the failure, ' + tell(again));
+    await stuck(failed, from, to);
+  };
   /* What find() came back with, as three different things: no installation located at all, one whose file does not
      name the limit the way this build knows, and the limits actually read. */
   const tell = (installs) => {
@@ -111,11 +192,12 @@ function create(host, opts = {}) {
   };
   let started = false, checking = false;
   const checkOnce = async (mine) => {
-    const mode = cfg().get(SETTING, 'ask');
-    if (mode === 'leave' || !host.trusted() || !vscode.workspace.fs || !vscode.env.appRoot) return;
+    if (!host.trusted() || !vscode.workspace.fs || !vscode.env.appRoot) return;
     const at = where();
     const installs = await look(at);
     say('webview request limit: ' + tell(installs));
+    const mode = cfg().get(SETTING, 'ask');
+    if (mode === 'leave') return;
     const low = installs.filter((i) => i.limit === webviewLimit.OLD);
     if (!low.length) return;
     const linux = low.every((i) => webviewLimit.platformOf(i.root, process.platform) === 'linux');
@@ -146,7 +228,7 @@ function create(host, opts = {}) {
     if (done) {
       vscode.window.showInformationMessage('Agent Plus: VS Code\'s request limit is now 1000000. Quit and reopen VS Code for this to apply.');
     }
-    if (failed.length) await stuck(failed, webviewLimit.OLD, webviewLimit.NEW);
+    if (failed.length) await recover(at, failed, webviewLimit.OLD, webviewLimit.NEW);
   };
   const check = () => {
     if (checking) return running;
@@ -189,7 +271,7 @@ function create(host, opts = {}) {
     if (done) {
       vscode.window.showInformationMessage('Agent Plus: VS Code\'s request limit is back to 32 and will stay there. Quit and reopen VS Code for this to apply.');
     }
-    if (failed.length) await stuck(failed, webviewLimit.NEW, webviewLimit.OLD);
+    if (failed.length) await recover(at, failed, webviewLimit.NEW, webviewLimit.OLD);
   };
   return {
     check,
@@ -216,4 +298,4 @@ function create(host, opts = {}) {
   };
 }
 
-module.exports = { create, claimAsk, SETTING, ASKED_KEY, START_DELAY_MS };
+module.exports = { create, claimAsk, holdMachine, SETTING, ASKED_KEY, START_DELAY_MS, HOLD_FILE, HOLD_STALE_MS };
