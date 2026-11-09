@@ -121,8 +121,17 @@ function start(context, log, opts = {}) {
     if (!kind) return;
     if (memento) await memento.update(TOLD_KEY, Object.assign({}, told, { [kind]: true }));
     if (kind === 'orphaned') {
-      vscode.window.showInformationMessage('Agent Plus does nothing on its own, and no extension that uses it is installed '
-        + 'here any more. You can uninstall it in the Extensions view.');
+      const text = 'Agent Plus does nothing on its own, and no extension that uses it is installed here any more. You can '
+        + 'uninstall it in the Extensions view.';
+      /* Uninstalling cannot put VS Code's request limit back: the uninstall hook runs where this extension is
+         installed, which in a remote window is not the client, and deactivate runs after the extension host has
+         dropped its connection to the client. This notice is the moment someone is about to uninstall. */
+      const raised = limit && typeof limit.raised === 'function' ? await limit.raised().catch(() => false) : false;
+      if (!raised) { vscode.window.showInformationMessage(text); return; }
+      const put = 'Put Back the Request Limit';
+      const pick = await vscode.window.showInformationMessage(text + ' VS Code\'s webview request limit is still 1000000, and '
+        + 'uninstalling does not put it back: put it back first.', put);
+      if (pick === put) await limit.putBack();
       return;
     }
     const buttons = dependents.KNOWN.map((k) => `Install ${k.name}`);

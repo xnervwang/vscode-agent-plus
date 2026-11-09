@@ -170,10 +170,6 @@
           "when": "!agentPlus.alone"
         },
         {
-          "command": "agentPlus.restoreWebviewRequestLimit",
-          "when": "!agentPlus.alone"
-        },
-        {
           "command": "agentPlus.showWorkPlanDetail",
           "when": "false"
         },

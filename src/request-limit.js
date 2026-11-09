@@ -294,6 +294,13 @@ function create(host, opts = {}) {
   };
   return {
     check,
+    /* Whether an installation this window belongs to reads 1000000. Reads only, and false in Restricted Mode. */
+    async raised() {
+      if (!host.trusted() || !vscode.workspace.fs || !vscode.env.appRoot) return false;
+      try {
+        return (await webviewLimit.find(Object.assign({}, where(), { repair: false }))).some((i) => i.limit === webviewLimit.NEW);
+      } catch (_) { return false; }
+    },
     /* Called by the views once something uses this extension and the window is trusted. */
     start() {
       if (started || !host.trusted()) return;

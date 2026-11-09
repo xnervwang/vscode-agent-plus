@@ -35,6 +35,17 @@ code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
 - In Restricted Mode the views are read only: no answer is sent and nothing is written. An untrusted window also cannot see the extension that uses this one, since VS Code disables an extension whose own dependency is disabled, so it hides the views and says nothing until the workspace is trusted.
 - `Agent Plus: Show Status` lists the extensions using it and the registered sources.
 
+## Uninstall
+
+- Before uninstalling, run `Agent Plus: Put Back VS Code's Request Limit` if the limit was raised; uninstalling does not put it back.
+- The command stays in the command palette after the extensions that use Agent Plus are gone.
+- Left with nothing that uses it, Agent Plus says it can be uninstalled, and offers to put the limit back first when it is still raised.
+
+| Why uninstalling cannot do it | |
+| --- | --- |
+| The uninstall hook (`vscode:uninstall`) | Runs as plain Node on the machine the extension is installed on. In a remote window that is the remote, and the file is on the client |
+| `deactivate` | Runs after the extension host has dropped its connection to the window, so the client's files cannot be reached |
+
 ## Known limits
 
 | Limit | Detail |
