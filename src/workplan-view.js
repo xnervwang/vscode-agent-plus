@@ -59,7 +59,7 @@ const LOOK = {
 /* A state written by a newer writer. Its row says so rather than passing for something this build understands: it is
    left out of every count, and a reader who saw no mark on it would take those counts as the whole of the work. */
 const unknownLook = (state) => ({ icon: 'question', color: 'descriptionForeground', word: String(state || ''), unknown: true });
-const UNKNOWN_NOTE = 'this version of Agent Work Plan does not know this state';
+const UNKNOWN_NOTE = 'this version of Agent Plus does not know this state';
 /* hasOwnProperty, so a state named toString or __proto__ is unknown rather than an Object.prototype member. */
 const lookOf = (state) => (Object.prototype.hasOwnProperty.call(LOOK, state) ? LOOK[state] : unknownLook(state));
 
@@ -143,7 +143,7 @@ function fields(ms, timeZone) {
 /*
  * When a row was opened, and for a closed one the range up to when it ended.
  *
- * The shape follows Claude Code Extras' session list: month before day, an arrow between the
+ * The shape follows Claude Code Plus' session list: month before day, an arrow between the
  * ends of a range, and the year written only when it is not the current one. A second convention for the same kind of
  * value would be read as a different kind of value.
  *
@@ -320,8 +320,8 @@ class WorkPlanProvider {
       item.id = element.key;
       item.description = `format ${element.plan.format}; this version reads ${PLAN_FORMAT}`;
       item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('charts.orange'));
-      item.tooltip = `${element.plan.file}\n\nIt was written in plan format ${element.plan.format}, and this version of Agent Work Plan `
-        + `reads format ${PLAN_FORMAT}. Rows are drawn as far as format ${PLAN_FORMAT} goes. Update Agent Work Plan to see the rest.`;
+      item.tooltip = `${element.plan.file}\n\nIt was written in plan format ${element.plan.format}, and this version of Agent Plus `
+        + `reads format ${PLAN_FORMAT}. Rows are drawn as far as format ${PLAN_FORMAT} goes. Update Agent Plus to see the rest.`;
       return item;
     }
     if (element.kind === 'error') {
@@ -361,7 +361,7 @@ class WorkPlanProvider {
      */
     item.description = [times, lasted ? 'for ' + lasted : '', look.unknown ? `"${node.state}": ${UNKNOWN_NOTE}` : ''].filter(Boolean).join(' · ');
     item.iconPath = new vscode.ThemeIcon(look.icon, new vscode.ThemeColor(look.color));
-    item.contextValue = 'agentWorkPlanNode';
+    item.contextValue = 'agentPlusNode';
     const head = `**${node.title}**\n\n${word}${node.note ? ' — ' + node.note : ''}`
       + (look.unknown ? `\n\n"${node.state}": ${UNKNOWN_NOTE}, so this row is left out of every count.` : '')
       + (node.question ? '\n\nQuestion: ' + node.question : '') + (times ? '\n\n' + times : '');
@@ -376,7 +376,7 @@ class WorkPlanProvider {
      * looks like it will do. The file has a button in the title bar and an entry in the row's context menu.
      */
     item.command = {
-      command: 'agentWorkPlan.showWorkPlanDetail',
+      command: 'agentPlus.showWorkPlanDetail',
       title: 'Show the description',
       arguments: [{
         title: node.title, state: word, note: node.note, detail: node.detail, question: node.question,

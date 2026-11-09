@@ -214,7 +214,7 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   await l.check();
   eq(control.state.said.filter((s) => /Raise the limit/.test(s.message)).length, 1, 'and does not ask again for the same build');
   await l.putBack();
-  eq([asked.files[SW], control.state.configWrites.slice(-1)[0]], [text(32), ['agentWorkPlan.webviewRequestLimit', 'leave']],
+  eq([asked.files[SW], control.state.configWrites.slice(-1)[0]], [text(32), ['agentPlus.webviewRequestLimit', 'leave']],
     'putting it back restores 32 and stops it being raised again');
   l.dispose();
 
@@ -226,7 +226,7 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
     timing: fast, delayMs: 0, home: tmp('limit-home-3') });
   control.state.answers.length = 0;
   /* The previous instance left the setting at `leave`, which this one would honour by doing nothing at all. */
-  delete control.state.config['agentWorkPlan.webviewRequestLimit'];
+  delete control.state.config['agentPlus.webviewRequestLimit'];
   let putting = null;
   control.answer('Raise the limit to 1000000', () => { putting = l2.putBack(); return 'Raise it this time'; });
   control.state.said.length = 0;
@@ -244,7 +244,7 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   l3 = limit.create(host3, { where: () => ({ fs: late.fs, at: late.at, local: true, appRoot: APP, commit: 'late' }),
     timing: fast, delayMs: 0, home: tmp('limit-home-late') });
   control.state.answers.length = 0;
-  delete control.state.config['agentWorkPlan.webviewRequestLimit'];
+  delete control.state.config['agentPlus.webviewRequestLimit'];
   control.answer('Raise the limit to 1000000', 'Raise it this time');
   control.state.said.length = 0;
   await l3.check();

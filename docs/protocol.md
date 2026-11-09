@@ -1,43 +1,43 @@
-# Agent Work Plan protocol, major 1
+# Agent Plus protocol, major 1
 
-How an extension shows its agent's conversations in Agent Work Plan (`xnervwang.agent-work-plan`). Based on the work plan host protocol of Work Plan for Claude Code (`docs/work-plan-host.md` at vscode-claude-code-extras `d2efd51`), renamed and renumbered.
+How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent-plus`). Based on the work plan host protocol of Claude Code Plus (`docs/work-plan-host.md` at vscode-claude-code-extras `d2efd51`), renamed and renumbered.
 
 ## Roles
 
 | Part | Who | Does |
 | --- | --- | --- |
-| Core | Agent Work Plan | Work plan view, Conversations view, Answer view, status bar entry, reading plan files, answers across windows, VS Code's webview request limit |
-| Source | Each feature extension (Work Plan for Claude Code, Codex Extras) | One agent's conversations, plans, tabs, focus, answer typing |
+| Core | Agent Plus | Work plan view, Conversations view, Answer view, status bar entry, reading plan files, answers across windows, VS Code's webview request limit |
+| Source | Each feature extension (Claude Code Plus, Codex Plus) | One agent's conversations, plans, tabs, focus, answer typing |
 
 ## Setting up a feature extension
 
 | Field in its `package.json` | Value | Why |
 | --- | --- | --- |
-| `extensionDependencies` | includes `xnervwang.agent-work-plan` | VS Code installs and activates the core first |
-| `agentWorkPlan.protocol` | the protocol major its source implements, `1` | The core reads it from the manifest before the extension activates, to say which extension to update |
+| `extensionDependencies` | includes `xnervwang.agent-plus` | VS Code installs and activates the core first |
+| `agentPlus.protocol` | the protocol major its source implements, `1` | The core reads it from the manifest before the extension activates, to say which extension to update |
 | `extensionKind` | `["workspace"]` | `exports` cannot cross extension hosts; the core is `workspace` too |
 | `capabilities.untrustedWorkspaces` | `{ "supported": "limited", ... }` | The core runs limited in Restricted Mode; an extension disabled there would leave it looking alone |
 
-- Get the interface: `vscode.extensions.getExtension('xnervwang.agent-work-plan').exports.agentWorkPlan`. The core is active by then; `await ext.activate()` is harmless.
+- Get the interface: `vscode.extensions.getExtension('xnervwang.agent-plus').exports.agentPlus`. The core is active by then; `await ext.activate()` is harmless.
 - Call `registerSource(source)` once. Show views of your own only after `accepted` is true, under a context key you set then.
-- A view the core does not draw (such as a session list) can go in the core's activity bar container, id `agentWorkPlan`.
+- A view the core does not draw (such as a session list) can go in the core's activity bar container, id `agentPlus`.
 
 ## Ids the core owns
 
 | Kind | Id |
 | --- | --- |
-| Activity bar container | `agentWorkPlan` |
-| Panel container | `agentWorkPlanPanel` |
-| Views | `agentWorkPlan.workPlan`, `agentWorkPlan.conversations`, `agentWorkPlan.answer` |
-| Context key | `agentWorkPlan.alone`: set to true only once the core finds nothing installed that depends on it and no source registered. The views, the status bar entry and the commands are hidden by `!agentWorkPlan.alone`, so an unset key shows them: the key does not exist until the core has activated, and a window's panel is put back before that |
-| Commands | `agentWorkPlan.*` |
-| Settings | `agentWorkPlan.workPlanView`, `agentWorkPlan.conversationsView`, `agentWorkPlan.webviewRequestLimit` |
+| Activity bar container | `agentPlus` |
+| Panel container | `agentPlusPanel` |
+| Views | `agentPlus.workPlan`, `agentPlus.conversations`, `agentPlus.answer` |
+| Context key | `agentPlus.alone`: set to true only once the core finds nothing installed that depends on it and no source registered. The views, the status bar entry and the commands are hidden by `!agentPlus.alone`, so an unset key shows them: the key does not exist until the core has activated, and a window's panel is put back before that |
+| Commands | `agentPlus.*` |
+| Settings | `agentPlus.workPlanView`, `agentPlus.conversationsView`, `agentPlus.webviewRequestLimit` |
 
 ## The interface
 
 | Member | Meaning |
 | --- | --- |
-| `family` | `'agent-work-plan'` |
+| `family` | `'agent-plus'` |
 | `version` | The core's marketplace version |
 | `protocol` | The newest protocol major the core implements; also the first number of `version` |
 | `accepts` | The source protocol majors the core accepts |
@@ -75,7 +75,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `features` | Optional capability names the source implements; none in major 1 |
 | `id` | Source id, such as `'codex'` or `'claude-code'` |
 | `label` | Shown in tooltips and in the work plan view's description |
-| `extensionId` | The extension that registered it, such as `'xnervwang.codex-extras'`; used for update notices |
+| `extensionId` | The extension that registered it, such as `'xnervwang.codex-plus'`; used for update notices |
 | `logo` | `{ light, dark }` SVG `vscode.Uri` values, read from the agent's own extension; drawn with a state dot when more than one source is registered |
 | `planPath(sessionId)` | Absolute path of the conversation's plan file, or `null` |
 | `planDir()` | Folder of the plan files; the core watches it, with the folder itself as the watcher's base and `*.json` as the pattern, and never writes or deletes in it. A folder that does not exist yet is watched once it appears |
@@ -114,11 +114,11 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Shape | The contract at the top of `src/workplan.js` |
 | `format` | Plan format version, `1`; absent means 1. A higher one is drawn as far as format 1 goes, with a row saying the plan is newer |
 | Row states | `discussing`, `todo`, `doing`, `waiting`, `parked`, `done`, `dropped`; no state reads as `todo` |
-| Unknown state | Drawn with its name and "this version of Agent Work Plan does not know this state"; counted nowhere, and the Conversations row says how many |
+| Unknown state | Drawn with its name and "this version of Agent Plus does not know this state"; counted nowhere, and the Conversations row says how many |
 | `waitingOn` | `user`, `build`, `someone`, `session`, `other` |
 | Changes | Fields are only added; a changed meaning takes a new `format` |
 | Writing | Nothing is asked of how a plan file is written. A file read halfway through a write does not parse, and the core shows the plan that last parsed while that file was written in the past 2 seconds; after that the row says it could not be read |
-| Reading again | A file whose modification time and size are both unchanged is not parsed again. `Agent Work Plan: Refresh` parses every plan afresh |
+| Reading again | A file whose modification time and size are both unchanged is not parsed again. `Agent Plus: Refresh` parses every plan afresh |
 
 ## The conversation in front
 
@@ -217,7 +217,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 
 | Mismatch | Notice | Button |
 | --- | --- | --- |
-| Source newer than the core (`core-too-old`) | Update Agent Work Plan | Installs the gallery's newest Agent Work Plan when it accepts that protocol and allows this VS Code; otherwise opens its page with the reason |
+| Source newer than the core (`core-too-old`) | Update Agent Plus | Installs the gallery's newest Agent Plus when it accepts that protocol and allows this VS Code; otherwise opens its page with the reason |
 | Core past the source (`source-too-old`) | Update the feature extension | Installs its newest release when that uses a protocol the core accepts; otherwise opens its page with the reason |
 
 - Told once per pair of versions.

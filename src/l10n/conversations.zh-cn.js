@@ -12,7 +12,7 @@ module.exports = {
   open: (n) => `${n} 项未完成`,
   noPlan: '没有工作计划',
   unknown: (n) => `${n} 行状态这个版本不认识`,
-  unknownTip: (n) => `${n} 行的状态这个版本的 Agent Work Plan 不认识，没有算进任何计数。`,
+  unknownTip: (n) => `${n} 行的状态这个版本的 Agent Plus 不认识，没有算进任何计数。`,
   doing: (age) => (age ? `在做 ${age}` : '在做'),
   lastWorked: (age) => (age ? `在做（对话空闲 ${age}）` : '在做（对话空闲）'),
   asked: (age) => (age ? `${age}前问的` : '问过'),

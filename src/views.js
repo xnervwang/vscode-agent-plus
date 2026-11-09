@@ -26,7 +26,7 @@ const { AnswerView, questionKey } = require('./answer-view');
 const answers = require('./answers');
 const { sharedHome } = require('./files');
 
-const CONFIG = 'agentWorkPlan';
+const CONFIG = 'agentPlus';
 const REFRESH_MS = 30000;
 /*
  * How often the answers folder is read when nothing has told this window to look. It has to be well under the 15
@@ -44,7 +44,7 @@ const WRITING_MS = 2000;
    after how long a list still outstanding is shown as a problem. */
 const LIST_WAIT_MS = 3000;
 const SLOW_MS = 20000;
-const ZONE_KEY = 'agentWorkPlan.timeZone';
+const ZONE_KEY = 'agentPlus.timeZone';
 const EMPTY_LIST = { list: [], problem: '' };
 const NO_CONVERSATIONS = { running: [], stopped: [], asks: 0 };
 
@@ -102,7 +102,7 @@ function create(host, opts = {}) {
   const planMtime = (file) => { const had = plans.get(file); if (had) return had.mtimeMs; const st = statOf(file); return st ? st.mtimeMs : 0; };
   const workplan = new WorkPlanProvider({ read: (session, sourceId) => planOf(sourceId, session).plan });
   workplan.setScoped(true);
-  const view = keep(vscode.window.createTreeView('agentWorkPlan.workPlan', { treeDataProvider: workplan }));
+  const view = keep(vscode.window.createTreeView('agentPlus.workPlan', { treeDataProvider: workplan }));
   let viewSays;
   const paintPlanView = () => {
     const s = focus.sourceId ? registry.get(focus.sourceId) : null;
@@ -127,12 +127,12 @@ function create(host, opts = {}) {
 
   /* ── Conversations ── */
   const conversationsTree = new ConversationsProvider();
-  const conversationsView = keep(vscode.window.createTreeView('agentWorkPlan.conversations', { treeDataProvider: conversationsTree }));
+  const conversationsView = keep(vscode.window.createTreeView('agentPlus.conversations', { treeDataProvider: conversationsTree }));
   const conversationsOn = () => cfg().get('conversationsView', true) !== false;
   const conversationsLang = () => conversationsText.language(vscode.env.language);
-  const statusEntry = keep(vscode.window.createStatusBarItem('agentWorkPlan.conversations', vscode.StatusBarAlignment.Right, 100));
+  const statusEntry = keep(vscode.window.createStatusBarItem('agentPlus.conversations', vscode.StatusBarAlignment.Right, 100));
   statusEntry.name = 'Conversations';
-  statusEntry.command = 'agentWorkPlan.showConversations';
+  statusEntry.command = 'agentPlus.showConversations';
   const paintConversations = () => {
     const t = conversationsText.textFor(conversationsTree.lang);
     const asks = conversationsTree.data.asks;
@@ -338,7 +338,7 @@ function create(host, opts = {}) {
   });
   answerView.setLanguage(conversationsLang());
   answerView.setRestricted(!trusted());
-  keep(vscode.window.registerWebviewViewProvider('agentWorkPlan.answer', answerView, { webviewOptions: { retainContextWhenHidden: true } }));
+  keep(vscode.window.registerWebviewViewProvider('agentPlus.answer', answerView, { webviewOptions: { retainContextWhenHidden: true } }));
 
   /* Created only once a source is registered and the window is trusted, which is also when the folder is made. */
   let courier = null, answersWatch = null, answersSoon = 0, answersPoll = 0;
@@ -512,7 +512,7 @@ function create(host, opts = {}) {
     refreshWorkPlan: () => { plans.clear(); workplan.signature = ''; refreshPlans(); refreshConversations(true); },
     openWorkPlanFile: async (element) => {
       const file = (element && element.plan && element.plan.file) || (workplan.shown() && workplan.shown().file);
-      if (!file) { vscode.window.showInformationMessage('Agent Work Plan: the conversation in front is not keeping a work plan.'); return; }
+      if (!file) { vscode.window.showInformationMessage('Agent Plus: the conversation in front is not keeping a work plan.'); return; }
       await vscode.window.showTextDocument(vscode.Uri.file(file));
     },
     /* Modal, because the description is the thing being read. It shows the whole description, which is bounded where it
@@ -524,16 +524,16 @@ function create(host, opts = {}) {
       if (row.times) head.push(row.times);
       if (row.path && row.path.length) head.push('in: ' + row.path.join(' › '));
       if (row.children) head.push(row.children + ' of its own to finish first');
-      if (row.unknown) head.push('This version of Agent Work Plan does not know this state.');
+      if (row.unknown) head.push('This version of Agent Plus does not know this state.');
       const body = row.detail || 'No description was written for this one.';
       await vscode.window.showInformationMessage(row.title, { modal: true, detail: head.concat(['', body]).join('\n') });
     },
     answerQuestion: async (q) => {
       if (!q) return;
       answerView.show(q);
-      await vscode.commands.executeCommand('agentWorkPlan.answer.focus');
+      await vscode.commands.executeCommand('agentPlus.answer.focus');
     },
-    showConversations: () => vscode.commands.executeCommand('agentWorkPlan.conversations.focus'),
+    showConversations: () => vscode.commands.executeCommand('agentPlus.conversations.focus'),
     /* A conversation row goes to its conversation through its source. An extension cannot bring another window
        forward, so a source answers false for one that is open elsewhere, and then this says so. */
     openConversation: async (target) => {

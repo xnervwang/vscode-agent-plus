@@ -16,7 +16,7 @@ const TEXT = {
     open: (n) => `${n} open`,
     noPlan: 'no work plan',
     unknown: (n) => `${n} in a state this version does not know`,
-    unknownTip: (n) => `${n} row${n === 1 ? ' is' : 's are'} in a state this version of Agent Work Plan does not know, and counted nowhere.`,
+    unknownTip: (n) => `${n} row${n === 1 ? ' is' : 's are'} in a state this version of Agent Plus does not know, and counted nowhere.`,
     doing: (age) => (age ? `doing for ${age}` : 'doing'),
     lastWorked: (age) => (age ? `doing (conversation idle ${age})` : 'doing (conversation idle)'),
     asked: (age) => (age ? `asked ${age} ago` : 'asked'),

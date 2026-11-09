@@ -10,11 +10,11 @@
 const path = require('path');
 const fake = require('./fake-vscode');
 
-const CODEX = (over = {}) => ({ id: 'xnervwang.codex-extras', packageJSON: { name: 'codex-extras', displayName: 'Codex Extras',
-  version: '0.1.0', extensionDependencies: ['openai.chatgpt', 'xnervwang.agent-work-plan'], agentWorkPlan: { protocol: 1 }, ...over } });
-const CLAUDE = (over = {}) => ({ id: 'xnervwang.claude-code-extras', packageJSON: { name: 'claude-code-extras',
-  displayName: 'Claude Code Extras', version: '1.1.0', extensionDependencies: ['xnervwang.agent-work-plan'], agentWorkPlan: { protocol: 1 }, ...over } });
-const SELF = () => ({ id: 'xnervwang.agent-work-plan', packageJSON: { name: 'agent-work-plan', version: '1.0.0' } });
+const CODEX = (over = {}) => ({ id: 'xnervwang.codex-plus', packageJSON: { name: 'codex-plus', displayName: 'Codex Plus',
+  version: '0.1.0', extensionDependencies: ['openai.chatgpt', 'xnervwang.agent-plus'], agentPlus: { protocol: 1 }, ...over } });
+const CLAUDE = (over = {}) => ({ id: 'xnervwang.claude-code-plus', packageJSON: { name: 'claude-code-plus',
+  displayName: 'Claude Code Plus', version: '1.1.0', extensionDependencies: ['xnervwang.agent-plus'], agentPlus: { protocol: 1 }, ...over } });
+const SELF = () => ({ id: 'xnervwang.agent-plus', packageJSON: { name: 'agent-plus', version: '1.0.0' } });
 
 function boot(root, tmp, { extensions = [CODEX()], trusted = true, config = {}, fetch, noticeDelayMs = 0, version, views, memento, home,
   viewOptions, limit } = {}) {
@@ -22,7 +22,7 @@ function boot(root, tmp, { extensions = [CODEX()], trusted = true, config = {}, 
   const undo = fake.install(vscode);
   fake.fresh(root);
   control.state.extensions = [SELF()].concat(extensions);
-  control.state.config = Object.assign({ 'agentWorkPlan.workPlanView': true, 'agentWorkPlan.conversationsView': true }, config);
+  control.state.config = Object.assign({ 'agentPlus.workPlanView': true, 'agentPlus.conversationsView': true }, config);
   const storage = tmp('storage');
   const subs = [];
   const context = { subscriptions: subs, globalState: memento || fake.memento(), workspaceState: fake.memento(),

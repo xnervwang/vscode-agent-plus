@@ -134,11 +134,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     listConversations: async () => [{ sessionId: 'S', title: 'Task', cwd: ws, state: 'idle' }],
     canDeliver: () => true, deliverAnswer: async (id, text, opts) => { got.push([text.split('\n').pop(), !!(opts && opts.deliveryId)]); return { outcome: next, reason: 'busy' }; } });
   await wait(80);
-  const conv = control.state.views['agentWorkPlan.conversations'].provider;
+  const conv = control.state.views['agentPlus.conversations'].provider;
   const row = conv.getChildren().find((e) => e.kind === 'conversation');
   const question = conv.getTreeItem(conv.getChildren(row)[0]).command.arguments[0];
-  await control.state.handlers['agentWorkPlan.answerQuestion'](question);
-  const view = control.state.webviews['agentWorkPlan.answer'];
+  await control.state.handlers['agentPlus.answerQuestion'](question);
+  const view = control.state.webviews['agentPlus.answer'];
   const key = view.current.key;
   view.receive({ type: 'send', key, text: 'Yes, merge.' });
   view.receive({ type: 'send', key, text: 'Yes, merge.' });

@@ -5,7 +5,7 @@
 'use strict';
 /*
  * Everything shipped parses, every source file carries the license header, and the numbers package.json states under
- * "agentWorkPlan" are the ones the code uses.
+ * "agentPlus" are the ones the code uses.
  */
 const fs = require('fs');
 const path = require('path');
@@ -36,7 +36,7 @@ module.exports = async ({ ok, bad, eq, root }) => {
   eq(files.filter((f) => !fs.readFileSync(path.join(root, f), 'utf8').startsWith(header)), [], 'every source file carries the license header');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const sources = require(path.join(root, 'src', 'sources.js'));
-  eq([pkg.agentWorkPlan.protocol, pkg.agentWorkPlan.accepts], [sources.PROTOCOL, sources.ACCEPTS], 'package.json states the protocol and accepted majors the code uses');
+  eq([pkg.agentPlus.protocol, pkg.agentPlus.accepts], [sources.PROTOCOL, sources.ACCEPTS], 'package.json states the protocol and accepted majors the code uses');
   eq(Number(pkg.version.split('.')[0]), sources.PROTOCOL, 'the first number of the version is the protocol major');
   if (sources.ACCEPTS.includes(sources.PROTOCOL)) ok('the host accepts its own protocol major'); else bad('ACCEPTS leaves out PROTOCOL');
   eq([pkg.extensionKind, pkg.activationEvents], [['workspace'], ['onStartupFinished']], 'it runs beside its sources and starts after startup');
@@ -46,8 +46,8 @@ module.exports = async ({ ok, bad, eq, root }) => {
   eq([containers.map((c) => c.icon), fs.existsSync(path.join(root, 'images', 'sidebar.svg'))], [['images/sidebar.svg', 'images/sidebar.svg'], true],
     'both containers use images/sidebar.svg, which is in the repository');
   const ids = JSON.stringify(pkg.contributes).match(/"(?:command|id|view)":"[^"]+"/g) || [];
-  const foreign = ids.filter((s) => !/"(agentWorkPlan[.A-Za-z]*)"/.test(s));
-  eq(foreign, [], 'every container, view and command id is in the agentWorkPlan namespace');
+  const foreign = ids.filter((s) => !/"(agentPlus[.A-Za-z]*)"/.test(s));
+  eq(foreign, [], 'every container, view and command id is in the agentPlus namespace');
   const settings = Object.keys(pkg.contributes.configuration.properties);
-  eq(settings.filter((k) => !k.startsWith('agentWorkPlan.')), [], 'every setting is in the agentWorkPlan namespace');
+  eq(settings.filter((k) => !k.startsWith('agentPlus.')), [], 'every setting is in the agentPlus namespace');
 };

@@ -4,7 +4,7 @@
 
 'use strict';
 /*
- * Conversation sources registered by other extensions through `agentWorkPlan.registerSource()` (docs/protocol.md). A
+ * Conversation sources registered by other extensions through `agentPlus.registerSource()` (docs/protocol.md). A
  * source object belongs to another extension but runs in this process, so every read and call on it goes through get()
  * or call(), and nothing it does may throw out of here.
  *
@@ -12,7 +12,7 @@
  */
 
 /* The protocol major this build implements, the source majors it accepts, and the optional host capabilities it offers.
-   package.json repeats them under "agentWorkPlan" so they can be read without running this code; the tests hold the two
+   package.json repeats them under "agentPlus" so they can be read without running this code; the tests hold the two
    together. The extension's marketplace major is PROTOCOL. */
 const PROTOCOL = 1;
 const ACCEPTS = [1];

@@ -58,8 +58,8 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
   tree.refresh();
   const items = tree.getChildren().map((e) => tree.getTreeItem(e));
   const odd = items.find((i) => i.label === '2. newer');
-  if (odd && odd.iconPath.id === 'question' && /"blocked": this version of Agent Work Plan does not know this state/.test(odd.description)
-    && /left out of every count/.test(odd.tooltip.value) && odd.command.command === 'agentWorkPlan.showWorkPlanDetail'
+  if (odd && odd.iconPath.id === 'question' && /"blocked": this version of Agent Plus does not know this state/.test(odd.description)
+    && /left out of every count/.test(odd.tooltip.value) && odd.command.command === 'agentPlus.showWorkPlanDetail'
     && odd.command.arguments[0].unknown === true && items.find((i) => i.label === '1. known').iconPath.id === 'circle-large-outline'
     && items[0].id.startsWith('other/abc12345/')) {
     ok('a row in an unknown state says this version does not know it');

@@ -16,9 +16,9 @@
 const sources = require('./sources');
 const gallery = require('./gallery');
 
-const OFFERED_KEY = 'agentWorkPlan.updateOffered';
+const OFFERED_KEY = 'agentPlus.updateOffered';
 const KEEP = 50;
-const SELF = { id: 'xnervwang.agent-work-plan', name: 'Agent Work Plan' };
+const SELF = { id: 'xnervwang.agent-plus', name: 'Agent Plus' };
 
 /* 'core' when this build is older than `protocol`, 'source' when it has dropped it, '' when they fit or it is unknown. */
 function behind(protocol, accepts = sources.ACCEPTS) {

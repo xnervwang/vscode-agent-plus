@@ -61,8 +61,8 @@ module.exports = async ({ ok, bad, eq, root }) => {
     && JSON.stringify(src.logoOf(S({ logo: { light: { fsPath: '/l.svg' } } }))) === '{"light":"/l.svg","dark":"/l.svg"}') {
     ok('missing or throwing source members give the fallback');
   } else bad('a bare or throwing source was not tolerated');
-  eq([src.extensionOf(S({ extensionId: 'xnervwang.codex-extras' })), src.extensionOf(S({ extensionId: 'no' })), src.timeZoneOf(S({ timeZone: () => 'America/Los_Angeles' }))],
-    ['xnervwang.codex-extras', '', 'America/Los_Angeles'], 'extensionId and timeZone are read when well formed');
+  eq([src.extensionOf(S({ extensionId: 'xnervwang.codex-plus' })), src.extensionOf(S({ extensionId: 'no' })), src.timeZoneOf(S({ timeZone: () => 'America/Los_Angeles' }))],
+    ['xnervwang.codex-plus', '', 'America/Los_Angeles'], 'extensionId and timeZone are read when well formed');
   eq(src.noticeOf(S({ planNotice: () => ({ title: '  Install it ', command: 'x.y', arguments: [1], description: 'click' }) })),
     { title: 'Install it', description: 'click', detail: '', command: 'x.y', arguments: [1] }, 'planNotice() is read into a fixed shape');
 

@@ -98,7 +98,7 @@ class ConversationsProvider {
     const from = c.source && c.source.id ? c.source : null;
     const sourceId = from ? from.id : c.sourceId || '';
     const target = { sourceId, sessionId: c.sessionId, cwd: c.cwd, title: c.title };
-    const open = { command: 'agentWorkPlan.openConversation', title: 'Go to the conversation', arguments: [target] };
+    const open = { command: 'agentPlus.openConversation', title: 'Go to the conversation', arguments: [target] };
     /* Encoded so that ('a', 'b/c') and ('a/b', 'c') give different ids. */
     const where = (c.running ? '' : 'stopped/') + keyPart(sourceId) + '/' + keyPart(c.sessionId);
     if (element.kind === 'conversation') {
@@ -123,7 +123,7 @@ class ConversationsProvider {
       item.iconPath = new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.orange'));
       item.description = t.asked(ageSince(q.since));
       item.tooltip = `${q.question}\n\n${q.row}. ${q.title}`;
-      item.command = { command: 'agentWorkPlan.answerQuestion', title: 'Answer it', arguments: [questionOf(c, q, sourceId)] };
+      item.command = { command: 'agentPlus.answerQuestion', title: 'Answer it', arguments: [questionOf(c, q, sourceId)] };
       return item;
     }
     const d = element.d;

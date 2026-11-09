@@ -74,8 +74,8 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
   const q = tree.getTreeItem(tree.getChildren(top[0])[0]);
   if (items[0].id === 'conversations/codex/same' && items[1].id === 'conversations/claude-code/same'
     && items[0].iconPath.light === '/i/l.svg' && items[1].iconPath.id === 'sync~spin'
-    && items[0].tooltip.split('\n')[1] === 'Codex' && items[0].command.command === 'agentWorkPlan.openConversation'
-    && items[0].command.arguments[0].sourceId === 'codex' && q.command.command === 'agentWorkPlan.answerQuestion'
+    && items[0].tooltip.split('\n')[1] === 'Codex' && items[0].command.command === 'agentPlus.openConversation'
+    && items[0].command.arguments[0].sourceId === 'codex' && q.command.command === 'agentPlus.answerQuestion'
     && q.command.arguments[0].sourceId === 'codex' && q.command.arguments[0].open.sourceId === 'codex' && q.id === 'conversations/codex/same/?1'
     && items[0].description.startsWith('needs you') && /1 in a state this version does not know/.test(items[1].description)) {
     ok('rows show the logo and label, carry the source id, and say how many rows are in unknown states');

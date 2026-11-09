@@ -24,7 +24,7 @@ function sources(vscode, dirs, logo) {
   const claudeTab = { label: 'Claude', input: new vscode.TabInputWebview('mainThreadWebview-claudeVSCodePanel') };
   const state = { focused: false, revealed: [] };
   const codex = {
-    protocol: 1, features: [], id: 'codex', label: 'Codex', extensionId: 'xnervwang.codex-extras',
+    protocol: 1, features: [], id: 'codex', label: 'Codex', extensionId: 'xnervwang.codex-plus',
     logo: { light: { fsPath: logo }, dark: { fsPath: logo } },
     planPath: (id) => path.join(dirs.codex, id + '.json'), planDir: () => dirs.codex,
     sessionForTab: (tab) => (tab.input === codexTab.input ? T : tab.input === freshTab.input ? '' : null),
@@ -56,14 +56,14 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const s = sources(vscode, { codex: codexDir, claude: claudeDir, ws }, logo);
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     eq(pkg.contributes.commands.map((c) => c.command).filter((c) => !control.state.handlers[c]), [], 'every command in the manifest is registered');
-    eq(Object.keys(control.state.views).sort(), ['agentWorkPlan.conversations', 'agentWorkPlan.workPlan'], 'the two trees are created');
-    eq(Object.keys(control.state.webviews), ['agentWorkPlan.answer'], 'and the Answer view');
+    eq(Object.keys(control.state.views).sort(), ['agentPlus.conversations', 'agentPlus.workPlan'], 'the two trees are created');
+    eq(Object.keys(control.state.webviews), ['agentPlus.answer'], 'and the Answer view');
     const rc = b.api.registerSource(s.codex), rl = b.api.registerSource(s.claude);
     await wait(120);
-    const conv = control.state.views['agentWorkPlan.conversations'].provider, plan = control.state.views['agentWorkPlan.workPlan'];
+    const conv = control.state.views['agentPlus.conversations'].provider, plan = control.state.views['agentPlus.workPlan'];
     const rows = () => conv.getChildren().filter((e) => e.kind === 'conversation').map((e) => conv.getTreeItem(e));
     const r = rows();
-    const status = control.state.status.find((i) => i.id === 'agentWorkPlan.conversations');
+    const status = control.state.status.find((i) => i.id === 'agentPlus.conversations');
     if (rc.accepted && rl.accepted && r.length === 2 && r[0].id === `conversations/codex/${T}` && r[0].iconPath.light
       && fs.existsSync(r[0].iconPath.light.fsPath) && r[1].iconPath.id === 'circle-outline' && /\nCodex\n/.test(r[0].tooltip)
       && status && status.shown && status.text.endsWith('1 to decide')) {
@@ -97,7 +97,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     eq([ignored, shown()], [[null, 'Codex'], [path.join(codexDir, T + '.json'), 'Codex']],
       'a focus report is taken only when the source still says that conversation is in front');
 
-    await control.state.handlers['agentWorkPlan.openConversation']({ sourceId: 'codex', sessionId: T, title: 'Codex task', cwd: ws });
+    await control.state.handlers['agentPlus.openConversation']({ sourceId: 'codex', sessionId: T, title: 'Codex task', cwd: ws });
     eq([s.state.revealed, control.state.said.some((m) => /could not be brought to front/.test(m.message))], [[T], true],
       'a row\'s reveal() goes to its source, and a false answer is said');
 
@@ -149,7 +149,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
        source is shown is made when the tabs are set, and firing the event again shows it that same object. */
     const tab = { label: 'New', input: new vscode.TabInputWebview('one-panel') };
     const otherTab = { label: 'Other', input: new vscode.TabInputWebview('other-panel') };
-    const view = control.state.views['agentWorkPlan.workPlan'];
+    const view = control.state.views['agentPlus.workPlan'];
     const titleNow = () => {
       const p = view.provider.shown();
       if (!p) return 'none';
@@ -248,7 +248,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       fire('change'); await wait(40);
       fire('change'); await wait(40);
       const unchanged = [reads, titleNow()];
-      await control.state.handlers['agentWorkPlan.refreshWorkPlan']();
+      await control.state.handlers['agentPlus.refreshWorkPlan']();
       await wait(40);
       const afterRefresh = [reads, titleNow()];
       fs.writeFileSync(file, plan('third'));
@@ -276,8 +276,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const s = sources(vscode, { codex: codexDir, claude: claudeDir, ws }, logo);
     b.api.registerSource(s.codex); b.api.registerSource(s.claude);
     await wait(120);
-    const answer = control.state.webviews['agentWorkPlan.answer'];
-    const conv = control.state.views['agentWorkPlan.conversations'].provider;
+    const answer = control.state.webviews['agentPlus.answer'];
+    const conv = control.state.views['agentPlus.conversations'].provider;
     const first = conv.getTreeItem(conv.getChildren().find((e) => e.kind === 'conversation'));
     eq([answer.restricted, fs.existsSync(path.join(b.home, 'answers')), fs.existsSync(path.join(b.storage, 'conversation-icons')), !!first.iconPath.light],
       [true, false, false, false], 'in Restricted Mode the Answer view is read only, and no answer folder or icon is written');
@@ -301,7 +301,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const c = boot(root, tmp, { extensions: [], viewOptions: timing });
     const r = c.api.registerSource({ protocol: 1, id: 'stray', planDir: () => codexDir, listConversations: async () => [] });
     await wait(20);
-    eq([r.accepted, c.control.state.context['agentWorkPlan.alone'], c.control.state.watchers.length], [true, false, 1],
+    eq([r.accepted, c.control.state.context['agentPlus.alone'], c.control.state.watchers.length], [true, false, 1],
       'a source registering without a declared dependency brings the views back, with one watcher for its plans');
     c.close();
   }

@@ -8,7 +8,7 @@
  * webview tab in every window (out/vs/workbench/contrib/webview/browser/pre/service-worker.js, since 1.130.0). A
  * response that is never read to the end keeps its slot, and a webview tab (Claude Code's, Codex's) whose scripts wait
  * for a slot stays blank. This raises that limit in the client's copy of the file. From src/webview-limit.js of
- * vscode-claude-code-extras bb28f51; Agent Work Plan is the only extension of the three that changes it.
+ * vscode-claude-code-extras bb28f51; Agent Plus is the only extension of the three that changes it.
  *
  * The file lives in the VS Code app on the client machine. In a remote window that is not this machine, and the
  * client's files are reached through the vscode-local scheme. The running installation is the one whose product.json

@@ -1,14 +1,14 @@
 {
-  "name": "agent-work-plan",
-  "displayName": "Agent Work Plan",
-  "description": "Work plan sidebar, Conversations panel and Answer view shared by Work Plan for Claude Code and Codex Extras.",
+  "name": "agent-plus",
+  "displayName": "Agent Plus",
+  "description": "Work plan sidebar, Conversations panel and Answer view shared by Claude Code Plus and Codex Plus.",
   "version": "1.0.0",
   "publisher": "xnervwang",
   "license": "BSD-3-Clause",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/xnervwang/vscode-agent-work-plan"
+    "url": "https://github.com/xnervwang/vscode-agent-plus"
   },
   "engines": {
     "vscode": "^1.96.0"
@@ -37,7 +37,7 @@
     "onStartupFinished"
   ],
   "main": "./extension.js",
-  "agentWorkPlan": {
+  "agentPlus": {
     "protocol": 1,
     "accepts": [
       1
@@ -48,159 +48,159 @@
   "contributes": {
     "commands": [
       {
-        "command": "agentWorkPlan.refreshWorkPlan",
-        "title": "Agent Work Plan: Refresh",
+        "command": "agentPlus.refreshWorkPlan",
+        "title": "Agent Plus: Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "agentWorkPlan.openWorkPlanFile",
-        "title": "Agent Work Plan: Open the Work Plan File",
+        "command": "agentPlus.openWorkPlanFile",
+        "title": "Agent Plus: Open the Work Plan File",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "agentWorkPlan.showConversations",
-        "title": "Agent Work Plan: Show Conversations",
+        "command": "agentPlus.showConversations",
+        "title": "Agent Plus: Show Conversations",
         "icon": "$(list-tree)"
       },
       {
-        "command": "agentWorkPlan.showStatus",
-        "title": "Agent Work Plan: Show Status"
+        "command": "agentPlus.showStatus",
+        "title": "Agent Plus: Show Status"
       },
       {
-        "command": "agentWorkPlan.restoreWebviewRequestLimit",
-        "title": "Agent Work Plan: Put Back VS Code's Request Limit"
+        "command": "agentPlus.restoreWebviewRequestLimit",
+        "title": "Agent Plus: Put Back VS Code's Request Limit"
       },
       {
-        "command": "agentWorkPlan.showWorkPlanDetail",
-        "title": "Agent Work Plan: Show a Row of the Work Plan"
+        "command": "agentPlus.showWorkPlanDetail",
+        "title": "Agent Plus: Show a Row of the Work Plan"
       },
       {
-        "command": "agentWorkPlan.answerQuestion",
-        "title": "Agent Work Plan: Answer a Question"
+        "command": "agentPlus.answerQuestion",
+        "title": "Agent Plus: Answer a Question"
       },
       {
-        "command": "agentWorkPlan.openConversation",
-        "title": "Agent Work Plan: Go to a Conversation"
+        "command": "agentPlus.openConversation",
+        "title": "Agent Plus: Go to a Conversation"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "agentWorkPlan",
-          "title": "Agent Work Plan",
+          "id": "agentPlus",
+          "title": "Agent Plus",
           "icon": "images/sidebar.svg"
         }
       ],
       "panel": [
         {
-          "id": "agentWorkPlanPanel",
+          "id": "agentPlusPanel",
           "title": "Conversations",
           "icon": "images/sidebar.svg"
         }
       ]
     },
     "views": {
-      "agentWorkPlan": [
+      "agentPlus": [
         {
-          "id": "agentWorkPlan.workPlan",
+          "id": "agentPlus.workPlan",
           "name": "Work plan",
-          "when": "!agentWorkPlan.alone && config.agentWorkPlan.workPlanView"
+          "when": "!agentPlus.alone && config.agentPlus.workPlanView"
         }
       ],
-      "agentWorkPlanPanel": [
+      "agentPlusPanel": [
         {
-          "id": "agentWorkPlan.conversations",
+          "id": "agentPlus.conversations",
           "name": "Conversations",
-          "when": "!agentWorkPlan.alone && config.agentWorkPlan.conversationsView"
+          "when": "!agentPlus.alone && config.agentPlus.conversationsView"
         },
         {
           "type": "webview",
-          "id": "agentWorkPlan.answer",
+          "id": "agentPlus.answer",
           "name": "Answer",
-          "when": "!agentWorkPlan.alone && config.agentWorkPlan.conversationsView"
+          "when": "!agentPlus.alone && config.agentPlus.conversationsView"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "agentWorkPlan.workPlan",
+        "view": "agentPlus.workPlan",
         "contents": "No work plan for the conversation in front."
       },
       {
-        "view": "agentWorkPlan.conversations",
+        "view": "agentPlus.conversations",
         "contents": "No conversation of this workspace is running or has open rows."
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "agentWorkPlan.showConversations",
-          "when": "view == agentWorkPlan.workPlan",
+          "command": "agentPlus.showConversations",
+          "when": "view == agentPlus.workPlan",
           "group": "navigation@0"
         },
         {
-          "command": "agentWorkPlan.openWorkPlanFile",
-          "when": "view == agentWorkPlan.workPlan",
+          "command": "agentPlus.openWorkPlanFile",
+          "when": "view == agentPlus.workPlan",
           "group": "navigation@1"
         },
         {
-          "command": "agentWorkPlan.refreshWorkPlan",
-          "when": "view == agentWorkPlan.workPlan",
+          "command": "agentPlus.refreshWorkPlan",
+          "when": "view == agentPlus.workPlan",
           "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
-          "command": "agentWorkPlan.openWorkPlanFile",
-          "when": "view == agentWorkPlan.workPlan && viewItem == agentWorkPlanNode",
+          "command": "agentPlus.openWorkPlanFile",
+          "when": "view == agentPlus.workPlan && viewItem == agentPlusNode",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "agentWorkPlan.refreshWorkPlan",
-          "when": "!agentWorkPlan.alone"
+          "command": "agentPlus.refreshWorkPlan",
+          "when": "!agentPlus.alone"
         },
         {
-          "command": "agentWorkPlan.openWorkPlanFile",
-          "when": "!agentWorkPlan.alone"
+          "command": "agentPlus.openWorkPlanFile",
+          "when": "!agentPlus.alone"
         },
         {
-          "command": "agentWorkPlan.showConversations",
-          "when": "!agentWorkPlan.alone"
+          "command": "agentPlus.showConversations",
+          "when": "!agentPlus.alone"
         },
         {
-          "command": "agentWorkPlan.restoreWebviewRequestLimit",
-          "when": "!agentWorkPlan.alone"
+          "command": "agentPlus.restoreWebviewRequestLimit",
+          "when": "!agentPlus.alone"
         },
         {
-          "command": "agentWorkPlan.showWorkPlanDetail",
+          "command": "agentPlus.showWorkPlanDetail",
           "when": "false"
         },
         {
-          "command": "agentWorkPlan.answerQuestion",
+          "command": "agentPlus.answerQuestion",
           "when": "false"
         },
         {
-          "command": "agentWorkPlan.openConversation",
+          "command": "agentPlus.openConversation",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "Agent Work Plan",
+      "title": "Agent Plus",
       "properties": {
-        "agentWorkPlan.workPlanView": {
+        "agentPlus.workPlanView": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show the **Work plan** view: the plan of the conversation in front."
         },
-        "agentWorkPlan.conversationsView": {
+        "agentPlus.conversationsView": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show the **Conversations** and **Answer** views in the panel, and the status bar entry."
         },
-        "agentWorkPlan.webviewRequestLimit": {
+        "agentPlus.webviewRequestLimit": {
           "type": "string",
           "scope": "application",
           "enum": [
@@ -214,7 +214,7 @@
             "Do not change it"
           ],
           "default": "ask",
-          "markdownDescription": "VS Code's limit on requests in flight for all webview tabs together (32). Raising it to 1000000 edits VS Code's `service-worker.js`. Takes effect after VS Code is restarted; VS Code updates reset it. `Agent Work Plan: Put Back VS Code's Request Limit` returns it to 32."
+          "markdownDescription": "VS Code's limit on requests in flight for all webview tabs together (32). Raising it to 1000000 edits VS Code's `service-worker.js`. Takes effect after VS Code is restarted; VS Code updates reset it. `Agent Plus: Put Back VS Code's Request Limit` returns it to 32."
         }
       }
     }

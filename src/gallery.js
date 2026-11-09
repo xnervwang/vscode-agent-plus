@@ -5,7 +5,7 @@
 'use strict';
 /*
  * The newest release of an extension on the gallery this editor installs from, with what its package.json says under
- * "agentWorkPlan" and the VS Code versions it supports. Used only after the user clicked an update button, to tell
+ * "agentPlus" and the VS Code versions it supports. Used only after the user clicked an update button, to tell
  * whether updating can fix the mismatch before VS Code is asked to install anything.
  *
  * VS Code itself installs from the Visual Studio Marketplace; editors built from its sources (VSCodium, Cursor, Kiro)
@@ -61,14 +61,14 @@ async function fromOpenVsx(id, fetchFn) {
 /*
  * { version, engine, protocol, accepts, gallery } for the newest non-pre-release version of `id`, or null when the
  * gallery does not have it. Throws when the gallery cannot be reached. protocol is 0 and accepts [] when the manifest
- * says nothing under "agentWorkPlan".
+ * says nothing under "agentPlus".
  */
 async function latest(id, { scheme, fetch: fetchFn = globalThis.fetch } = {}) {
   if (typeof fetchFn !== 'function') throw new Error('this editor has no fetch()');
   const gallery = galleryOf(scheme);
   const r = gallery === 'marketplace' ? await fromMarketplace(id, fetchFn) : await fromOpenVsx(id, fetchFn);
   if (!r) return null;
-  const declared = (r.manifest && r.manifest.agentWorkPlan) || {};
+  const declared = (r.manifest && r.manifest.agentPlus) || {};
   return {
     version: String(r.version),
     engine: String(r.engine || ''),

@@ -17,10 +17,10 @@ const dependents = require('./dependents');
 const compat = require('./compat');
 const PACKAGE = require('../package.json');
 
-const FAMILY = 'agent-work-plan';
+const FAMILY = 'agent-plus';
 /*
  * The views, the status bar entry and the commands are hidden by one context key, and it reads the other way round:
- * they show unless agentWorkPlan.alone says this extension is installed with nothing that uses it. A key this extension
+ * they show unless agentPlus.alone says this extension is installed with nothing that uses it. A key this extension
  * sets does not exist until activate() has run, and VS Code puts a window's panel back while extensions are still
  * starting: a view whose `when` wants a key of ours would be inactive at that moment (viewContainerModel.ts sets
  * state.active from the `when` when the view is added, which happens as the manifests are read), its container would
@@ -34,9 +34,9 @@ const FAMILY = 'agent-work-plan';
  * window does not do is say anything or write down that it has: a dependent that is only disabled, not missing, would
  * make that notice wrong, and once said it is said for good. It is worked out again on onDidGrantWorkspaceTrust.
  */
-const ALONE_KEY = 'agentWorkPlan.alone';
-const HAD_KEY = 'agentWorkPlan.hadDependents';
-const TOLD_KEY = 'agentWorkPlan.toldAlone';
+const ALONE_KEY = 'agentPlus.alone';
+const HAD_KEY = 'agentPlus.hadDependents';
+const TOLD_KEY = 'agentPlus.toldAlone';
 /* How long after start the one-off notices wait, so they do not compete with the window opening. */
 const NOTICE_DELAY_MS = 4000;
 /* Every command the manifest declares. They are registered at once, so none is ever missing, and handed to the views
@@ -46,7 +46,7 @@ const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', '
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {
-  const why = 'Agent Work Plan could not start: ' + String((error && error.message) || error || 'unknown error');
+  const why = 'Agent Plus could not start: ' + String((error && error.message) || error || 'unknown error');
   return Object.freeze({
     family: FAMILY, version: PACKAGE.version, protocol: sources.PROTOCOL, accepts: sources.ACCEPTS.slice(), features: [],
     registerSource: () => ({ accepted: false, code: sources.REFUSED.failed, reason: why, registration: null }),
@@ -121,13 +121,13 @@ function start(context, log, opts = {}) {
     if (!kind) return;
     if (memento) await memento.update(TOLD_KEY, Object.assign({}, told, { [kind]: true }));
     if (kind === 'orphaned') {
-      vscode.window.showInformationMessage('Agent Work Plan does nothing on its own, and no extension that uses it is installed '
+      vscode.window.showInformationMessage('Agent Plus does nothing on its own, and no extension that uses it is installed '
         + 'here any more. You can uninstall it in the Extensions view.');
       return;
     }
     const buttons = dependents.KNOWN.map((k) => `Install ${k.name}`);
     const used = dependents.nameList(dependents.KNOWN.map((k) => k.name));
-    const pick = await vscode.window.showInformationMessage(`Agent Work Plan is used by ${used}, `
+    const pick = await vscode.window.showInformationMessage(`Agent Plus is used by ${used}, `
       + 'which install it themselves. On its own it does nothing.', ...buttons);
     const chosen = dependents.KNOWN[buttons.indexOf(pick)];
     if (chosen) await vscode.commands.executeCommand('workbench.extensions.installExtension', chosen.id);
@@ -211,7 +211,7 @@ function start(context, log, opts = {}) {
     return { accepted: true, code: '', reason: '', registration };
   };
 
-  const agentWorkPlan = Object.freeze({
+  const agentPlus = Object.freeze({
     family: FAMILY,
     version: core.version,
     protocol: core.protocol,
@@ -229,7 +229,7 @@ function start(context, log, opts = {}) {
   /* ── Commands ── */
   const status = () => {
     const lines = [
-      `Agent Work Plan ${core.version}: protocol ${core.protocol}, accepts ${core.accepts.join(', ')}`,
+      `Agent Plus ${core.version}: protocol ${core.protocol}, accepts ${core.accepts.join(', ')}`,
       `Workspace trusted: ${host.trusted() ? 'yes' : 'no (Restricted Mode: read only)'}`,
       `Extensions using it: ${deps.map((d) => `${d.id} ${d.version} (protocol ${d.protocol || 'not declared'})`).join(', ') || 'none'}`,
       ...(views ? views.commands.statusLines() : ['The views are not built: nothing here uses this extension.']),
@@ -245,11 +245,11 @@ function start(context, log, opts = {}) {
   };
   for (const name of COMMANDS) {
     try {
-      context.subscriptions.push(vscode.commands.registerCommand(`agentWorkPlan.${name}`, (...args) => {
+      context.subscriptions.push(vscode.commands.registerCommand(`agentPlus.${name}`, (...args) => {
         try { return Promise.resolve(run(name, args)).catch((e) => say(`${name}: ${(e && e.message) || e}`)); }
         catch (e) { say(`${name}: ${(e && e.message) || e}`); return undefined; }
       }));
-    } catch (e) { say(`could not register agentWorkPlan.${name}: ${(e && e.message) || e}`); }
+    } catch (e) { say(`could not register agentPlus.${name}: ${(e && e.message) || e}`); }
   }
 
   context.subscriptions.push({ dispose: () => {
@@ -262,9 +262,9 @@ function start(context, log, opts = {}) {
     registry.clear();
   } });
   host.dependents = () => deps.slice();
-  host.api = agentWorkPlan;
+  host.api = agentPlus;
   host.views = () => views;
-  return agentWorkPlan;
+  return agentPlus;
 }
 
 module.exports = { start, unavailable, FAMILY, ALONE_KEY, HAD_KEY, TOLD_KEY, NOTICE_DELAY_MS, COMMANDS };

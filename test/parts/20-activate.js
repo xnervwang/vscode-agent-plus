@@ -13,7 +13,7 @@ const path = require('path');
 const fake = require('../fake-vscode');
 const { boot, CODEX, CLAUDE } = require('../boot');
 
-const source = (over = {}) => Object.assign({ protocol: 1, id: 'codex', label: 'Codex', extensionId: 'xnervwang.codex-extras' }, over);
+const source = (over = {}) => Object.assign({ protocol: 1, id: 'codex', label: 'Codex', extensionId: 'xnervwang.codex-plus' }, over);
 
 module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   /* extension.js itself, with a host that throws. */
@@ -27,7 +27,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const ext = require(path.join(root, 'extension.js'));
     let r, threw = '';
     try { r = ext.activate({ subscriptions: [], globalState: fake.memento() }); } catch (e) { threw = e.message; }
-    const refused = r && r.agentWorkPlan && r.agentWorkPlan.registerSource(source());
+    const refused = r && r.agentPlus && r.agentPlus.registerSource(source());
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     eq([threw, typeof (r && r.then), refused && refused.accepted, refused && refused.code, /boom/.test(refused && refused.reason)],
       ['', 'undefined', false, 'failed', true], 'activate() returns synchronously and, when start() throws, an interface that refuses with the reason');
@@ -40,13 +40,13 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     undo();
   }
 
-  /* With Codex Extras installed. */
+  /* With Codex Plus installed. */
   {
     const b = boot(root, tmp, { views: false });
     const api = b.api;
     eq([api.family, api.protocol, api.accepts, api.features, api.version, Object.isFrozen(api)],
-      ['agent-work-plan', 1, [1], [], '1.0.0', true], 'the interface: family, protocol 1, accepted majors, features, version');
-    eq(b.control.state.context['agentWorkPlan.alone'], false, 'a dependent in the installed manifests leaves the views showing');
+      ['agent-plus', 1, [1], [], '1.0.0', true], 'the interface: family, protocol 1, accepted majors, features, version');
+    eq(b.control.state.context['agentPlus.alone'], false, 'a dependent in the installed manifests leaves the views showing');
     const r = api.registerSource(source());
     eq([r.accepted, r.code, r.reason, typeof (r.registration && r.registration.dispose), Object.isFrozen(r)], [true, '', '', 'function', true],
       'an accepted registration says so and carries a Disposable');
@@ -69,24 +69,24 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   {
     const memento = fake.memento();
     const b = boot(root, tmp, { extensions: [], views: false, memento });
-    eq(b.control.state.context['agentWorkPlan.alone'], true, 'alone, the one key the views are hidden by is set');
+    eq(b.control.state.context['agentPlus.alone'], true, 'alone, the one key the views are hidden by is set');
     await wait(20);
     const said = b.control.state.said.map((s) => [s.message.slice(0, 40), s.buttons]);
-    /* Each extension is called what it is called in the Extensions view, which for the Claude Code one is not its
-       package name: a reader told to look for something else finds nothing. */
+    /* Each extension is called what it is called in the Extensions view: a reader told to look for something else
+       finds nothing. */
     const names = require(path.join(root, 'src', 'dependents.js')).KNOWN.map((k) => k.name);
-    eq(said, [[`Agent Work Plan is used by ${names[0]}, `.slice(0, 40), names.map((n) => 'Install ' + n)]],
+    eq(said, [[`Agent Plus is used by ${names.join(' and ')}`.slice(0, 40), names.map((n) => 'Install ' + n)]],
       'alone, it says once what it is for, with a button naming each extension as the Extensions view does');
-    eq(names, ['Work Plan for Claude Code', 'Codex Extras'], 'and those are the marketplace names');
+    eq(names, ['Claude Code Plus', 'Codex Plus'], 'and those are the marketplace names');
     eq(fs.readdirSync(b.storage).concat(fs.existsSync(b.home) ? fs.readdirSync(b.home) : []), [], 'and writes nothing');
     b.close();
     const again = boot(root, tmp, { extensions: [], views: false, memento });
     await wait(20);
     eq(again.control.state.said.length, 0, 'the next window does not say it again');
-    /* Codex Extras is installed while the window is open. */
+    /* Codex Plus is installed while the window is open. */
     again.control.state.extensions.push(CODEX());
     again.control.fireExtensions();
-    eq(again.control.state.context['agentWorkPlan.alone'], false, 'installing an extension that uses it brings the views back');
+    eq(again.control.state.context['agentPlus.alone'], false, 'installing an extension that uses it brings the views back');
     again.close();
     /* Then it is gone again. */
     const left = boot(root, tmp, { extensions: [], views: false, memento });
@@ -105,18 +105,18 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     b.control.fireExtensions();
     await wait(120);
     const said = b.control.state.said.map((s) => s.message);
-    eq([said, b.control.state.context['agentWorkPlan.alone']], [[], false],
+    eq([said, b.control.state.context['agentPlus.alone']], [[], false],
       'the extension that uses it arriving before the notice is due keeps the notice from being said at all');
     b.close();
     /* And a notice said too early is taken back, so the next window that really is alone still says it. */
     const early = fake.memento();
-    await early.update('agentWorkPlan.toldAlone', { alone: true });
+    await early.update('agentPlus.toldAlone', { alone: true });
     const c = boot(root, tmp, { extensions: [CODEX()], views: false, memento: early, noticeDelayMs: 0 });
     await wait(20);
     c.close();
     const d = boot(root, tmp, { extensions: [], views: false, memento: early, noticeDelayMs: 0 });
     await wait(20);
-    eq(d.control.state.said.filter((s) => /does nothing on its own|is used by Claude Code Extras/.test(s.message)).length, 1,
+    eq(d.control.state.said.filter((s) => /does nothing on its own|is used by Claude Code Plus/.test(s.message)).length, 1,
       'a window with a dependent clears a notice that was said too early');
     d.close();
   }
@@ -131,8 +131,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const memento = fake.memento();
     const b = boot(root, tmp, { extensions: [], trusted: false, views: false, memento, noticeDelayMs: 0 });
     await wait(20);
-    const untrusted = [b.control.state.context['agentWorkPlan.alone'], b.control.state.said.length,
-      memento.get('agentWorkPlan.toldAlone', null)];
+    const untrusted = [b.control.state.context['agentPlus.alone'], b.control.state.said.length,
+      memento.get('agentPlus.toldAlone', null)];
     b.control.grantTrust();
     await wait(20);
     eq([untrusted, b.control.state.said.some((s) => /is used by/.test(s.message))],
@@ -142,7 +142,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     /* A dependent an untrusted window can see is a dependent: the views show. */
     const c = boot(root, tmp, { extensions: [CODEX()], trusted: false, views: false, noticeDelayMs: 0 });
     await wait(20);
-    eq([c.control.state.context['agentWorkPlan.alone'], c.control.state.said.length], [false, 0],
+    eq([c.control.state.context['agentPlus.alone'], c.control.state.said.length], [false, 0],
       'an untrusted window that can see a dependent shows the views, and still says nothing');
     c.close();
   }
@@ -150,10 +150,10 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   /* The install buttons. */
   {
     const b = boot(root, tmp, { extensions: [], views: false });
-    b.control.answer('Agent Work Plan is used by', 'Install Codex Extras');
+    b.control.answer('Agent Plus is used by', 'Install Codex Plus');
     await wait(20);
     const asked = b.control.state.commands.filter((c) => c[0] === 'workbench.extensions.installExtension');
-    eq(asked, [['workbench.extensions.installExtension', 'xnervwang.codex-extras']], 'the button installs that extension');
+    eq(asked, [['workbench.extensions.installExtension', 'xnervwang.codex-plus']], 'the button installs that extension');
     b.close();
   }
 
@@ -168,40 +168,40 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
           properties: [{ key: 'Microsoft.VisualStudio.Code.Engine', value: '^1.96.0' }],
           files: [{ assetType: 'Microsoft.VisualStudio.Code.Manifest', source: 'https://gallery/manifest' }] }] }] }] }) };
       }
-      return { ok: true, json: async () => ({ agentWorkPlan: { protocol: gallery.protocol, accepts: gallery.accepts } }) };
+      return { ok: true, json: async () => ({ agentPlus: { protocol: gallery.protocol, accepts: gallery.accepts } }) };
     };
     const memento = fake.memento();
-    const b = boot(root, tmp, { extensions: [CODEX({ version: '0.2.0', agentWorkPlan: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
-    b.control.answer('needs a newer Agent Work Plan', 'Update Agent Work Plan');
+    const b = boot(root, tmp, { extensions: [CODEX({ version: '0.2.0', agentPlus: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
+    b.control.answer('needs a newer Agent Plus', 'Update Agent Plus');
     await wait(30);
     const said = b.control.state.said.map((s) => s.message);
     const r = b.api.registerSource(source({ protocol: 2 }));
     await wait(30);
     const installs = b.control.state.commands.filter((c) => c[0] === 'workbench.extensions.installExtension');
-    if (said.length >= 1 && /Codex Extras needs a newer Agent Work Plan: it uses protocol 2/.test(said[0])
-      && r.code === 'core-too-old' && JSON.stringify(installs) === JSON.stringify([['workbench.extensions.installExtension', 'xnervwang.agent-work-plan', { enable: true }]])
+    if (said.length >= 1 && /Codex Plus needs a newer Agent Plus: it uses protocol 2/.test(said[0])
+      && r.code === 'core-too-old' && JSON.stringify(installs) === JSON.stringify([['workbench.extensions.installExtension', 'xnervwang.agent-plus', { enable: true }]])
       && b.control.state.said.filter((s) => /needs a newer/.test(s.message)).length === 1 && fetched.length === 2) {
-      ok('a newer dependent is told about once, and the button installs the gallery\'s Agent Work Plan when that accepts it');
+      ok('a newer dependent is told about once, and the button installs the gallery\'s Agent Plus when that accepts it');
     } else bad(`core too old: ${JSON.stringify([said, r, installs, fetched])}`);
     b.close();
     /* The gallery has nothing newer. */
     gallery.version = '1.0.0'; gallery.protocol = 1; gallery.accepts = [1];
-    const c = boot(root, tmp, { extensions: [CODEX({ version: '0.3.0', agentWorkPlan: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
-    c.control.answer('needs a newer Agent Work Plan', 'Update Agent Work Plan');
+    const c = boot(root, tmp, { extensions: [CODEX({ version: '0.3.0', agentPlus: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
+    c.control.answer('needs a newer Agent Plus', 'Update Agent Plus');
     await wait(30);
     const opened = c.control.state.commands.filter((x) => x[0] === 'extension.open' || x[0] === 'workbench.extensions.installExtension');
     const why = c.control.state.said.map((s) => s.message).find((m) => /cannot be updated from here/.test(m)) || '';
-    eq([opened, /the newest release, 1\.0\.0, is the one installed/.test(why)], [[['extension.open', 'xnervwang.agent-work-plan']], true],
+    eq([opened, /the newest release, 1\.0\.0, is the one installed/.test(why)], [[['extension.open', 'xnervwang.agent-plus']], true],
       'when the gallery has no fix, the button opens the extension\'s page and says why');
     c.close();
   }
 
   /* A dependent this build has left behind, and the gallery is unreachable. */
   {
-    const b = boot(root, tmp, { extensions: [CLAUDE({ version: '1.0.30', agentWorkPlan: { protocol: 0 } })], views: false,
+    const b = boot(root, tmp, { extensions: [CLAUDE({ version: '1.0.30', agentPlus: { protocol: 0 } })], views: false,
       fetch: async () => { throw new Error('offline'); } });
-    b.control.answer('is too old for Agent Work Plan', (m, buttons) => buttons[0]);
-    const r = b.api.registerSource(source({ id: 'claude-code', protocol: 0, extensionId: 'xnervwang.claude-code-extras' }));
+    b.control.answer('is too old for Agent Plus', (m, buttons) => buttons[0]);
+    const r = b.api.registerSource(source({ id: 'claude-code', protocol: 0, extensionId: 'xnervwang.claude-code-plus' }));
     eq(r.code, 'shape', 'protocol 0 is not a protocol');
     b.close();
     const accepts = require(path.join(root, 'src', 'sources.js')).ACCEPTS;
@@ -209,14 +209,14 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     eq([compat.behind(1, accepts), compat.behind(2, [2]), compat.behind(1, [3, 2]), compat.behind(0, [1])], ['', '', 'source', ''],
       'behind() names the side to update');
     const { vscode, control } = fake.create();
-    control.answer('is too old for Agent Work Plan', (m, buttons) => buttons[0]);
+    control.answer('is too old for Agent Plus', (m, buttons) => buttons[0]);
     const out = await compat.offer({ vscode, memento: fake.memento(), who: 'source',
-      ext: { id: 'xnervwang.claude-code-extras', name: 'Claude Code Extras', version: '1.0.30', protocol: 1 },
+      ext: { id: 'xnervwang.claude-code-plus', name: 'Claude Code Plus', version: '1.0.30', protocol: 1 },
       core: { version: '2.0.0', accepts: [2] }, fetch: async () => { throw new Error('offline'); } });
     const msgs = control.state.said.map((s) => s.message);
-    if (out === 'page' && /Claude Code Extras 1\.0\.30 is too old for Agent Work Plan 2\.0\.0/.test(msgs[0]) && /Update Claude Code Extras/.test(JSON.stringify(control.state.said[0].buttons))
+    if (out === 'page' && /Claude Code Plus 1\.0\.30 is too old for Agent Plus 2\.0\.0/.test(msgs[0]) && /Update Claude Code Plus/.test(JSON.stringify(control.state.said[0].buttons))
       && /could not be reached \(offline\)/.test(msgs[1])
-      && JSON.stringify(control.state.commands) === JSON.stringify([['extension.open', 'xnervwang.claude-code-extras']])) {
+      && JSON.stringify(control.state.commands) === JSON.stringify([['extension.open', 'xnervwang.claude-code-plus']])) {
       ok('a dependent left behind is told to update itself; with the gallery unreachable its page opens with the reason');
     } else bad(`source too old: ${JSON.stringify([out, msgs, control.state.commands])}`);
   }
