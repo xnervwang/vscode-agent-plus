@@ -76,11 +76,13 @@ module.exports = async ({ eq, root, tmp }) => {
   /* Copies left by changes that never finished: once the file is usable again, those too old to belong to a change
      still under way are removed, and a young one stays. With the file missing, the newest copy is the one used. */
   {
-    const legacy = SW + wl.BACKUP_SUFFIX, young = SW + wl.BACKUP_SUFFIX + '.young';
-    const c = client({ [SW]: text(32), [legacy]: text(32), [young]: text(32) });
+    const legacy = SW + wl.BACKUP_SUFFIX, aged = SW + wl.BACKUP_SUFFIX + '.aged', young = SW + wl.BACKUP_SUFFIX + '.young';
+    const c = client({ [SW]: text(32), [legacy]: text(32), [aged]: text(32), [young]: text(32) });
     c.meta.set(legacy, { mtime: Date.now() - wl.LOCK_STALE_MS - 1000 });
+    c.meta.set(aged, { mtime: Date.now() - wl.LOCK_STALE_MS - 1000 });
     await wl.find({ fs: c.fs, at: c.at, local: true, appRoot: APP, repair: true, timing: fast });
-    eq(leftovers(c.files), [young], 'a copy left long ago is removed once the file is usable, and a young one is left for the change it may belong to');
+    eq(leftovers(c.files).sort(), [legacy, young].sort(),
+      'a copy left long ago is removed once the file is usable; a young one, and the one an earlier version made, are left');
     const m = client({ [legacy]: text(32), [young]: text(wl.NEW) });
     m.meta.set(legacy, { mtime: Date.now() - 5000 });
     const [back] = await wl.find({ fs: m.fs, at: m.at, local: true, appRoot: APP, repair: true, timing: fast });

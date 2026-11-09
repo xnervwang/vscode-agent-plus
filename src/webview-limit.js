@@ -258,7 +258,9 @@ async function restore(fs, uri, timing) {
 
 /*
  * Removes the copies a change left behind, once the file names the limit again. A copy younger than LOCK_STALE_MS on
- * the client's clock can belong to a change still under way in another window, and is kept. Returns how many went.
+ * the client's clock can belong to a change still under way in another window, and is kept. So is the single
+ * `.backup` an earlier version made: a window still running that version reuses one it finds instead of making its
+ * own, and removes it itself once its change is read back. Returns how many went.
  */
 async function tidy(fs, uri, timing) {
   if (!(await copiesOf(fs, uri)).length) return 0;
@@ -269,6 +271,7 @@ async function tidy(fs, uri, timing) {
     if (!now) return 0;
     let n = 0;
     for (const copy of await copiesOf(fs, uri)) {
+      if (copy.path.endsWith(BACKUP_SUFFIX)) continue;
       const st = await stat(fs, copy);
       if (!st || now - millis(st.mtime) <= LOCK_STALE_MS) continue;
       try { await fs.delete(copy); n++; } catch (_) { /* removed by another window */ }
