@@ -51,11 +51,15 @@ class AnswerView {
     /* The wording each state was recorded against: a row asked something else now is a different question, and the
        outcome of the last one does not belong to it. */
     this.asked = new Map();
+    /* Which sending each question's state belongs to. The key is the row, and an answer to what the row asked before
+       can still be on its way when it asks something new and that is answered too; its outcome is not this one's. */
+    this.tickets = new Map();
+    this.ticketSeq = 0;
   }
 
   /* Remembers the keys whose drafts and states may be kept, oldest first. */
   trim() {
-    for (const map of [this.drafts, this.states, this.sent, this.asked]) {
+    for (const map of [this.drafts, this.states, this.sent, this.asked, this.tickets]) {
       while (map.size > KEEP_DRAFTS) {
         const oldest = map.keys().next();
         if (oldest.done) break;
@@ -114,6 +118,7 @@ class AnswerView {
     if (this.asked.has(key) && this.asked.get(key) !== (q.question || '')) {
       this.states.delete(key);
       this.sent.delete(key);
+      this.tickets.delete(key);
     }
     this.asked.set(key, q.question || '');
     if (!this.drafts.has(key)) this.drafts.set(key, '');
@@ -144,6 +149,7 @@ class AnswerView {
     if (this.asked.get(next.key) !== (next.question || '')) {
       this.states.delete(next.key);
       this.sent.delete(next.key);
+      this.tickets.delete(next.key);
       this.asked.set(next.key, next.question || '');
     }
     if (!same) this.paint();
@@ -167,11 +173,22 @@ class AnswerView {
     return !!(st && st.kind === 'waiting');
   }
 
+  /** Marks an answer to question `key` as on its way, and returns the ticket its outcome is to come back with. */
+  begin(key) {
+    const ticket = ++this.ticketSeq;
+    this.tickets.set(key, ticket);
+    this.setState(key, { kind: 'waiting' }, ticket);
+    return ticket;
+  }
+
   /**
    * Shows the outcome of the answer to question `key`, and clears its draft once it was submitted and the box still
    * holds the text that was sent. Anything typed while the answer was on its way is a draft of its own and is kept.
+   * With a `ticket` (begin()), an outcome for any other sending of that question, or for what the row asked before, is
+   * not shown.
    */
-  setState(key, state) {
+  setState(key, state, ticket) {
+    if (ticket !== undefined && this.tickets.get(key) !== ticket) return;
     this.states.set(key, Object.assign({ at: Date.now() }, state));
     if (state.kind === 'submitted') {
       const text = this.sent.get(key);

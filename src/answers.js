@@ -210,6 +210,21 @@ class Courier {
     }
   }
 
+  /*
+   * Takes back the answers this window sent that no window has taken yet and `keep(sent)` no longer wants: the row
+   * they answer has gone on to ask something else, or stopped asking. Each is reported as not received.
+   */
+  recall(keep) {
+    if (this.closed) return;
+    for (const [id, o] of [...this.outgoing]) {
+      let wanted = true;
+      try { wanted = keep(o) !== false; } catch (_) { wanted = true; }
+      if (wanted || !withdraw(this.dir, id)) continue;
+      this.outgoing.delete(id);
+      try { this.finish(o, { outcome: 'notReceived', reason: 'its question changed before a window took it', recalled: true }); } catch (_) { /* the view is gone */ }
+    }
+  }
+
   /** The source's report on answer `id`. A report after the SEND_MS timeout has nobody to hear it. */
   handed(id, result) {
     if (!this.handing.has(id)) return;

@@ -263,6 +263,7 @@ function create(host, opts = {}) {
       /* The question on screen is only as good as the last pass: the row it is on may have been reworded, finished, or
          its conversation stopped. */
       answerView.revise((key) => questionNow(data, key));
+      if (courier) courier.recall((sent) => stillAsked(data, sent.target));
       paintConversations();
     } catch (e) {
       say('conversations: ' + ((e && e.message) || e));
@@ -278,6 +279,18 @@ function create(host, opts = {}) {
       for (const q of c.questions) if (questionKey(c.sourceId, c.sessionId, q.row) === key) return questionOf(c, q);
     }
     return null;
+  };
+
+  /*
+   * Whether the row an answer was written for still asks what it was answering. True whenever the latest pass cannot
+   * tell: its conversation is not in the list (a source whose list failed this pass) or its plan did not parse.
+   */
+  const stillAsked = (data, target) => {
+    if (!target) return true;
+    const c = data.running.concat(data.stopped).find((x) => x.sourceId === target.sourceId && x.sessionId === target.sessionId);
+    if (!c || !c.hasPlan) return true;
+    const q = c.questions.find((x) => x.row === target.row);
+    return !!q && (q.question || '') === target.question;
   };
 
   const refreshPlans = () => {
@@ -323,16 +336,18 @@ function create(host, opts = {}) {
     },
     send: (q, text) => {
       if (!trusted()) { answerView.setRestricted(true); return; }
+      let ticket;
       try {
         const c = courierNow();
         if (!c) throw new Error('no answer folder');
         const body = answers.message(q.row, q.question, text);
-        answerView.setState(q.key, { kind: 'waiting' });
-        c.send({ sourceId: q.sourceId, sessionId: q.sessionId, row: q.row, text: body }, { key: q.key });
+        ticket = answerView.begin(q.key);
+        const target = { sourceId: q.sourceId, sessionId: q.sessionId, row: q.row, question: q.question || '' };
+        c.send({ sourceId: q.sourceId, sessionId: q.sessionId, row: q.row, text: body }, { key: q.key, ticket, target });
       } catch (e) {
         say('answer: ' + ((e && e.message) || e));
         Promise.resolve(vscode.env.clipboard.writeText(answers.message(q.row, q.question, text))).catch(() => {});
-        answerView.setState(q.key, { kind: 'error' });
+        answerView.setState(q.key, { kind: 'error' }, ticket);
       }
     },
   });
@@ -394,8 +409,10 @@ function create(host, opts = {}) {
       hand: delivery.hand,
       claiming: () => trusted() && !closing,
       finish: (sent, result) => {
-        if (result.outcome === 'notReceived') Promise.resolve(vscode.env.clipboard.writeText(sent.text)).catch(() => {});
-        answerView.setState(sent.key, { kind: result.outcome, reason: result.reason || '' });
+        /* One taken back because its row asks something else is not shown in the view, which has moved on to the new
+           question with the draft still in the box, so nothing is put on the clipboard behind the reader's back. */
+        if (result.outcome === 'notReceived' && !result.recalled) Promise.resolve(vscode.env.clipboard.writeText(sent.text)).catch(() => {});
+        answerView.setState(sent.key, { kind: result.outcome, reason: result.reason || '' }, sent.ticket);
         say(`answer ${sent.id}: ${result.outcome}${result.reason ? ' (' + result.reason + ')' : ''}`);
       },
     });
