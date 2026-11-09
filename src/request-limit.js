@@ -77,15 +77,18 @@ function create(host, opts = {}) {
   const begin = (what) => { doing = what; return ++decision; };
   const dropped = (mine) => mine !== decision;
   const cancelRaise = () => { if (doing === 'raise') decision++; };
+  /* `done` counts the installs actually changed, so a change dropped part way (or before it began) is not reported as
+     made: the one that dropped it says what it did itself. */
   const change = async (at, installs, from, to, mine) => {
     const failed = [];
+    let done = 0;
     for (const i of installs) {
-      if (dropped(mine)) { say(`webview request limit: ${from} -> ${to} dropped, it is no longer wanted`); return failed; }
+      if (dropped(mine)) { say(`webview request limit: ${from} -> ${to} dropped, it is no longer wanted`); return { failed, done }; }
       const why = await webviewLimit.setLimit(at.fs, i, from, to, opts.timing);
       say(`webview request limit: ${i.root} ${from} -> ${to}: ${why || 'done'}`);
-      if (why) failed.push({ install: i, why });
+      if (why) failed.push({ install: i, why }); else done++;
     }
-    return failed;
+    return { failed, done };
   };
   /* The command that makes the same change by hand has to be the one this operation was trying to make: offering
      32 -> 1000000 to someone whose restore failed sends them the wrong way. */
@@ -139,8 +142,8 @@ function create(host, opts = {}) {
        have been updated under us. */
     const again = (await look(at)).filter((i) => i.limit === webviewLimit.OLD);
     if (!again.length) { say('webview request limit: nothing left at ' + webviewLimit.OLD); return; }
-    const failed = await change(at, again, webviewLimit.OLD, webviewLimit.NEW, mine);
-    if (failed.length < again.length) {
+    const { failed, done } = await change(at, again, webviewLimit.OLD, webviewLimit.NEW, mine);
+    if (done) {
       vscode.window.showInformationMessage('Agent Work Plan: VS Code\'s request limit is now 1000000. Quit and reopen VS Code for this to apply.');
     }
     if (failed.length) await stuck(failed, webviewLimit.OLD, webviewLimit.NEW);
@@ -182,8 +185,8 @@ function create(host, opts = {}) {
       }
       return;
     }
-    const failed = await change(at, high, webviewLimit.NEW, webviewLimit.OLD, mine);
-    if (failed.length < high.length) {
+    const { failed, done } = await change(at, high, webviewLimit.NEW, webviewLimit.OLD, mine);
+    if (done) {
       vscode.window.showInformationMessage('Agent Work Plan: VS Code\'s request limit is back to 32 and will stay there. Quit and reopen VS Code for this to apply.');
     }
     if (failed.length) await stuck(failed, webviewLimit.NEW, webviewLimit.OLD);

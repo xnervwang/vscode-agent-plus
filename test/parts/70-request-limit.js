@@ -229,11 +229,29 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
   delete control.state.config['agentWorkPlan.webviewRequestLimit'];
   let putting = null;
   control.answer('Raise the limit to 1000000', () => { putting = l2.putBack(); return 'Raise it this time'; });
+  control.state.said.length = 0;
   await l2.check();
   await putting;
   eq([cancelled.files[SW], control.state.log.some((m) => /dropped, it is no longer wanted/.test(m))], [text(32), true],
     'a restore while the question is open stops the raise it was asking about');
   l2.dispose();
+
+  /* The same put-back arriving later, while the raise reads the file a second time after the answer: it is dropped
+     there, inside the change itself, and has to be no more reported as made than the one stopped above. */
+  let swReads = 0, putLater = null, l3 = null;
+  const late = fresh(32, {}, { onRead: (p) => { if (p === SW && ++swReads === 2) putLater = l3.putBack(); } });
+  const host3 = { vscode, context: { globalState: fake.memento() }, say: (m) => control.state.log.push(m), trusted: () => true };
+  l3 = limit.create(host3, { where: () => ({ fs: late.fs, at: late.at, local: true, appRoot: APP, commit: 'late' }),
+    timing: fast, delayMs: 0, home: tmp('limit-home-late') });
+  control.state.answers.length = 0;
+  delete control.state.config['agentWorkPlan.webviewRequestLimit'];
+  control.answer('Raise the limit to 1000000', 'Raise it this time');
+  control.state.said.length = 0;
+  await l3.check();
+  await putLater;
+  eq([late.files[SW], control.state.said.some((s) => /is now 1000000/.test(s.message))], [text(32), false],
+    'a raise dropped part way is not reported as made, and the file is left at 32');
+  l3.dispose();
 
   /* Putting it back has three different things to say, and "already 32" is only one of them. */
   const says = async (make) => {
