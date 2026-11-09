@@ -113,7 +113,8 @@ function node(raw, depth, budget) {
 function readPlanAt(file, session, max = MAX_PLAN_BYTES) {
   if (!file || !session) return null;
   const body = readBounded(file, max);
-  if (!body) return null;
+  /* An empty file goes on to fail the parse below: it is what a writer that truncates first leaves for a moment. */
+  if (body === null) return null;
   const entry = { session, file, title: '', nodes: [], error: '', format: PLAN_FORMAT, newer: false };
   let parsed;
   try { parsed = JSON.parse(body); }

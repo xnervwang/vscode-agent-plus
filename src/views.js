@@ -77,6 +77,9 @@ function create(host, opts = {}) {
    * size exactly would not be noticed; the refresh command drops the whole cache for that.
    */
   const plans = new Map();
+  /* Each pass of the Conversations tree is numbered and every plan read stamped with it; one not read for two passes
+     is let go, so a window open for weeks does not keep every plan it was ever shown. */
+  let pass = 0;
   const statOf = (file) => { try { return fs.statSync(file); } catch (_) { return null; } };
   const planOf = (sourceId, session) => {
     const source = registry.get(sourceId);
@@ -84,6 +87,7 @@ function create(host, opts = {}) {
     if (!file) return { file: '', plan: null };
     const st = statOf(file);
     const had = plans.get(file);
+    if (had) had.pass = pass;
     if (st && had && had.session === session && had.mtimeMs === st.mtimeMs && had.size === st.size) return { file, plan: had.plan };
     const plan = readPlanAt(file, session, MAX_PLAN_BYTES);
     /*
@@ -95,10 +99,11 @@ function create(host, opts = {}) {
     if (plan && plan.error && had && had.plan && !had.plan.error && st && Date.now() - st.mtimeMs < WRITING_MS) {
       return { file, plan: had.plan };
     }
-    if (st) plans.set(file, { session, mtimeMs: st.mtimeMs, size: st.size, plan });
+    if (st) plans.set(file, { session, mtimeMs: st.mtimeMs, size: st.size, plan, pass });
     else plans.delete(file);
     return { file, plan };
   };
+  const letGo = () => { for (const [file, had] of plans) if (had.pass < pass - 1) plans.delete(file); };
   const planMtime = (file) => { const had = plans.get(file); if (had) return had.mtimeMs; const st = statOf(file); return st ? st.mtimeMs : 0; };
   const workplan = new WorkPlanProvider({ read: (session, sourceId) => planOf(sourceId, session).plan });
   workplan.setScoped(true);
@@ -172,6 +177,7 @@ function create(host, opts = {}) {
     if (st.pending) { st.askAgain = true; return st.pending; }
     st.askNext = false;
     st.slow = false;
+    st.askedAt = Date.now();
     let asking = null;
     const slowTimer = after(() => {
       if (st.pending !== asking || closing) return;
@@ -184,7 +190,14 @@ function create(host, opts = {}) {
       st.slow = false;
       if (closing || !registry.has(entry)) return r;
       st.last = r;
-      if (st.askAgain) { st.askAgain = false; st.repaint = false; st.askNext = true; refreshConversations(false); }
+      /* No sooner than the debounce after this list was asked for: a source that reports a change from inside every
+         list it gives would otherwise be listed again the moment each list settles, for as long as the window is open.
+         A list that took longer than that is followed at once. */
+      if (st.askAgain) {
+        st.askAgain = false; st.repaint = false; st.askNext = true;
+        const left = soon - (Date.now() - st.askedAt);
+        if (left > 0) convAfter(left); else refreshConversations(false);
+      }
       else if (st.repaint) { st.repaint = false; refreshConversations(false, true); }
       return r;
     });
@@ -251,7 +264,9 @@ function create(host, opts = {}) {
         if (listState(entry).slow) problems.push([entry.source, `it has not listed its conversations for ${Math.round(slowAfter / 1000)} seconds; still waiting`]);
       });
       const several = registry.size > 1;
+      pass++;
       const data = conversations.assemble({ lists, folders: roots, planOf, modified: planMtime, inFolder });
+      letGo();
       for (const c of data.running.concat(data.stopped)) {
         const source = registry.get(c.sourceId);
         c.source = { id: c.sourceId, label: sources.labelOf(source) || c.sourceId };
@@ -313,10 +328,11 @@ function create(host, opts = {}) {
     if (closing || plansTimer) return;
     plansTimer = setTimeout(() => { plansTimer = 0; refreshPlans(); }, soon);
   };
-  const convSoon = () => {
+  const convAfter = (ms) => {
     if (closing || convTimer) return;
-    convTimer = setTimeout(() => { convTimer = 0; refreshConversations(false); }, soon);
+    convTimer = setTimeout(() => { convTimer = 0; refreshConversations(false); }, ms);
   };
+  const convSoon = () => convAfter(soon);
 
   /* ── Answers ── */
   const answersDir = () => path.join(opts.home || sharedHome(), 'answers');
@@ -603,7 +619,8 @@ function create(host, opts = {}) {
     commands,
     setActive(on) { active = !!on; paintConversations(); },
     /* For tests. */
-    _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, answerView, focus, courier: () => courier },
+    _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, answerView, focus, courier: () => courier,
+      plans: () => [...plans.keys()] },
     dispose() {
       closing = true;
       clearInterval(tick);
