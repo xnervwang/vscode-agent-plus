@@ -36,7 +36,11 @@ function activate(context) {
     const host = require('./src/host');
     const views = require('./src/views');
     const limit = require('./src/request-limit');
-    return { agentPlus: host.start(context, log, { views: views.create, limit: limit.create }) };
+    const agentPlus = host.start(context, log, { views: views.create, limit: limit.create });
+    require('./src/old-settings').adopt(vscode).then((written) => {
+      for (const [key, scope, value] of written) if (log) log.appendLine(`took over ${key} = ${value} (${scope}) from the old Claude Code extension's setting`);
+    }, (e) => { if (log) log.appendLine(`taking over old settings: ${(e && e.message) || e}`); });
+    return { agentPlus };
   } catch (e) {
     try { if (log) log.appendLine(`could not start: ${(e && e.stack) || e}`); } catch (_) { /* nothing left to report to */ }
     return { agentPlus: refusing(e) };
