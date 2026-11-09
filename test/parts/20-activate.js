@@ -45,7 +45,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const b = boot(root, tmp, { views: false });
     const api = b.api;
     eq([api.family, api.protocol, api.accepts, api.features, api.version, Object.isFrozen(api)],
-      ['agent-plus', 1, [1], [], '1.0.0', true], 'the interface: family, protocol 1, accepted majors, features, version');
+      ['agent-plus', 1, [1], [], require(path.join(root, 'package.json')).version, true], 'the interface: family, protocol 1, accepted majors, features, version');
     eq(b.control.state.context['agentPlus.alone'], false, 'a dependent in the installed manifests leaves the views showing');
     const r = api.registerSource(source());
     eq([r.accepted, r.code, r.reason, typeof (r.registration && r.registration.dispose), Object.isFrozen(r)], [true, '', '', 'function', true],
@@ -185,13 +185,14 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     } else bad(`core too old: ${JSON.stringify([said, r, installs, fetched])}`);
     b.close();
     /* The gallery has nothing newer. */
-    gallery.version = '1.0.0'; gallery.protocol = 1; gallery.accepts = [1];
+    const installed = require(path.join(root, 'package.json')).version;
+    gallery.version = installed; gallery.protocol = 1; gallery.accepts = [1];
     const c = boot(root, tmp, { extensions: [CODEX({ version: '0.3.0', agentPlus: { protocol: 2 } })], views: false, fetch: fetchFn, memento });
     c.control.answer('needs a newer Agent Plus', 'Update Agent Plus');
     await wait(30);
     const opened = c.control.state.commands.filter((x) => x[0] === 'extension.open' || x[0] === 'workbench.extensions.installExtension');
     const why = c.control.state.said.map((s) => s.message).find((m) => /cannot be updated from here/.test(m)) || '';
-    eq([opened, /the newest release, 1\.0\.0, is the one installed/.test(why)], [[['extension.open', 'xnervwang.agent-plus']], true],
+    eq([opened, why.includes(`the newest release, ${installed}, is the one installed`)], [[['extension.open', 'xnervwang.agent-plus']], true],
       'when the gallery has no fix, the button opens the extension\'s page and says why');
     c.close();
   }
