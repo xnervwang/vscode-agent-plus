@@ -46,7 +46,7 @@ ${icon ? `    <Icon>${esc(icon)}</Icon>\n` : ''}  </Metadata>
   <Assets>
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />
-    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
 ${icon ? `    <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="${esc(icon)}" Addressable="true" />\n` : ''}  </Assets>
 </PackageManifest>
 `;

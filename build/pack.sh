@@ -18,7 +18,9 @@ trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/extension"
 
 cd "$root"
-cp -r package.json extension.js src images README.md LICENSE "$stage/extension/"
+cp -r package.json extension.js src images README.md "$stage/extension/"
+# The marketplace finds a package part by its extension, so a license file without one is not found.
+cp LICENSE "$stage/extension/LICENSE.txt"
 node build/make-manifest.js "$stage"
 
 rm -f "$out"
