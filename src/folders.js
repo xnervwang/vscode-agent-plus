@@ -1,23 +1,46 @@
 // BSD 3-Clause License
 // Copyright (c) 2026, Xnerv Wang
 // All rights reserved.
+// Source: vscode-agent-plus src/folders.js; sync-shared.js copies it, so edit it there.
 
 'use strict';
 /*
- * The two parts of src/waiting.js in vscode-claude-code-extras bb28f51 that are not about Claude Code: whether a
- * conversation's folder is in this window's workspace, and which rows of a plan wait on the user.
+ * Whether a conversation's folder is in this window's workspace, and which rows of a plan wait on the user. Agent Plus
+ * filters Conversations with the first, and Claude Code Plus and Codex Plus each ship a copy.
+ *
+ * Paths are compared after resolving symbolic links, because VS Code can report a workspace folder as /home/<user>/...
+ * while an agent records the same folder as /local/home/<user>/..., /home/<user> being a link. Compared as strings,
+ * every conversation would fall outside the workspace.
  */
 const fs = require('fs');
 const path = require('path');
 
-/* So that /home/x and /local/home/x match when one is a symbolic link to the other. */
-const realPath = (p) => { try { return fs.realpathSync.native(p); } catch (_) { return path.resolve(p); } };
-const caseOf = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
+/* How far up the tree to look for an ancestor that exists. Deeper than any real checkout, and bounded so a path that
+   never resolves cannot spin. */
+const MAX_WALK_UP = 64;
+
+const caseOf = process.platform === 'win32' || process.platform === 'darwin' ? (s) => s.toLowerCase() : (s) => s;
+
+/** `p` with every symbolic link resolved; the nearest existing ancestor's real path with the rest put back, if it is gone. */
+function realPath(p) {
+  const abs = path.resolve(p);
+  try { return fs.realpathSync.native(abs); } catch (_) { /* gone, or not readable */ }
+  let head = abs;
+  const tail = [];
+  for (let i = 0; i < MAX_WALK_UP; i++) {
+    const parent = path.dirname(head);
+    if (parent === head) break;
+    tail.unshift(path.basename(head));
+    head = parent;
+    try { return path.join(fs.realpathSync.native(head), ...tail); } catch (_) { /* keep going up */ }
+  }
+  return abs;
+}
 
 /*
- * A test for "is this directory one of `folders` or under one", comparing real paths. With a `memo`, each path is
- * resolved once: the test is asked about the folder of every conversation on every pass, and resolving one is a system
- * call per level of it. The caller owns the memo and so decides how long an answer stays good for.
+ * A test for "is this directory one of `folders` or under one". With a `memo`, each path is resolved once: the test is
+ * asked about the folder of every conversation on every pass, and resolving one is a system call per level of it. How
+ * long a resolved answer stays good for is up to whoever passes the memo in.
  */
 function folderTest(folders, memo) {
   const resolve = memo
@@ -47,4 +70,4 @@ function planQuestions(nodes, prefix = '', out = []) {
   return out;
 }
 
-module.exports = { folderTest, planQuestions };
+module.exports = { folderTest, realPath, planQuestions, MAX_WALK_UP };

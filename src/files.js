@@ -1,27 +1,50 @@
 // BSD 3-Clause License
 // Copyright (c) 2026, Xnerv Wang
 // All rights reserved.
+// Source: vscode-agent-plus src/files.js; sync-shared.js copies it, so edit it there.
 
 'use strict';
 /*
  * Writing files other processes and other windows read at any moment: always whole, through a temporary file renamed
- * into place, so a reader never sees half of one. writeAtomic() comes from src/claude-files.js of
- * vscode-claude-code-extras bb28f51.
+ * into place, so a reader never sees half of one. Agent Plus uses this file itself, and Claude Code Plus and Codex
+ * Plus each ship a copy.
  */
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-function writeAtomic(file, text, mode) {
-  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-  try {
-    fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
-    fs.renameSync(tmp, file);
-  } catch (e) {
-    try { fs.unlinkSync(tmp); } catch (_) { /* never written */ }
+/*
+ * The temporary name carries this process and a random part: several windows write the same files, and with one shared
+ * name a second writer would replace the first one's temporary file, whose rename would then fail. `tag` goes into that
+ * name; `tries` above 1 starts a failed write over from scratch.
+ */
+function writeAtomic(file, text, mode, { tag = '', tries = 1 } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    const tmp = `${file}${tag}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+    try {
+      fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
+      fs.renameSync(tmp, file);
+      return;
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch (_) { /* never written, or already moved */ }
+      if (attempt >= tries) throw e;
+    }
+  }
+}
+
+/*
+ * Puts a patched file's original back by moving its backup over it in one step, so no window can find a clean file
+ * beside its backup: one patching in that moment would write a fresh backup for a separate delete to take, and leave a
+ * patched file with nothing to restore it from. Of two restores at once, the one whose move finds no backup has nothing
+ * left to do.
+ */
+function moveBack(backup, file) {
+  try { fs.renameSync(backup, file); } catch (e) {
+    if (e && e.code === 'ENOENT') return { changed: false, message: 'nothing to restore' };
     throw e;
   }
+  return { changed: true, message: 'restored' };
 }
 
 /*
@@ -49,4 +72,4 @@ function privateDir(dir) {
   return dir;
 }
 
-module.exports = { writeAtomic, sharedHome, privateDir };
+module.exports = { writeAtomic, moveBack, sharedHome, privateDir };
