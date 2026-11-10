@@ -73,6 +73,8 @@ module.exports = async (h) => {
 
   {
     const repo = tmp('extension-repo');
+    /* An export of this repository (git archive) has no commit to record. */
+    const inGit = fs.existsSync(path.join(root, '.git'));
     fs.writeFileSync(path.join(repo, 'shared.json'), JSON.stringify({ core: '', files: [
       { path: 'build/sync-shared.js', from: 'shared/build/sync-shared.js' },
       { path: 'build/make-manifest.js', from: 'shared/build/make-manifest.js' },
@@ -81,7 +83,7 @@ module.exports = async (h) => {
     eq(sync.sync(repo, root), ['build/sync-shared.js', 'build/make-manifest.js', 'test/shared-copies.js'], 'sync-shared.js copies each listed file');
     const m = sync.readManifest(repo);
     eq([fs.readFileSync(path.join(repo, 'build', 'make-manifest.js')).equals(fs.readFileSync(manifest)),
-      m.files.every((f) => f.sha256 === sync.sha256(path.join(root, f.from))), /^[0-9a-f]{40}(-dirty)?$/.test(m.core)],
+      m.files.every((f) => f.sha256 === sync.sha256(path.join(root, f.from))), inGit ? /^[0-9a-f]{40}(-dirty)?$/.test(m.core) : m.core === 'unknown'],
     [true, true, true], 'byte for byte, recording each hash and the Agent Plus commit');
     eq(sync.sync(repo, root), [], 'and a second sync copies nothing');
 
@@ -89,7 +91,7 @@ module.exports = async (h) => {
     const sub = { ok: (s) => results.push('ok ' + s), bad: (s) => results.push('bad ' + s), note: (s) => results.push('note ' + s),
       eq: (g, w, s) => results.push((JSON.stringify(g) === JSON.stringify(w) ? 'ok ' : 'bad ') + s) };
     const copies = require(path.join(repo, 'test', 'shared-copies.js'));
-    const committed = !m.core.endsWith('-dirty');
+    const committed = /^[0-9a-f]{40}$/.test(m.core);
     await copies(sub, repo, root);
     eq(results.filter((r) => !r.startsWith('ok ')).length, committed ? 0 : 1, 'the copied check passes in the extension when nothing has moved');
 
