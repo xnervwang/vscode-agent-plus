@@ -4,3 +4,5 @@ docs/**
 *.vsix
 .gitignore
 .github/**
+# Code the two extensions share; each ships its own copy of it (shared/build/sync-shared.js).
+shared/**
