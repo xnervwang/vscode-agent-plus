@@ -113,8 +113,8 @@ module.exports = async (h) => {
     eq(/does not carry the line naming its source/.test(refused), true, 'and a source without the line naming it is not copied');
   }
   {
-    /* An extension whose copies, the sync script's own among them, carry the line in its earlier wording, and whose
-       sync script still demands that wording of every source. */
+    /* An extension whose copies, including build/sync-shared.js, still carry the old wording of the source line, and
+       whose sync script checks every source for that old wording. */
     const repo = tmp('older-copies');
     const older = (from) => fs.readFileSync(path.join(root, from), 'utf8')
       .replace(sync.sourceLine(from), `Source: vscode-agent-plus ${from}, copied by sync-shared.js; edit it there, not in a copy.`);
@@ -133,6 +133,28 @@ module.exports = async (h) => {
     const check = cp.spawnSync(process.execPath, [path.join(repo, 'build', 'sync-shared.js'), '--check'], { encoding: 'utf8', env });
     eq([run.status, run.stderr.trim(), files.every((f) => fs.readFileSync(path.join(repo, f.path)).equals(fs.readFileSync(path.join(root, f.from)))), check.status],
       [0, '', true, 0], 'and an older copy of the sync script syncs the current sources, running Agent Plus\'s own rules');
+  }
+  {
+    /* A file made from a template and a fill, both in Agent Plus. */
+    const core = tmp('core-template');
+    const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(core, rel)), { recursive: true }); fs.writeFileSync(path.join(core, rel), text); };
+    put('shared/t/doc.md', `# ${sync.sourceLine('shared/t/doc.md')}\nA\n{{one}}\nB\n{{two}}\n`);
+    put('shared/t/fill.txt', 'notes\n=== one\n1a\n1b\n\n=== two\n2\n');
+    const repo = tmp('made');
+    fs.writeFileSync(path.join(repo, 'shared.json'), JSON.stringify({ core: '', files: [{ path: 'doc.md', from: 'shared/t/doc.md', fill: 'shared/t/fill.txt' }] }));
+    sync.sync(repo, core);
+    eq([fs.readFileSync(path.join(repo, 'doc.md'), 'utf8').split('\n').slice(1).join('\n'), sync.checkCopies(repo), sync.checkCore(repo, core)],
+      ['A\n1a\n1b\nB\n2\n', [], []], 'a template line {{name}} becomes the lines of that block of the fill');
+    put('shared/t/fill.txt', 'notes\n=== one\n1a\n\n=== two\n2\n');
+    eq(sync.checkCore(repo, core), ['shared/t/doc.md with shared/t/fill.txt has changed in Agent Plus'], 'a changed fill is noted as Agent Plus having moved on');
+    put('shared/t/fill.txt', 'notes\n=== one\n1a\n');
+    let refused = '';
+    try { sync.sync(repo, core); } catch (e) { refused = e.message; }
+    eq(refused, 'the fill has no block named two', 'and a template line the fill has no block for stops the sync');
+    put('shared/t/fill.txt', '=== one\n1\n\n=== two\n2\n\n=== three\n3\n');
+    refused = '';
+    try { sync.sync(repo, core); } catch (e) { refused = e.message; }
+    eq(refused, 'the template has no line for three', 'as does a block the template has no line for');
   }
   if (!fs.existsSync(path.join(root, 'build', 'make-manifest.js'))) ok('build/ keeps no second copy of the descriptor writer');
   else bad('build/make-manifest.js is a second copy of shared/build/make-manifest.js');

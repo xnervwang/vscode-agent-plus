@@ -1,0 +1,90 @@
+# Source: vscode-agent-plus shared/plugin/claude/maintain-skill.txt; sync-shared.js copies it, so edit it there.
+# What Claude Code puts in each {{name}} line of shared/plugin/skills/maintain/SKILL.md: each block runs from its "=== name"
+# line to the blank line before the next one.
+
+=== first-row-intro
+Before one exists nothing is injected at all, so for the first row the path has to be built:
+
+=== first-row-path
+echo "$HOME/.claude/plugins/data/agent-work-plan-claude-code-extras/$CLAUDE_CODE_SESSION_ID.json"
+
+=== first-row-tail
+In PowerShell:
+
+```powershell
+"$HOME\.claude\plugins\data\agent-work-plan-claude-code-extras\$env:CLAUDE_CODE_SESSION_ID.json"
+```
+
+One file per conversation, named by its session id, in the directory the platform gives this plugin. That directory's
+
+=== doing-who
+| `doing` | agreed, and being worked on right now by this conversation or an agent it started with `claude --bg` |
+
+=== runners
+worth saying, goes in `note`: the main thread, a sub-agent, a detached one. A row stays `doing` while an
+
+=== started-with
+started with `claude --bg` is still working on it.** Between turns, nothing else in this conversation runs. Move a stale
+
+=== conversations-list
+These are fields rather than words in `note` because the extension's Conversations tab lists, for each conversation of
+the workspace, what waits on the user, and it builds that list from these two fields only. Nothing reads `note` for it: a guess from free
+text would get the list wrong. So a row with no
+`waitingOn` is shown as waiting on someone unknown and is not listed, and one with `user` but no answerable question
+gives the user nothing to act on.
+
+=== waiting-required
+- **Moving a row into `waiting`** needs `--waiting-on`; the row command refuses without it, and refuses `user` without
+  `--question`.
+- **A `discussing` row** may say `--waiting-on user` with its question when you have put a decision to the user and the
+
+=== old-waiting
+- **A `waiting` row from before the field** shows `on ?` in the injected block. Give it `--waiting-on` the next time you
+
+=== table-waiting
+| An agreed, started row is held up by someone or something outside this conversation | Move it to `waiting` when that happens, with `--waiting-on`, and `--question` when it waits on the user |
+| You put a decision on a `discussing` row to the user and cannot go on without it | Give it `--waiting-on user` and the `--question` you asked |
+
+=== table-watermark
+| A hook says the context has passed a water mark | For every `doing` row, `set <row> --detail TEXT`: the exact next step, anything not to do, and the user's own words written nowhere else |
+
+=== remind-when
+it. After each batch of tool calls, a hook can remind the main thread to mark the row it is working on. It does so once
+
+=== row-section
+## The row command
+
+For a change of state, prefer the `plan-row.py` command shipped with the plugin. It is one short call. Changing state by
+hand means reading the clock first and rewriting the whole file. The block put in front of you each turn gives the full
+command line with both paths filled in. Its two forms are:
+
+```bash
+python3 <path>/plan-row.py <plan file> set <row> [<state>] [--note TEXT] [--detail TEXT] [--waiting-on WHO] [--question TEXT]
+python3 <path>/plan-row.py <plan file> add <state> <title> [--under <row>] [--note TEXT] [--waiting-on WHO] [--question TEXT]
+```
+
+Use the command line from the block as given: it starts Python by the name that works on this machine, which is not
+always `python3`. For the first row, before a plan exists, there is no block. The command is then `hooks/plan-row.py`
+in this plugin, two folders above the base directory this skill was loaded from, run with `python3`. You can also write
+the file directly.
+
+`<row>` is the number in front of a row, such as `3` or `2.1`; closed rows count, and `--note ""` removes the note.
+`--detail` replaces the row's description, `--detail ""` removes it, and a description past 12 lines or 900 characters
+is refused without changing the file. Omitting `<state>` keeps the row's state; naming its current state does not reset
+`since`. The command reads the plan file immediately before writing to keep hand edits, takes `opened`, `since`, and
+`closed` from the clock, writes the whole file, and renames it into place; `add` creates a missing plan file, but `set`
+does not.
+
+`--waiting-on ""` removes who a row waits on, and its question with it; `--question ""` removes the question.
+
+The command refuses a row number that does not exist, a state outside the seven fixed keywords, a file that does not
+parse, a file that is not a plan, and plans switched off. It also refuses a move into `waiting` without `--waiting-on`,
+`user` without a question, a question on a row not waiting on the user, a question past 200 characters, and
+`--waiting-on` on a row that is neither `waiting` nor `discussing`. It leaves the file untouched in each case.
+
+Change a title, or move a row, by editing the file directly under the two rules below: read the file
+before writing it, and never delete a node. The row command satisfies both rules by itself.
+
+=== read-first
+**Read the file before writing it.** Write the whole file at once, from what you just read - never from what you
+remember of it. The user edits this file by hand to correct you, and that is the point of it; a write built from memory

@@ -1,0 +1,86 @@
+# Source: vscode-agent-plus shared/plugin/codex/maintain-skill.txt; sync-shared.js copies it, so edit it there.
+# What Codex puts in each {{name}} line of shared/plugin/skills/maintain/SKILL.md: each block runs from its "=== name"
+# line to the blank line before the next one.
+
+=== first-row-intro
+Before one exists nothing is injected at all, so for the first row the path has to be built. Codex puts the thread's
+id in every shell command's environment:
+
+=== first-row-path
+echo "${CODEX_HOME:-$HOME/.codex}/plugins/data/agent-work-plan-codex-extras/$CODEX_THREAD_ID.json"
+
+=== first-row-tail
+One file per conversation, named by its thread id, in the directory Codex gives this plugin. That directory's
+
+=== doing-who
+| `doing` | agreed, and being worked on right now by this conversation, a sub-agent it spawned, or a `codex exec` run it started |
+
+=== runners
+worth saying, goes in `note`: the main thread, a sub-agent, a `codex exec` run. A row stays `doing` while an
+
+=== started-with
+started is still working on it.** Between turns, nothing else in this conversation runs. Move a stale
+
+=== conversations-list
+These are fields rather than words in `note` because the editor's Conversations view lists, for each conversation of
+the workspace, what waits on the user, and it builds that list from these two fields only. Nothing reads `note` for it:
+a guess from free text would get the list wrong. So a row with no `waitingOn` is shown as waiting on someone unknown
+and is not listed, and one with `user` but no answerable question gives the user nothing to act on.
+
+=== waiting-required
+- **Moving a row into `waiting`** needs `waiting_on`; the row command refuses without it, and refuses `user` without
+  `question`.
+- **A `discussing` row** may say `waiting_on user` with its question when you have put a decision to the user and the
+
+=== old-waiting
+- **A `waiting` row from before the field** shows `on ?` in the injected block. Give it `waiting_on` the next time you
+
+=== table-waiting
+| An agreed, started row is held up by someone or something outside this conversation | Move it to `waiting` when that happens, with `waiting_on`, and `question` when it waits on the user |
+| You put a decision on a `discussing` row to the user and cannot go on without it | Give it `waiting_on user` and the `question` you asked |
+
+=== table-watermark
+| A hook says the context has passed a water mark | For every `doing` row, `set_row` with `detail`: the exact next step, anything not to do, and the user's own words written nowhere else |
+
+=== remind-when
+it. After each tool call, a hook can remind the main thread to mark the row it is working on. It does so once
+
+=== row-section
+## The row tools
+
+For any change of state, use the plan's own MCP tools, `set_row` and `add_row` on the `work_plan` server. Codex runs them
+outside the sandbox, so they need no approval; the plan lives under CODEX_HOME, which a shell command or a patch cannot
+write without one. Both take `plan`, the plan file's absolute path from the block at the start of the turn (or built as
+above for the first row), and read the clock themselves.
+
+- `set_row`: `row` (the number in front of it, such as `3` or `2.1`; closed rows count), and any of `state`, `note`,
+  `detail`, `waiting_on`, `question`.
+- `add_row`: `state`, `title`, and any of `under`, `note`, `waiting_on`, `question`. It creates a missing plan file;
+  `set_row` does not.
+
+An empty `note` removes the note, an empty `detail` the description, an empty `waiting_on` who the row waits on and its
+question with it, an empty `question` the question. A description past 12 lines or 900 characters is refused without
+changing the file. Leaving out `state` keeps the row's state; naming its current state does not reset `since`. Each
+call reads the plan file immediately before writing, so hand edits are kept, holds the plan's lock, writes the whole
+file and renames it into place.
+
+The tools refuse a row number that does not exist, a state outside the seven fixed keywords, a file that does not parse,
+a file that is not a plan, and plans switched off. They also refuse a move into `waiting` without `waiting_on`, `user`
+without a question, a question on a row not waiting on the user, a question past 200 characters, and `waiting_on` on a
+row that is neither `waiting` nor `discussing`. They leave the file untouched in each case.
+
+The same command exists for a shell, `hooks/plan-row.py <plan file> set|add ...` in this plugin, for a person keeping the
+plan by hand; from inside Codex it stops for an approval, and a direct patch or shell write to the plan file is refused
+before it asks.
+
+To change a title or move a row, which the tools do not do, ask the user to edit the file.
+
+## Codex's own checklist
+
+Codex's `update_plan` tool draws a checklist of the steps of the current task. It is a different thing: use it for the
+steps of this turn if it helps, and keep this plan for work that outlives the turn - what is agreed, what waits on
+someone, what was dropped and why. Do not copy one into the other.
+
+=== read-first
+**Read the file before writing it.** The row tools do this for you. Anything else that writes the file writes the
+whole of it at once, from what was just read - never from what is remembered of it. The user edits this file by hand to correct you, and that is the point of it; a write built from memory
