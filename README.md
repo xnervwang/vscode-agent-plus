@@ -37,11 +37,11 @@ code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
 
 ## Uninstall
 
-- Before uninstalling, run `Agent Plus: Put Back VS Code's Request Limit` if the limit was raised; uninstalling does not put it back.
+- If the request limit was raised, run `Agent Plus: Put Back VS Code's Request Limit` before uninstalling. Uninstalling does not put it back.
 - The command stays in the command palette after the extensions that use Agent Plus are gone.
-- Left with nothing that uses it, Agent Plus says it can be uninstalled, and offers to put the limit back first when it is still raised.
+- Once nothing uses Agent Plus, it says it can be uninstalled. If the limit is still raised, it offers to put it back first.
 
-| Why uninstalling cannot do it | |
+| What runs on uninstall | Why it cannot put the limit back |
 | --- | --- |
 | The uninstall hook (`vscode:uninstall`) | Runs as plain Node on the machine the extension is installed on. In a remote window that is the remote, and the file is on the client |
 | `deactivate` | Runs after the extension host has dropped its connection to the window, so the client's files cannot be reached |
@@ -50,9 +50,9 @@ code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
 
 | Limit | Detail |
 | --- | --- |
-| The request limit is only changed in a VS Code installed where VS Code installs itself | A portable or ZIP copy, or one in a directory of your own, is not found: the client's application directory is searched in the places each platform puts it, and a remote window cannot ask the client where it was started from. `Agent Plus: Show Status` then logs `no installation found`, nothing is asked and no file is touched. To raise it anyway, replace `maxActiveHostResourceResponseBodies=32,` with `maxActiveHostResourceResponseBodies=1000000,` in `out/vs/workbench/contrib/webview/browser/pre/service-worker.js` under that copy of VS Code, and quit and reopen it |
+| The request limit is only changed in a VS Code in a standard install location | A portable or ZIP copy, or one in a directory of your own, is not found: the client's application directory is searched in the places each platform puts it, and a remote window cannot ask the client where it was started from. `Agent Plus: Show Status` then logs `no installation found`, nothing is asked and no file is touched. To raise it anyway, replace `maxActiveHostResourceResponseBodies=32,` with `maxActiveHostResourceResponseBodies=1000000,` in `out/vs/workbench/contrib/webview/browser/pre/service-worker.js` under that copy of VS Code, and quit and reopen it |
 
 ## For extension authors
 
-- `docs/protocol.md`: registering a source, the interface, plan files, answers, versions.
-- `node test/check.js`: the whole suite, no dependencies.
+- `docs/protocol.md`: how an extension shows its agent's conversations in Agent Plus. It covers the API it registers through, the plan file format, how answers are passed between windows, and version compatibility.
+- `node test/check.js` runs all the tests. It needs nothing from npm.
