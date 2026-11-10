@@ -37,11 +37,11 @@ code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
 
 ## Uninstall
 
-- If the request limit was raised, run `Agent Plus: Put Back VS Code's Request Limit` before uninstalling.
+- If the request limit was raised, run `Agent Plus: Put Back VS Code's Request Limit` before uninstalling Agent Plus.
 - The command stays in the command palette after the extensions that use Agent Plus are gone.
-- Once nothing uses Agent Plus, it shows a notice that it can be uninstalled. If the limit is still raised, it offers to put the limit back first.
+- Once nothing uses Agent Plus, a notice says it can be uninstalled. If the limit is still raised, the notice offers to put the limit back first.
 
-Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) runs as plain Node on the machine the extension is installed on, which in a remote window is the remote, while the limit is in a file on the client, the machine the window runs on. `deactivate`, the extension's shutdown function, runs after the extension host (the process extensions run in) has dropped its connection to the window, so it cannot reach the client's files either.
+Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) runs as plain Node on the machine the extension is installed on, which in a remote window is the remote, while the limit is in VS Code's `service-worker.js` on the client, the machine the window runs on. `deactivate`, the extension's shutdown function, runs after the extension host (the process extensions run in) has dropped its connection to the window, so it cannot reach the client's files either.
 
 ## Known limits
 
