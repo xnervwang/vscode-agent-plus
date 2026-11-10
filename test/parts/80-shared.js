@@ -112,6 +112,28 @@ module.exports = async (h) => {
     try { sync.sync(repo, core); } catch (e) { refused = e.message; }
     eq(/does not carry the line naming its source/.test(refused), true, 'and a source without the line naming it is not copied');
   }
+  {
+    /* An extension whose copies, the sync script's own among them, carry the line in its earlier wording, and whose
+       sync script still demands that wording of every source. */
+    const repo = tmp('older-copies');
+    const older = (from) => fs.readFileSync(path.join(root, from), 'utf8')
+      .replace(sync.sourceLine(from), `Source: vscode-agent-plus ${from}, copied by sync-shared.js; edit it there, not in a copy.`);
+    const files = [{ path: 'build/sync-shared.js', from: 'shared/build/sync-shared.js' }, { path: 'build/make-manifest.js', from: 'shared/build/make-manifest.js' }];
+    for (const f of files) {
+      fs.mkdirSync(path.dirname(path.join(repo, f.path)), { recursive: true });
+      let text = older(f.from);
+      if (f.path === 'build/sync-shared.js') text = text.replace("namesSource(fs.readFileSync(from, 'utf8'), f.from)", "fs.readFileSync(from, 'utf8').includes(`Source: vscode-agent-plus ${f.from}, copied`)");
+      fs.writeFileSync(path.join(repo, f.path), text);
+    }
+    fs.writeFileSync(path.join(repo, 'shared.json'), JSON.stringify({ core: '', files }));
+    eq(files.map((f) => sync.namesSource(fs.readFileSync(path.join(repo, f.path), 'utf8'), f.from)), [true, true],
+      'a copy carrying the line in its earlier wording still names its source');
+    const env = { ...process.env, AGENT_WORK_PLAN_DIR: root };
+    const run = cp.spawnSync(process.execPath, [path.join(repo, 'build', 'sync-shared.js')], { encoding: 'utf8', env });
+    const check = cp.spawnSync(process.execPath, [path.join(repo, 'build', 'sync-shared.js'), '--check'], { encoding: 'utf8', env });
+    eq([run.status, run.stderr.trim(), files.every((f) => fs.readFileSync(path.join(repo, f.path)).equals(fs.readFileSync(path.join(root, f.from)))), check.status],
+      [0, '', true, 0], 'and an older copy of the sync script syncs the current sources, running Agent Plus\'s own rules');
+  }
   if (!fs.existsSync(path.join(root, 'build', 'make-manifest.js'))) ok('build/ keeps no second copy of the descriptor writer');
   else bad('build/make-manifest.js is a second copy of shared/build/make-manifest.js');
 };
