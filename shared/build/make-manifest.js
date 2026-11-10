@@ -10,8 +10,8 @@
  *
  *   node make-manifest.js <staging-dir> [<package.json>]
  *
- * The package.json read is the staged one unless another is named; build/pack-shim.sh in Claude Code Plus names the
- * shim's.
+ * It reads the staged extension/package.json, or the one given as the second argument (build/pack-shim.sh in Claude
+ * Code Plus passes the shim's).
  */
 const fs = require('fs');
 const path = require('path');

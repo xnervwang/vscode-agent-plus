@@ -5,9 +5,9 @@
 
 'use strict';
 /*
- * Agent Plus keeps the code its two extensions share in its shared/ folder, and each extension ships its own copy. The
- * copies sit where the extension requires them from, and shared.json at the repository root lists each one: its path
- * here, its path in Agent Plus, its sha256, and the Agent Plus commit last copied from.
+ * Code shared by Claude Code Plus and Codex Plus lives in Agent Plus's shared/ folder, and each extension ships a copy
+ * at the path it requires it from. shared.json at the repository root lists each copy (path, source path, sha256) and
+ * the Agent Plus commit of the last sync.
  *
  *   node build/sync-shared.js           copy every listed file from Agent Plus and rewrite shared.json
  *   node build/sync-shared.js --check   compare only; exit 1 if a copy is not what shared.json records

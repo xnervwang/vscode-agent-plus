@@ -5,9 +5,9 @@
 
 'use strict';
 /*
- * What a local package holds (build/pack-vsix.js with the paths build/pack.sh hands it), against what vsce would
- * publish: every file the repository tracks either ships in both or in neither, the images the README links are left
- * out of both, and the descriptor files name a content type for every file extension and the license.
+ * Runs build/pack-vsix.js on the paths build/pack.sh lists and compares the result with what vsce would publish.
+ * Every tracked file that vsce would publish must be in the local package, and no image the README links may be in
+ * either. The descriptor files must give every file extension a content type and name the license.
  */
 const cp = require('child_process');
 const fs = require('fs');

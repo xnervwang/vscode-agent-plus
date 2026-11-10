@@ -10,8 +10,8 @@
  *
  *   node pack-vsix.js <repository> <path>...
  *
- * Each path is a file or folder of the repository to ship. What the repository's .vscodeignore leaves out is left out
- * here too, read the way vsce reads it, so a local package holds what the published one does.
+ * The paths are files and folders of the repository. Files under them that its .vscodeignore excludes, by vsce's
+ * rules, are skipped, so a local package has the same files as a published one.
  */
 const cp = require('child_process');
 const fs = require('fs');
@@ -34,9 +34,9 @@ function globRe(glob) {
 }
 
 /*
- * vsce's reading: blank lines and lines starting with # are dropped, a pattern whose last part has no * covers a folder
- * of that name too, and a line starting with ! takes back what the others leave out. package.json and README.md always
- * ship.
+ * vsce's rules: blank lines and lines starting with # are dropped, a pattern whose last part has no * also matches a
+ * folder of that name, and a line starting with ! re-includes what another line excluded. package.json and README.md
+ * are never excluded.
  */
 function ignoreRules(root) {
   let text = '';
@@ -55,9 +55,9 @@ const ALWAYS = new Set(['package.json', 'README.md']);
 const ignored = (rules, rel) => !ALWAYS.has(rel) && rules.ignore.some((r) => r.test(rel)) && !rules.negate.some((r) => r.test(rel));
 
 /*
- * Copies the paths into <dir>/extension. Python's __pycache__ folders are skipped: running the plugin's hooks locally
- * seeds them inside the tree, and they belong to whoever ran them last. LICENSE goes in as LICENSE.txt, because the
- * marketplace finds a package part by its file extension.
+ * Copies the paths into <dir>/extension. Python's __pycache__ folders are skipped; running the plugin's hooks locally
+ * leaves them in the tree. LICENSE goes in as LICENSE.txt, because the marketplace finds a package part by its file
+ * extension.
  */
 function stage(root, dir, paths) {
   const rules = ignoreRules(root);

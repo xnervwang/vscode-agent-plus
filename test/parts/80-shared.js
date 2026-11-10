@@ -4,9 +4,10 @@
 
 'use strict';
 /*
- * shared/: the code Claude Code Plus and Codex Plus each ship a copy of. Every file there names its own path as its
- * source, the packing script and the descriptor writer behave as vsce does, and sync-shared.js copies, records and
- * catches a changed copy. This repository's own package is checked the way the extensions check theirs.
+ * shared/ holds the code Claude Code Plus and Codex Plus each ship a copy of. Every file there names its own path as
+ * its source, pack-vsix.js reads .vscodeignore as vsce does, make-manifest.js refuses a file with no extension or a
+ * missing license, and sync-shared.js copies files, records their hashes and fails on a copy edited in place.
+ * pack-check.js also runs on this repository's own package.
  */
 const cp = require('child_process');
 const fs = require('fs');
