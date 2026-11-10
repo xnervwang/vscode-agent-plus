@@ -37,14 +37,11 @@ code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
 
 ## Uninstall
 
-- If the request limit was raised, run `Agent Plus: Put Back VS Code's Request Limit` before uninstalling. Uninstalling does not put it back.
+- If the request limit was raised, run `Agent Plus: Put Back VS Code's Request Limit` before uninstalling.
 - The command stays in the command palette after the extensions that use Agent Plus are gone.
 - Once nothing uses Agent Plus, it says it can be uninstalled. If the limit is still raised, it offers to put it back first.
 
-| What runs on uninstall | Why it cannot put the limit back |
-| --- | --- |
-| The uninstall hook (`vscode:uninstall`) | Runs as plain Node on the machine the extension is installed on. In a remote window that is the remote, and the file is on the client |
-| `deactivate` | Runs after the extension host has dropped its connection to the window, so the client's files cannot be reached |
+Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) runs as plain Node on the machine the extension is installed on, which in a remote window is the remote, while the limit is in a file on the client. `deactivate` runs after the extension host has dropped its connection to the window, so it cannot reach the client's files either.
 
 ## Known limits
 
@@ -54,5 +51,5 @@ code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
 
 ## For extension authors
 
-- `docs/protocol.md`: how an extension shows its agent's conversations in Agent Plus. It covers the API it registers through, the plan file format, how answers are passed between windows, and version compatibility.
-- `node test/check.js` runs all the tests. It needs nothing from npm.
+- `docs/protocol.md`: how an extension shows its agent's conversations in Agent Plus.
+- `node test/check.js` runs all the tests.
