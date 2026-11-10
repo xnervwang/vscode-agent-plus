@@ -52,4 +52,4 @@ Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) 
 ## For extension authors
 
 - `docs/protocol.md`: how an extension shows its agent's conversations in Agent Plus.
-- `node test/check.js` runs all the tests.
+- `node test/check.js` runs all the tests, with nothing to install first.
