@@ -1,7 +1,7 @@
 // BSD 3-Clause License
 // Copyright (c) 2026, Xnerv Wang
 // All rights reserved.
-// Source: vscode-agent-plus shared/build/sync-shared.js, copied by sync-shared.js; edit it there, not in a copy.
+// Source: vscode-agent-plus shared/build/sync-shared.js; sync-shared.js copies it, so edit it there.
 
 'use strict';
 /*
@@ -24,7 +24,7 @@ const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file
 const coreDir = (root) => process.env.AGENT_WORK_PLAN_DIR || path.join(root, '..', 'vscode-agent-plus');
 const readManifest = (root) => JSON.parse(fs.readFileSync(path.join(root, MANIFEST), 'utf8'));
 /** The line every shared file carries, naming its source; a copy is byte for byte the source, so it carries it too. */
-const sourceLine = (from) => `Source: vscode-agent-plus ${from}, copied by sync-shared.js; edit it there, not in a copy.`;
+const sourceLine = (from) => `Source: vscode-agent-plus ${from}; sync-shared.js copies it, so edit it there.`;
 
 function writeAtomic(file, data, mode) {
   const tmp = `${file}.${process.pid}.sync`;
