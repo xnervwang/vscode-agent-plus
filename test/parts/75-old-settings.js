@@ -61,6 +61,24 @@ module.exports = async ({ eq, root, tmp, wait }) => {
     const { vscode, writes } = settings({});
     eq([await oldSettings.adopt(vscode), writes], [[], []], 'nothing set under either old id: nothing written');
   }
+  /* The request limit: a string from the new setting's enum, and only from the user's settings, since
+     agentPlus.webviewRequestLimit is an application setting. */
+  for (const value of ['ask', 'raise', 'leave']) {
+    const { vscode, writes } = settings({ 'claudeCodeWorkPlan.webviewRequestLimit': { globalValue: value } });
+    await oldSettings.adopt(vscode);
+    eq(writes, [['agentPlus.webviewRequestLimit', value, 1]], `the request limit set to ${value} under the old id is taken over`);
+  }
+  {
+    const { vscode, writes } = settings({ 'claudeCodeExtras.webviewRequestLimit': { globalValue: 'leave' } });
+    await oldSettings.adopt(vscode);
+    eq(writes, [['agentPlus.webviewRequestLimit', 'leave', 1]], 'the request limit under the older id too');
+  }
+  {
+    const { vscode, writes } = settings({ 'claudeCodeWorkPlan.webviewRequestLimit': { globalValue: 'sometimes', workspaceValue: 'raise' },
+      'claudeCodeExtras.webviewRequestLimit': { globalValue: true } }, { folders: [{}] });
+    await oldSettings.adopt(vscode);
+    eq(writes, [], 'a request limit outside the enum, or in a workspace, is not taken over');
+  }
   /* Restricted Mode: a workspace's .vscode/settings.json is not this extension's to write until it is trusted. */
   {
     const { vscode, writes } = settings({ 'claudeCodeWorkPlan.conversations': { workspaceValue: false } }, { trusted: false, folders: [{}] });

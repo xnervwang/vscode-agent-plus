@@ -14,8 +14,15 @@
  * whose write failed is not recorded, and is tried again next time. Nothing is written in Restricted Mode, where the
  * workspace's settings file belongs to a folder not yet trusted. From renameSettings in Claude Code Plus's extension.js.
  */
+const REQUEST_LIMIT = ['ask', 'raise', 'leave'];
+/* Each setting with the old ids it is taken from and the values taken from them; any other value is left alone. The
+   request limit is an application setting, which VS Code refuses to write to a workspace, so it is taken from the
+   user's settings only. */
 const ADOPTED = [
-  { to: 'agentPlus.conversationsView', from: ['claudeCodeWorkPlan.conversations', 'claudeCodeExtras.conversations'] },
+  { to: 'agentPlus.conversationsView', from: ['claudeCodeWorkPlan.conversations', 'claudeCodeExtras.conversations'],
+    takes: (v) => typeof v === 'boolean' },
+  { to: 'agentPlus.webviewRequestLimit', from: ['claudeCodeWorkPlan.webviewRequestLimit', 'claudeCodeExtras.webviewRequestLimit'],
+    takes: (v) => REQUEST_LIMIT.includes(v), only: 'Global' },
 ];
 const SCOPES = [['globalValue', 'Global', 'globalState'], ['workspaceValue', 'Workspace', 'workspaceState']];
 const DONE_KEY = 'agentPlus.oldSettingsAdopted';
@@ -35,9 +42,10 @@ async function adopt(vscode, context) {
     const state = context && context[store];
     if (state && state.get(DONE_KEY)) continue;
     let complete = true;
-    for (const { to, from } of ADOPTED) {
+    for (const { to, from, takes, only } of ADOPTED) {
+      if (only && only !== target) continue;
       if (inspect(vscode, to)[field] !== undefined) continue;
-      const old = from.map((k) => inspect(vscode, k)[field]).find((v) => typeof v === 'boolean');
+      const old = from.map((k) => inspect(vscode, k)[field]).find(takes);
       if (old === undefined) continue;
       const [section, name] = split(to);
       try {
