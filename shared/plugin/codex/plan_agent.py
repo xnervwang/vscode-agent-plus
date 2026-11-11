@@ -267,6 +267,13 @@ def ask_how(path):
     return "set_row with waiting_on user and question, or add_row for a new row (%s, plan=%s)." % (MCP_TOOLS, path)
 
 
+def brief_how(path, parts):
+    """The sentence that says how to write each of `parts`, which holds "summary", "status" or both."""
+    forms = {"summary": "set_summary with text", "status": "set_status with doing, progress and next"}
+    return "Use the `%s` MCP server's %s (plan=%s). No approval is needed." % (
+        MCP_SERVER, " and ".join(forms[p] for p in parts), path)
+
+
 """The reminder when a turn starts working with nothing `doing` (remind-work-plan.py)."""
 REMIND_EVENT = "PostToolUse"
 

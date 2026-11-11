@@ -48,6 +48,10 @@ gives the user nothing to act on.
 === table-watermark
 | A hook says the context has passed a water mark | For every `doing` row, `set <row> --detail TEXT`: the exact next step, anything not to do, and the user's own words written nowhere else |
 
+=== table-brief
+| A turn did work and the brief's status is older than the turn | `plan-row.py <plan> status --doing TEXT --progress TEXT --next TEXT`: what you are doing, the latest progress, who it waits on or the next step (widths 80, 100, 60; `none` for an empty part) |
+| The plan has rows and no summary, its top rows changed since the summary, or the context was compacted since | `plan-row.py <plan> summary TEXT`: what the conversation is for, its stage, decisions not to forget (width 400). Widths count a CJK character as 2; the conversation's own language; no names coined in it |
+
 === remind-when
 it. After each batch of tool calls, a hook can remind the main thread to mark the row it is working on. It does so once
 

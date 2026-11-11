@@ -7,6 +7,7 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | The work plan (the agent's task list for a conversation, one row per task) of the conversation in front, following the editor tab of either agent | Work plan view, in the Agent Plus sidebar |
 | Conversations of this workspace from every installed agent: state, questions in their plans waiting for your answer, rows in progress (`doing`), stopped conversations with unfinished rows; each with its agent's logo | Conversations view, in the panel |
 | Answer a plan question, delivered to the window that shows the conversation | Answer view, beside Conversations |
+| A conversation's brief on clicking its row, for agents whose extension keeps one: its summary and current status in its own words, when written, whether out of date, what runs now, its questions; else one put together from its plan, marked so. The row's arrow goes to the conversation | Answer view, beside Conversations |
 | `N to decide` (questions waiting for you), or `Conversations M` (running ones) when there are none | Status bar |
 | Rows in a state this version does not know, and plans in a newer format, marked as such | Work plan and Conversations views |
 | VS Code's limit of 32 requests in flight for all webview tabs together, raised on request | VS Code's files |

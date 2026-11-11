@@ -72,7 +72,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Member | Meaning |
 | --- | --- |
 | `protocol` | `1` |
-| `features` | Optional capability names the source implements; none in major 1 |
+| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation |
 | `id` | Source id, such as `'codex'` or `'claude-code'` |
 | `label` | Shown in tooltips and in the work plan view's description |
 | `extensionId` | The extension that registered it, such as `'xnervwang.codex-plus'`; used for update notices |
@@ -116,6 +116,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Row states | `discussing`, `todo`, `doing`, `waiting`, `parked`, `done`, `dropped`; no state reads as `todo` |
 | Unknown state | Drawn with its name and "this version of Agent Plus does not know this state"; counted nowhere, and the Conversations row says how many |
 | `waitingOn` | `user`, `build`, `someone`, `session`, `other` |
+| `brief` | Optional, at the top of the file: `summary`, `summaryAt`, `status` (`doing`, `progress`, `next`) and `statusAt`, the conversation's account of itself. The plugins write it with widths of 400, and 80, 100 and 60, where a CJK character counts 2 and any other 1. A part missing or of the wrong type reads as not written |
+| Reading the brief | Shown for a source that lists `'brief'`. A part not written is put together from the plan (top rows; `doing` rows with their notes; last activity) and marked as such. The status is marked as possibly out of date when the conversation's `lastActiveAt` is more than 5 minutes after `statusAt` |
 | Changes | Fields are only added; a changed meaning takes a new `format` |
 | Writing | Nothing is asked of how a plan file is written. A file read halfway through a write does not parse, and the core shows the plan that last parsed while that file was written in the past 2 seconds; after that the row says it could not be read |
 | Reading again | A file whose modification time and size are both unchanged is not parsed again. `Agent Plus: Refresh` parses every plan afresh |

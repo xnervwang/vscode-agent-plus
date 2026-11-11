@@ -17,7 +17,7 @@ const path = require('path');
 const sources = require('./sources');
 const { readPlanAt, countOpen, countUnknown, MAX_PLAN_BYTES } = require('./workplan');
 const { WorkPlanProvider, ageSince } = require('./workplan-view');
-const { ConversationsProvider, questionOf } = require('./conversations-view');
+const { ConversationsProvider, questionOf, briefOf, briefKey } = require('./conversations-view');
 const conversations = require('./conversations');
 const conversationsText = require('./conversations-text');
 const folders = require('./folders');
@@ -270,6 +270,7 @@ function create(host, opts = {}) {
       for (const c of data.running.concat(data.stopped)) {
         const source = registry.get(c.sourceId);
         c.source = { id: c.sourceId, label: sources.labelOf(source) || c.sourceId };
+        c.briefs = sources.supports(source, 'brief');
         if (several) { try { const icon = rowIcon(source, c.state); if (icon) c.icon = icon; } catch (_) { /* the row keeps the state icon */ } }
       }
       const problem = problems.map(([source, what]) => (several ? sources.labelOf(source) + ': ' + what : what)).join('\n');
@@ -278,6 +279,7 @@ function create(host, opts = {}) {
       /* The question on screen is only as good as the last pass: the row it is on may have been reworded, finished, or
          its conversation stopped. */
       answerView.revise((key) => questionNow(data, key));
+      answerView.reviseBrief((key) => briefNow(data, key));
       if (courier) courier.recall((sent) => stillAsked(data, sent.target));
       paintConversations();
     } catch (e) {
@@ -294,6 +296,12 @@ function create(host, opts = {}) {
       for (const q of c.questions) if (questionKey(c.sourceId, c.sessionId, q.row) === key) return questionOf(c, q);
     }
     return null;
+  };
+
+  /* The conversation whose brief is named `key`, as the latest list has it, or null when it is not in the list. */
+  const briefNow = (data, key) => {
+    const c = data.running.concat(data.stopped).find((x) => briefKey(x.sourceId, x.sessionId) === key);
+    return c ? briefOf(c) : null;
   };
 
   /*
@@ -565,6 +573,17 @@ function create(host, opts = {}) {
       if (!q) return;
       answerView.show(q);
       await vscode.commands.executeCommand('agentPlus.answer.focus');
+    },
+    showBrief: async (b) => {
+      if (!b) return;
+      answerView.showBrief(b);
+      await vscode.commands.executeCommand('agentPlus.answer.focus');
+    },
+    /* The arrow on a conversation's row, which VS Code hands the tree element. */
+    goToConversation: (element) => {
+      const c = element && element.c;
+      if (!c) return undefined;
+      return commands.openConversation({ sourceId: (c.source && c.source.id) || c.sourceId || '', sessionId: c.sessionId, cwd: c.cwd, title: c.title });
     },
     showConversations: () => vscode.commands.executeCommand('agentPlus.conversations.focus'),
     /* A conversation row goes to its conversation through its source. An extension cannot bring another window

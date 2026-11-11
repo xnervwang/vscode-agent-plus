@@ -8,8 +8,11 @@
  * questions and its `doing` rows. src/conversations.js builds the list. From src/conversations-view.js of
  * vscode-claude-code-extras bb28f51.
  *
- * The host sets `source` ({ id, label }) on each row, and, with more than one source registered, `icon` when the logo
- * can be drawn (src/sourceicons.js).
+ * The host sets `source` ({ id, label }) on each row, `briefs` when that source lists 'brief' in its features, and, with
+ * more than one source registered, `icon` when the logo can be drawn (src/sourceicons.js).
+ *
+ * Clicking a conversation shows its brief in the Answer view when its source supports briefs, and goes to the
+ * conversation otherwise. The arrow at the row's end goes to the conversation either way.
  */
 const vscode = require('vscode');
 const { ageSince } = require('./workplan-view');
@@ -33,6 +36,21 @@ function questionOf(c, q, from = (c.source && c.source.id) || c.sourceId || '') 
   return {
     sourceId: from, sessionId: c.sessionId, row: q.row, rowTitle: q.title, question: q.question, note: q.note,
     detail: q.detail, since: q.since, conversation: c.title, running: c.running,
+    open: { sourceId: from, sessionId: c.sessionId, cwd: c.cwd, title: c.title },
+  };
+}
+
+/* How a conversation's brief is named in the Answer view. Unlike a question's name it has two parts, so the two can
+   never be the same. */
+const briefKey = (sourceId, sessionId) => 'brief:' + keyPart(sourceId || '') + '/' + keyPart(sessionId);
+
+/* The argument of showBrief for conversation `c`, built in one place so that the page opened by a click and the one
+   revised on a later pass have the same shape. */
+function briefOf(c, from = (c.source && c.source.id) || c.sourceId || '') {
+  return {
+    key: briefKey(from, c.sessionId), sourceId: from, sessionId: c.sessionId, title: c.title, state: c.state,
+    running: c.running, lastActiveAt: c.since, hasPlan: c.hasPlan, brief: c.brief || null, top: c.top || [],
+    doing: c.doing, questions: c.questions.map((q) => questionOf(c, q, from)),
     open: { sourceId: from, sessionId: c.sessionId, cwd: c.cwd, title: c.title },
   };
 }
@@ -113,7 +131,9 @@ class ConversationsProvider {
         c.hasPlan ? t.open(c.open) : t.noPlan, c.unknown ? t.unknown(c.unknown) : ''].filter(Boolean).join(' · ');
       item.tooltip = [c.title, from ? from.label : '', t.state[c.state], c.cwd ? t.folder(c.cwd) : '',
         c.unknown ? t.unknownTip(c.unknown) : ''].filter(Boolean).join('\n');
-      item.command = open;
+      item.contextValue = 'agentPlusConversation';
+      item.command = c.briefs
+        ? { command: 'agentPlus.showBrief', title: 'Show where it stands', arguments: [briefOf(c, sourceId)] } : open;
       return item;
     }
     if (element.kind === 'question') {
@@ -139,4 +159,4 @@ class ConversationsProvider {
   }
 }
 
-module.exports = { ConversationsProvider, questionOf, LOOK };
+module.exports = { ConversationsProvider, questionOf, briefOf, briefKey, LOOK };

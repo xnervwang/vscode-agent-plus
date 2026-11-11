@@ -203,6 +203,7 @@ undo.
 | The user decides against it | Move it to `dropped` and set `closed`, with the reason in `detail` |
 | Doing A turns out to need B finished first | Add B as a child of A, with its own `opened` |
 {{table-watermark}}
+{{table-brief}}
 | A compaction has just happened | Read the plan file with a tool before anything else; the `detail` of each `doing` row holds the next step |
 | The user says to leave something for later | Move it to `parked`, with the reason in `note` |
 

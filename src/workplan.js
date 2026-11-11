@@ -22,7 +22,15 @@
  *                  "waitingOn": "optional, on a waiting or discussing row: user|build|someone|session|other",
  *                  "question": "optional, with waitingOn user: the one question the user has to answer",
  *                  "asked": "optional ISO 8601; when that question was put",
- *                  "children": [ ... ] } ] }
+ *                  "children": [ ... ] } ],
+ *     "brief": { "summary": "optional; what the conversation is for, its stage, decisions not to forget",
+ *                "summaryAt": "optional ISO 8601",
+ *                "status": { "doing": "...", "progress": "...", "next": "..." },
+ *                "statusAt": "optional ISO 8601" } }
+ *
+ * The brief is written by the agent through the plugins' plan-row.py (summary, status), within widths of 400 for the
+ * summary and 80, 100 and 60 for the three parts of the status, a CJK character counting 2. Missing or malformed parts
+ * are ignored.
  *
  * A child is something that has to be finished before its parent can be. Nesting means exactly that and nothing else.
  *
@@ -109,13 +117,29 @@ function node(raw, depth, budget) {
   };
 }
 
+/* Upper bounds for a brief edited by hand; the plugins refuse anything this long. */
+const MAX_SUMMARY_CHARS = 800;
+const MAX_STATUS_CHARS = 200;
+const STATUS_PARTS = ['doing', 'progress', 'next'];
+
+/** The brief of a parsed plan, or null when it has neither a summary nor a status. */
+function brief(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const summary = text(raw.summary, MAX_SUMMARY_CHARS);
+  const given = raw.status && typeof raw.status === 'object' && !Array.isArray(raw.status) ? raw.status : null;
+  const parts = given ? STATUS_PARTS.map((k) => text(given[k], MAX_STATUS_CHARS).replace(/\s+/g, ' ')) : [];
+  const status = parts.some(Boolean) ? { doing: parts[0], progress: parts[1], next: parts[2] } : null;
+  if (!summary && !status) return null;
+  return { summary, summaryAt: summary ? when(raw.summaryAt) : 0, status, statusAt: status ? when(raw.statusAt) : 0 };
+}
+
 /** The plan in `file` for conversation `session`, or null when there is none. */
 function readPlanAt(file, session, max = MAX_PLAN_BYTES) {
   if (!file || !session) return null;
   const body = readBounded(file, max);
   /* An empty file goes on to fail the parse below: it is what a writer that truncates first leaves for a moment. */
   if (body === null) return null;
-  const entry = { session, file, title: '', nodes: [], error: '', format: PLAN_FORMAT, newer: false };
+  const entry = { session, file, title: '', nodes: [], error: '', format: PLAN_FORMAT, newer: false, brief: null };
   let parsed;
   try { parsed = JSON.parse(body); }
   catch (e) {
@@ -126,6 +150,7 @@ function readPlanAt(file, session, max = MAX_PLAN_BYTES) {
   if (Number.isInteger(format) && format > 0) entry.format = format;
   entry.newer = entry.format > PLAN_FORMAT;
   entry.title = text(parsed && parsed.title, 120);
+  entry.brief = brief(parsed && parsed.brief);
   const budget = { left: MAX_NODES };
   if (parsed && Array.isArray(parsed.nodes)) {
     for (const raw of parsed.nodes) {
@@ -167,6 +192,6 @@ function countUnknown(nodes) {
 }
 
 module.exports = {
-  readPlanAt, countOpen, countUnknown, openFirst, OPEN_STATES, PLAN_FORMAT,
+  readPlanAt, countOpen, countUnknown, openFirst, brief, OPEN_STATES, PLAN_FORMAT, STATUS_PARTS,
   STATES, MAX_DEPTH, MAX_NODES, MAX_DETAIL_LINES, MAX_DETAIL_CHARS, WAITING_ON, MAX_QUESTION_CHARS, MAX_PLAN_BYTES,
 };

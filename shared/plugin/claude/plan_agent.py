@@ -183,6 +183,15 @@ def ask_how(path):
     return "%s set <row> <state> --waiting-on user --question TEXT, or `add` for a new row." % row_command(path)
 
 
+def brief_how(path, parts):
+    """The sentence that says how to write each of `parts`, which holds "summary", "status" or both."""
+    from plan_common import row_command
+    command = row_command(path)
+    forms = {"summary": "%s summary TEXT" % command,
+             "status": "%s status --doing TEXT --progress TEXT --next TEXT" % command}
+    return "Write %s with %s." % (" and ".join("the " + p for p in parts), " and ".join(forms[p] for p in parts))
+
+
 """The reminder when a turn starts working with nothing `doing` (remind-work-plan.py)."""
 REMIND_EVENT = "PostToolBatch"
 

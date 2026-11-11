@@ -81,6 +81,15 @@
       {
         "command": "agentPlus.openConversation",
         "title": "Agent Plus: Go to a Conversation"
+      },
+      {
+        "command": "agentPlus.showBrief",
+        "title": "Agent Plus: Show Where a Conversation Stands"
+      },
+      {
+        "command": "agentPlus.goToConversation",
+        "title": "Agent Plus: Go to the Conversation",
+        "icon": "$(arrow-right)"
       }
     ],
     "viewsContainers": {
@@ -154,6 +163,11 @@
           "command": "agentPlus.openWorkPlanFile",
           "when": "view == agentPlus.workPlan && viewItem == agentPlusNode",
           "group": "navigation"
+        },
+        {
+          "command": "agentPlus.goToConversation",
+          "when": "view == agentPlus.conversations && viewItem == agentPlusConversation",
+          "group": "inline"
         }
       ],
       "commandPalette": [
@@ -179,6 +193,14 @@
         },
         {
           "command": "agentPlus.openConversation",
+          "when": "false"
+        },
+        {
+          "command": "agentPlus.showBrief",
+          "when": "false"
+        },
+        {
+          "command": "agentPlus.goToConversation",
           "when": "false"
         }
       ]

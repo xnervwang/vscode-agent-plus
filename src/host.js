@@ -42,7 +42,7 @@ const NOTICE_DELAY_MS = 4000;
 /* Every command the manifest declares. They are registered at once, so none is ever missing, and handed to the views
    once those exist. */
 const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
-  'openConversation', 'showStatus', 'restoreWebviewRequestLimit'];
+  'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {

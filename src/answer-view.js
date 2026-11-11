@@ -18,9 +18,13 @@
  * wording can change, the row can be finished and the conversation can stop while the question sits here. revise() is
  * how the Conversations tree says what the row looks like now, and a row that is no longer asking is shown as one that
  * cannot be answered rather than quietly taking an answer to a question nobody is asking.
+ *
+ * When a conversation's row is clicked and its source supports briefs, it shows that conversation instead (showBrief),
+ * on a page src/brief.js builds. reviseBrief() updates it on each pass of the tree, as revise() does for a question.
  */
 const crypto = require('crypto');
 const { textFor } = require('./conversations-text');
+const { page } = require('./brief');
 const { keyPart } = require('./sources');
 
 /* How many questions' drafts are kept. A draft is only ever dropped to keep this from growing without end in a window
@@ -72,6 +76,7 @@ class AnswerView {
     this.view = view;
     view.webview.options = { enableScripts: true };
     view.webview.html = this.html();
+    this.shownBrief = '';
     view.webview.onDidReceiveMessage((m) => this.receive(m));
     view.onDidDispose(() => { if (this.view === view) this.view = null; });
     this.paint();
@@ -93,6 +98,14 @@ class AnswerView {
       return;
     }
     if (!this.current || m.key !== this.current.key) return;
+    if (this.current.mode === 'brief') {
+      if (m.type === 'open' && this.current.open) this.open(this.current.open);
+      else if (m.type === 'ask') {
+        const q = (this.current.questions || []).find((x) => x.row === m.row);
+        if (q) this.show(q);
+      }
+      return;
+    }
     if (m.type === 'draft' && typeof m.text === 'string') {
       this.drafts.set(m.key, m.text);
       this.trim();
@@ -131,7 +144,7 @@ class AnswerView {
    * nothing when that row is no longer asking: the agent reworded it, finished the row, or the conversation stopped.
    */
   revise(find) {
-    if (!this.current) return;
+    if (!this.current || this.current.mode === 'brief') return;
     let fresh = null;
     try { fresh = find(this.current.key); } catch (_) { fresh = null; }
     if (!fresh) {
@@ -155,10 +168,32 @@ class AnswerView {
     if (!same) this.paint();
   }
 
+  /** Shows `b`, a conversation from the Conversations tree (briefOf in src/conversations-view.js). */
+  showBrief(b) {
+    if (!b || !b.key || !b.sessionId) return;
+    this.current = Object.assign({}, b, { mode: 'brief', gone: false });
+    this.shownBrief = '';
+    this.paint();
+  }
+
+  /*
+   * `find(key)` returns the latest data for the conversation on screen, or null once it has left the list; the last
+   * page then stays up with a line saying so.
+   */
+  reviseBrief(find) {
+    if (!this.current || this.current.mode !== 'brief') return;
+    let fresh = null;
+    try { fresh = find(this.current.key); } catch (_) { fresh = null; }
+    this.current = fresh ? Object.assign({}, fresh, { mode: 'brief', gone: false })
+      : Object.assign({}, this.current, { running: false, gone: true });
+    this.paint();
+  }
+
   setLanguage(lang) {
     if (lang === this.lang) return;
     this.lang = lang;
     if (this.view) this.view.webview.html = this.html();
+    this.shownBrief = '';
     this.paint();
   }
 
@@ -207,6 +242,13 @@ class AnswerView {
     const t = textFor(this.lang);
     const q = this.current;
     if (!q) { this.view.webview.postMessage({ type: 'empty', text: t.answerEmpty }); return; }
+    if (q.mode === 'brief') {
+      const shown = page(q, t, this.age);
+      const said = JSON.stringify(shown);
+      if (said !== this.shownBrief) { this.shownBrief = said; this.view.webview.postMessage(shown); }
+      return;
+    }
+    this.shownBrief = '';
     const state = this.states.get(q.key);
     const ago = this.age(q.since);
     this.view.webview.postMessage({
@@ -258,6 +300,20 @@ class AnswerView {
   button:hover { background: var(--vscode-button-hoverBackground); }
   button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
   button:disabled { opacity: 0.5; cursor: default; }
+  #brief { display: none; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: auto; }
+  #bhead { display: flex; align-items: center; gap: 8px; }
+  #btitle { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+  #bsections { display: flex; flex-direction: column; gap: 8px; }
+  .head { font-weight: 600; }
+  .when, .label, #bgone { color: var(--vscode-descriptionForeground); font-weight: normal; }
+  .when { margin-left: 6px; }
+  .label { margin-right: 4px; }
+  .auto { color: var(--vscode-descriptionForeground); font-style: italic; }
+  .stale { color: var(--vscode-editorWarning-foreground, var(--vscode-descriptionForeground)); }
+  .line { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #blive { color: var(--vscode-charts-blue, var(--vscode-foreground)); }
+  .q { cursor: pointer; color: var(--vscode-textLink-foreground); }
+  .q:hover, .q:focus { text-decoration: underline; outline: none; }
 </style></head><body>
 <div id="empty">${attr(t.answerEmpty)}</div>
 <div id="main">
@@ -269,6 +325,13 @@ class AnswerView {
   <div id="bar"><span id="status"></span>
     <button id="open" class="secondary">${attr(t.answerOpen)}</button>
     <button id="send">${attr(t.answerSend)}</button></div>
+</div>
+<div id="brief">
+  <div id="bhead"><span id="btitle"></span><button id="bopen" class="secondary">${attr(t.answerOpen)}</button></div>
+  <div id="bgone"></div>
+  <div id="blive"></div>
+  <div id="bsections"></div>
+  <div id="bquestions"></div>
 </div>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
@@ -282,13 +345,60 @@ class AnswerView {
   });
   $('send').addEventListener('click', send);
   $('open').addEventListener('click', () => vscode.postMessage({ type: 'open', key }));
+  $('bopen').addEventListener('click', () => vscode.postMessage({ type: 'open', key }));
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+  const brief = (m) => {
+    $('btitle').textContent = m.title;
+    $('bgone').textContent = m.gone; $('bgone').style.display = m.gone ? '' : 'none';
+    $('blive').textContent = m.live; $('blive').style.display = m.live ? '' : 'none';
+    const box = $('bsections');
+    box.textContent = '';
+    for (const s of m.sections) {
+      const sec = el('div', 'section');
+      const head = el('div', 'head', s.head);
+      if (s.when) head.appendChild(el('span', 'when', s.when));
+      sec.appendChild(head);
+      if (s.auto) sec.appendChild(el('div', 'auto', m.auto));
+      if (s.stale) sec.appendChild(el('div', 'stale', s.stale));
+      for (const l of s.lines) {
+        const line = el('div', 'line');
+        if (l.label) line.appendChild(el('span', 'label', l.label));
+        line.appendChild(document.createTextNode(l.text));
+        sec.appendChild(line);
+      }
+      box.appendChild(sec);
+    }
+    const qs = $('bquestions');
+    qs.textContent = '';
+    if (m.questionsHead) qs.appendChild(el('div', 'head', m.questionsHead));
+    for (const q of m.questions) {
+      const row = el('div', 'q line', q.text);
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      if (q.when) row.appendChild(el('span', 'when', q.when));
+      const ask = () => vscode.postMessage({ type: 'ask', key, row: q.row });
+      row.addEventListener('click', ask);
+      row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ask(); } });
+      qs.appendChild(row);
+    }
+  };
   window.addEventListener('message', (e) => {
     const m = e.data || {};
     /* Cleared only while the box still holds what was sent: anything typed since belongs to the reader. */
     if (m.type === 'clear') { if (m.key === key && $('text').value === m.text) { $('text').value = ''; ready(); } return; }
-    if (m.type === 'empty') { $('main').style.display = 'none'; $('empty').style.display = ''; $('empty').textContent = m.text; return; }
+    if (m.type === 'empty') {
+      $('main').style.display = 'none'; $('brief').style.display = 'none'; $('empty').style.display = ''; $('empty').textContent = m.text;
+      return;
+    }
+    if (m.type === 'brief') {
+      $('empty').style.display = 'none'; $('main').style.display = 'none'; $('brief').style.display = 'flex';
+      key = m.key;
+      brief(m);
+      return;
+    }
     if (m.type !== 'show') return;
     $('empty').style.display = 'none';
+    $('brief').style.display = 'none';
     $('main').style.display = 'flex';
     const fresh = m.key !== key;
     key = m.key;

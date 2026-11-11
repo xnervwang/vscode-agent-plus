@@ -14,6 +14,7 @@
 const fs = require('fs');
 const { OPEN_STATES, countUnknown } = require('./workplan');
 const { folderTest, planQuestions } = require('./folders');
+const { topRows } = require('./brief');
 
 /* Stopped conversations are listed only while their plan was written within this many days. */
 const CLOSED_DAYS = 7;
@@ -24,7 +25,7 @@ const RANK = { prompt: 0, needs: 1, working: 2, unread: 3, idle: 4 };
 function doingRows(nodes, prefix = '', out = []) {
   (nodes || []).forEach((n, i) => {
     const num = (prefix ? prefix + '.' : '') + (i + 1);
-    if (n.state === 'doing') out.push({ row: num, title: n.title, since: n.since || 0 });
+    if (n.state === 'doing') out.push({ row: num, title: n.title, since: n.since || 0, note: n.note || '' });
     doingRows(n.children, num, out);
   });
   return out;
@@ -48,6 +49,7 @@ function entry(c, plan, located) {
     hasPlan: located || plan ? !!(plan && !plan.error) : c.hasPlan === true,
     title: c.title || (plan && plan.title) || (top && top.title) || c.sessionId,
     since: c.lastActiveAt || 0,
+    brief: (plan && plan.brief) || null, top: topRows(nodes),
   };
 }
 
