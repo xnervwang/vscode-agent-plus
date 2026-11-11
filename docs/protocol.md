@@ -118,9 +118,11 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `waitingOn` | `user`, `build`, `someone`, `session`, `other` |
 | `brief` | Optional, at the top of the file: `summary`, `summaryAt`, `status` (`doing`, `progress`, `next`) and `statusAt`, the conversation's account of itself. The plugins write it with widths of 400, and 80, 100 and 60, where a CJK character counts 2 and any other 1. A part missing or of the wrong type reads as not written |
 | Reading the brief | Shown for a source that lists `'brief'`. A part not written is put together from the plan (top rows; `doing` rows with their notes; last activity) and marked as such. The status is marked as possibly out of date when the conversation's `lastActiveAt` is more than 5 minutes after `statusAt` |
+| Closed rows moved out | A subtree whose rows are all `done` or `dropped`, the newest closed more than a day ago, may be moved to `closed/<session id>.json` in the plan's folder: `{ "format": 1, "nodes": [...] }`, each row there with `row`, its number in the plan. The plan keeps a placeholder in its place, `{ "title", "state", "archived": true }` with the title cut to 80 characters, so no row number changes. The plugins' `plan-row.py` moves rows out and back |
+| Reading moved rows | The core reads both files and puts each row back where its placeholder is, so the views show the plan as it was. A placeholder whose row is not in that file is drawn as a closed row with its short title. A change to that file counts as a change to the plan |
 | Changes | Fields are only added; a changed meaning takes a new `format` |
 | Writing | Nothing is asked of how a plan file is written. A file read halfway through a write does not parse, and the core shows the plan that last parsed while that file was written in the past 2 seconds; after that the row says it could not be read |
-| Reading again | A file whose modification time and size are both unchanged is not parsed again. `Agent Plus: Refresh` parses every plan afresh |
+| Reading again | A file whose modification time and size, and those of its `closed/` file, are all unchanged is not parsed again. `Agent Plus: Refresh` parses every plan afresh |
 
 ## The conversation in front
 

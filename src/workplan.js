@@ -32,12 +32,18 @@
  * summary and 80, 100 and 60 for the three parts of the status, a CJK character counting 2. Missing or malformed parts
  * are ignored.
  *
+ * Closed rows a day old are moved by plan-row.py to closed/<session id>.json beside the plan, a file of the same shape
+ * whose rows each carry `row`, their number in the plan. The plan keeps a placeholder in each one's place, with only a
+ * short title, the state and `"archived": true`, so no number changes. The rows are read from both files and put back
+ * where their placeholders are; a placeholder whose row is not in the archive is drawn as it is.
+ *
  * A child is something that has to be finished before its parent can be. Nesting means exactly that and nothing else.
  *
  * Reading is forgiving about a file that is absent or half-written, since another process writes it. It is not
  * forgiving quietly: a file that exists and cannot be parsed comes back as an entry with an error on it, so the view can
  * say so. A plan that silently shows nothing is indistinguishable from no work left.
  */
+const path = require('path');
 const { readBounded } = require('./bounded');
 
 /*
@@ -133,6 +139,37 @@ function brief(raw) {
   return { summary, summaryAt: summary ? when(raw.summaryAt) : 0, status, statusAt: status ? when(raw.statusAt) : 0 };
 }
 
+/** Where the closed rows moved out of the plan in `file` are kept. */
+const closedFileOf = (file) => path.join(path.dirname(file), 'closed', path.basename(file));
+
+/** The rows of the archive beside the plan in `file`, by row number; empty when there is none or it does not parse. */
+function archivedRows(file, max) {
+  const body = readBounded(closedFileOf(file), max);
+  const rows = new Map();
+  if (!body) return rows;
+  let parsed;
+  try { parsed = JSON.parse(body); } catch (_) { return rows; }
+  for (const n of parsed && Array.isArray(parsed.nodes) ? parsed.nodes : []) {
+    if (n && typeof n === 'object' && typeof n.row === 'string') rows.set(n.row, n);
+  }
+  return rows;
+}
+
+/** `nodes` with each placeholder replaced by its row from `rows`, as far down as the view draws. */
+function restoreArchived(nodes, rows, prefix = '', depth = 0) {
+  if (!Array.isArray(nodes) || depth > MAX_DEPTH) return nodes;
+  return nodes.map((raw, i) => {
+    const num = prefix + (i + 1);
+    let n = raw;
+    if (n && typeof n === 'object' && n.archived === true && rows.has(num)) {
+      n = Object.assign({}, rows.get(num));
+      delete n.row;
+    }
+    if (n && typeof n === 'object' && Array.isArray(n.children)) n = Object.assign({}, n, { children: restoreArchived(n.children, rows, num + '.', depth + 1) });
+    return n;
+  });
+}
+
 /** The plan in `file` for conversation `session`, or null when there is none. */
 function readPlanAt(file, session, max = MAX_PLAN_BYTES) {
   if (!file || !session) return null;
@@ -153,7 +190,11 @@ function readPlanAt(file, session, max = MAX_PLAN_BYTES) {
   entry.brief = brief(parsed && parsed.brief);
   const budget = { left: MAX_NODES };
   if (parsed && Array.isArray(parsed.nodes)) {
-    for (const raw of parsed.nodes) {
+    const archived = parsed.nodes.some(function has(n) {
+      return n && typeof n === 'object' && (n.archived === true || (Array.isArray(n.children) && n.children.some(has)));
+    });
+    const rows = archived ? archivedRows(file, max) : new Map();
+    for (const raw of rows.size ? restoreArchived(parsed.nodes, rows) : parsed.nodes) {
       const n = node(raw, 0, budget);
       if (n) entry.nodes.push(n);
     }
@@ -192,6 +233,6 @@ function countUnknown(nodes) {
 }
 
 module.exports = {
-  readPlanAt, countOpen, countUnknown, openFirst, brief, OPEN_STATES, PLAN_FORMAT, STATUS_PARTS,
+  readPlanAt, closedFileOf, countOpen, countUnknown, openFirst, brief, OPEN_STATES, PLAN_FORMAT, STATUS_PARTS,
   STATES, MAX_DEPTH, MAX_NODES, MAX_DETAIL_LINES, MAX_DETAIL_CHARS, WAITING_ON, MAX_QUESTION_CHARS, MAX_PLAN_BYTES,
 };

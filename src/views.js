@@ -15,7 +15,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const sources = require('./sources');
-const { readPlanAt, countOpen, countUnknown, MAX_PLAN_BYTES } = require('./workplan');
+const { readPlanAt, closedFileOf, countOpen, countUnknown, MAX_PLAN_BYTES } = require('./workplan');
 const { WorkPlanProvider, ageSince } = require('./workplan-view');
 const { ConversationsProvider, questionOf, briefOf, briefKey } = require('./conversations-view');
 const conversations = require('./conversations');
@@ -86,9 +86,14 @@ function create(host, opts = {}) {
     const file = source ? sources.planFileOf(source, session) : '';
     if (!file) return { file: '', plan: null };
     const st = statOf(file);
+    /* The rows moved to the archive beside the plan are part of it (src/workplan.js), so a change to that file is one. */
+    const ast = statOf(closedFileOf(file));
+    const also = ast ? `${ast.mtimeMs}:${ast.size}` : '';
     const had = plans.get(file);
     if (had) had.pass = pass;
-    if (st && had && had.session === session && had.mtimeMs === st.mtimeMs && had.size === st.size) return { file, plan: had.plan };
+    if (st && had && had.session === session && had.mtimeMs === st.mtimeMs && had.size === st.size && had.also === also) {
+      return { file, plan: had.plan };
+    }
     const plan = readPlanAt(file, session, MAX_PLAN_BYTES);
     /*
      * The protocol asks nothing of how a plan file is written, so a reader can land in the middle of one. A file that
@@ -99,7 +104,7 @@ function create(host, opts = {}) {
     if (plan && plan.error && had && had.plan && !had.plan.error && st && Date.now() - st.mtimeMs < WRITING_MS) {
       return { file, plan: had.plan };
     }
-    if (st) plans.set(file, { session, mtimeMs: st.mtimeMs, size: st.size, plan, pass });
+    if (st) plans.set(file, { session, mtimeMs: st.mtimeMs, size: st.size, also, plan, pass });
     else plans.delete(file);
     return { file, plan };
   };

@@ -266,6 +266,7 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
       return fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : '';
     };
     const on = mark(), off = mark({ brief: false });
-    eq([STAMP.test(on), off], [true, ''], `${agent}: a compaction leaves the time it happened beside the plan, and nothing when the brief is off`);
+    eq([STAMP.test(on), STAMP.test(off)], [true, true],
+      `${agent}: a compaction leaves the time it happened beside the plan, with the brief on or off, since the injection reads it too`);
   }
 };

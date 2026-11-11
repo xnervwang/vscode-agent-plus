@@ -138,6 +138,11 @@ def row_help(path, command, quoted):
             "keep this plan for work that outlives the turn."]
 
 
+def row_gist(path, command):
+    """The few words on changing a row that the injected block gives on a turn when it leaves row_help out."""
+    return "set_row or add_row of the `%s` MCP server, with plan=%s" % (MCP_SERVER, path)
+
+
 def fixture_reply(text):
     """A rollout line holding an assistant reply, for the hooks' self-tests."""
     return json.dumps({"timestamp": "2026-01-01T00:00:00Z", "type": "response_item", "payload": {

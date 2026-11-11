@@ -18,6 +18,10 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | `agentPlus.conversationsView` | `true` | Show the Conversations and Answer views and the status bar entry |
 | `agentPlus.webviewRequestLimit` | `ask` | Raise VS Code's request limit: `ask` once per VS Code version, `raise` without asking, or `leave` it |
 
+## What it costs in tokens
+
+Agent Plus adds no tokens to conversations. Its views and status bar entry read files and draw in VS Code; raising the request limit edits one of VS Code's own files. The work plan plugins that Claude Code Plus and Codex Plus each install into their agents (Claude Code and Codex) add plans, reminders, and tools to conversation context; the Claude Code Plus and Codex Plus READMEs list each addition, its maximum, and the setting that turns it off.
+
 ## Install
 
 - From the marketplace: install Claude Code Plus or Codex Plus; VS Code installs this with it.
