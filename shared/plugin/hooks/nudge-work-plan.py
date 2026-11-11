@@ -361,12 +361,15 @@ def reconcile(path, limits, shape):
         "\"todo\". This will not be said again until the plan has been written to." % (changed_count, path)))
 
 
-def status_owed(path, brief, shape):
+def status_owed(path, brief, shape, keep):
     """Whether to ask for a new status: the turn made a tool call or the plan was written during it, and the status was
-    not.
+    not, and no earlier Stop in this turn asked already.
 
     A status written during the turn counts even if rows changed after it. Otherwise a turn that wrote the status and
     then closed a row would be asked for it again.
+
+    One exchange can end in several Stops, so the turn that was asked is kept in `keep` (BRIEFED_SUFFIX) by its start
+    time, the same start the turn is measured from.
     """
     started, tools = shape[0], shape[1]
     if started is None:
@@ -376,7 +379,12 @@ def status_owed(path, brief, shape):
     except OSError:
         written = False
     # `statusAt` is written to the second, so the comparison is too.
-    return bool(tools or written) and (brief["statusAt"] is None or brief["statusAt"] < int(started))
+    if not (tools or written) or (brief["statusAt"] is not None and brief["statusAt"] >= int(started)):
+        return False
+    if keep.get("statusTurn") == started:
+        return False
+    keep["statusTurn"] = started
+    return True
 
 
 def read_side(path, suffix):
@@ -387,7 +395,17 @@ def read_side(path, suffix):
         return ""
 
 
-def summary_owed(path, plan, brief):
+def read_briefed(path):
+    """What the end of a turn last asked about the brief (BRIEFED_SUFFIX), as a dict."""
+    try:
+        with open(side_file(path, BRIEFED_SUFFIX), encoding="utf-8") as fh:
+            kept = json.load(fh)
+    except Exception:
+        kept = {}
+    return kept if isinstance(kept, dict) else {}
+
+
+def summary_owed(path, plan, brief, kept, keep):
     """Why the summary should be written again, or None.
 
     It is due when there is none and the plan has rows; when a top-level row was added, removed or closed after it was
@@ -395,17 +413,11 @@ def summary_owed(path, plan, brief):
     resume-work-plan.py), since after a compaction the summary is the main record of what the conversation is for.
     Changes below the top level do not count.
 
-    A reason is not repeated until the plan or the summary changes; what was asked is kept beside the plan
-    (BRIEFED_SUFFIX). A removed row has no timestamp, so removals are found by comparing the number of top-level
-    rows with the number at the first turn to end after the summary was written.
+    A reason is not repeated until the plan or the summary changes; what was asked is recorded in `keep`, which the
+    caller writes beside the plan (BRIEFED_SUFFIX), and `kept` is that record as it was read. A removed row has no
+    timestamp, so removals are found by comparing the number of top-level rows with the number at the first turn to
+    end after the summary was written.
     """
-    try:
-        with open(side_file(path, BRIEFED_SUFFIX), encoding="utf-8") as fh:
-            kept = json.load(fh)
-    except Exception:
-        kept = {}
-    kept = kept if isinstance(kept, dict) else {}
-    keep = dict(kept)
     top = [n for n in listed(plan.get("nodes")) if isinstance(n, dict)]
     stamp = brief["summaryStamp"] if isinstance(brief["summaryStamp"], str) else ""
     if keep.get("summaryAt") != stamp or not isinstance(keep.get("top"), int):
@@ -436,9 +448,6 @@ def summary_owed(path, plan, brief):
         keep["compacted"] = marker
     if key is not None:
         keep["asked"] = key
-    if keep != kept and not write_quietly(side_file(path, BRIEFED_SUFFIX), json.dumps(keep)):
-        # Without the record, the same reason would be given at the end of every turn.
-        return None
     return "; it ".join(reasons) or None
 
 
@@ -457,8 +466,13 @@ def brief_due(payload, path, shape, limits):
     if not isinstance(plan, dict):
         return None
     brief = brief_of(plan)
-    summary = summary_owed(path, plan, brief)
-    status = status_owed(path, brief, shape)
+    kept = read_briefed(path)
+    keep = dict(kept)
+    summary = summary_owed(path, plan, brief, kept, keep)
+    status = status_owed(path, brief, shape, keep)
+    if keep != kept and not write_quietly(side_file(path, BRIEFED_SUFFIX), json.dumps(keep)):
+        # Without the record, the same request would be made at the end of every turn, or at every Stop of one.
+        return None
     if not summary and not status:
         return None
     said, parts = [], []

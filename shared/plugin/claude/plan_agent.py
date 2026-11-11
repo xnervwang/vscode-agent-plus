@@ -130,9 +130,9 @@ MAYBE_CALL = ('"tool_use"',)
 MAYBE_USER = ('"user"',)
 NOTE_WORD = "--note"
 AFTER_OFFER = ""
-# Claude Code's Stop hook adds context for the next turn rather than keeping this one going, so it never runs again
-# because of its own output.
-STOP_REENTERS = False
+# Context a Stop hook adds keeps the turn going: the model answers it before the turn ends, and the Stop after that
+# answer carries stop_hook_active. Checked on Claude Code 2.1.322 with `claude -p`.
+STOP_REENTERS = True
 
 
 def tool_calls(row):

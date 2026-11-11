@@ -203,6 +203,45 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
     }
   }
 
+  /* ── Several Stops in one turn ── */
+  const userLine = (agent, ts) => JSON.stringify(agent === 'claude'
+    ? { type: 'user', timestamp: ts, message: { role: 'user', content: 'Go on.' } }
+    : { timestamp: ts, type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage' } } });
+  const writeLine = (agent, ts) => JSON.stringify(agent === 'claude'
+    ? { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: '/tmp/x', content: 'y' } }] } }
+    : { timestamp: ts, type: 'response_item', payload: { type: 'custom_tool_call', name: 'apply_patch', input: '*** Begin Patch' } });
+  for (const agent of AGENTS) {
+    const p = fresh(agent, 'stops', { nodes: [{ title: 'A', state: 'todo', opened: iso(now - 7200) }] }, { brief: true });
+    const tr = path.join(p.data, 't.jsonl');
+    const lines = [];
+    for (let i = 0; i < 3; i++) lines.push(userLine(agent, new Date((now - 600 + i * 60) * 1000).toISOString()));
+    for (let i = 0; i < 10; i++) lines.push(writeLine(agent, new Date((now - 400 + i) * 1000).toISOString()));
+    fs.writeFileSync(tr, lines.join('\n') + '\n');
+    fs.utimesSync(p.file, now - 3600, now - 3600);
+    const once = () => {
+      const r = run(agent, 'nudge-work-plan.py', [p.data], JSON.stringify({ session_id: SID, hook_event_name: 'Stop',
+        transcript_path: tr, last_assistant_message: 'Done.' }));
+      try { const o = JSON.parse(r.stdout); return (o.hookSpecificOutput ? o.hookSpecificOutput.additionalContext : o.reason) || ''; } catch (_) { return ''; }
+    };
+    const asked = [once(), once(), once(), once()].map(asksStatus);
+    fs.appendFileSync(tr, [userLine(agent, new Date((now - 100) * 1000).toISOString()),
+      ...[0, 1, 2].map((i) => writeLine(agent, new Date((now - 90 + i) * 1000).toISOString()))].join('\n') + '\n');
+    asked.push(asksStatus(once()));
+    eq(asked, [true, false, false, false, true],
+      `${agent}: of four Stops in one turn only the first asks for the status, and the next turn asks again`);
+  }
+  for (const agent of AGENTS) {
+    const p = fresh(agent, 'reenter', { nodes: [{ title: 'A', state: 'todo', opened: iso(now - 7200) }] });
+    const tr = path.join(p.data, 't.jsonl');
+    fs.writeFileSync(tr, [userLine(agent, new Date((now - 300) * 1000).toISOString()),
+      ...[0, 1, 2].map((i) => writeLine(agent, new Date((now - 200 + i) * 1000).toISOString()))].join('\n') + '\n');
+    fs.utimesSync(p.file, now - 3600, now - 3600);
+    const r = run(agent, 'nudge-work-plan.py', [p.data], JSON.stringify({ session_id: SID, hook_event_name: 'Stop',
+      transcript_path: tr, last_assistant_message: 'Done.', stop_hook_active: true }));
+    eq([r.status, r.stdout.trim()], [0, ''],
+      `${agent}: a Stop that follows one the hook kept going says nothing, though the turn changed things and left the plan alone`);
+  }
+
   /* ── The brief in the injected block ── */
   for (const agent of AGENTS) {
     const brief = { summary: 'Shipping the brief view.', summaryAt: iso(now - 7200), status: { doing: 'Tests', progress: 'Red', next: 'none' },
