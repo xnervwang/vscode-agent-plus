@@ -6,7 +6,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 
 | Part | Who | Does |
 | --- | --- | --- |
-| Core | Agent Plus | Work plan view, Conversations view, Answer view, status bar entry, reading plan files, answers across windows, VS Code's webview request limit |
+| Core | Agent Plus | Work plan view, Conversations view, Answer view, the Conversations and token mode entries in the status bar, the token mode setting, reading plan files, answers across windows, VS Code's webview request limit |
 | Source | Each feature extension (Claude Code Plus, Codex Plus) | One agent's conversations, plans, tabs, focus, answer typing |
 
 ## Setting up a feature extension
@@ -21,6 +21,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 - Get the interface: `vscode.extensions.getExtension('xnervwang.agent-plus').exports.agentPlus`. The core is active by then; `await ext.activate()` is harmless.
 - Call `registerSource(source)` once. Show views of your own only after `accepted` is true, under a context key you set then.
 - A view the core does not draw (such as a session list) can go in the core's activity bar container, id `agentPlus`.
+- Read each feature that adds to the agent's context through `effective()` in `src/token-mode.js`, copied in by `build/sync-shared.js`, and list its setting in that file's `SWITCHES`.
 
 ## Ids the core owns
 
@@ -29,9 +30,9 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | Activity bar container | `agentPlus` |
 | Panel container | `agentPlusPanel` |
 | Views | `agentPlus.workPlan`, `agentPlus.conversations`, `agentPlus.answer` |
-| Context key | `agentPlus.alone`: set to true only once the core finds nothing installed that depends on it and no source registered. The views, the status bar entry and the commands are hidden by `!agentPlus.alone`, so an unset key shows them: the key does not exist until the core has activated, and a window's panel is put back before that |
+| Context key | `agentPlus.alone`: set to true only once the core finds nothing installed that depends on it and no source registered. The views, the status bar entries and the commands are hidden by `!agentPlus.alone`, so an unset key shows them: the key does not exist until the core has activated, and a window's panel is put back before that |
 | Commands | `agentPlus.*` |
-| Settings | `agentPlus.workPlanView`, `agentPlus.conversationsView`, `agentPlus.webviewRequestLimit` |
+| Settings | `agentPlus.tokenMode`, `agentPlus.workPlanView`, `agentPlus.conversationsView`, `agentPlus.webviewRequestLimit` |
 
 ## The interface
 

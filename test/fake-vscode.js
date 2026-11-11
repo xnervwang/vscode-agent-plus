@@ -36,11 +36,15 @@ class Uri {
     Object.assign(this, { scheme, authority, path: p, query, fragment });
   }
   static from(parts) { return new Uri(parts); }
+  static parse(text) {
+    const m = /^([a-z][\w+.-]*):\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/i.exec(String(text)) || [];
+    return new Uri({ scheme: m[1] || 'file', authority: m[2] || '', path: m[3] || '', query: m[4] || '', fragment: m[5] || '' });
+  }
   static file(p) { return new Uri({ scheme: 'file', path: p }); }
   static joinPath(base, ...parts) { return new Uri({ ...base, path: path.posix.join(base.path, ...parts) }); }
   get fsPath() { return this.path; }
   with(change) { return new Uri({ ...this, ...change }); }
-  toString() { return `${this.scheme}://${this.authority}${this.path}${this.query ? '?' + this.query : ''}`; }
+  toString() { return `${this.scheme}://${this.authority}${this.path}${this.query ? '?' + this.query : ''}${this.fragment ? '#' + this.fragment : ''}`; }
 }
 
 class TabInputCustom { constructor(uri, viewType) { this.uri = uri; this.viewType = viewType; } }
@@ -57,7 +61,8 @@ class RelativePattern { constructor(base, pattern) { this.base = base; this.patt
 
 /*
  * `answers` maps a notification's text (matched as a substring) to the button the test's user picks; a function gets
- * the message and the buttons. Unmatched notifications are dismissed.
+ * the message and the buttons. Unmatched notifications are dismissed. Set `state.onQuickPick(qp)` to answer a quick pick
+ * when it is shown, with qp.accept(item) or qp.hide(). inspect() gives a key in `state.config` as its user setting.
  */
 function create({ version = '1.145.0', trusted = true } = {}) {
   const tabsChanged = new EventEmitter();
@@ -69,7 +74,7 @@ function create({ version = '1.145.0', trusted = true } = {}) {
   const groups = [{ viewColumn: 1, tabs: [], activeTab: null, isActive: true }];
   const state = {
     commands: [], context: {}, extensions: [], clipboard: '', views: {}, webviews: {}, status: [], log: [], handlers: {},
-    said: [], answers: [], watchers: [], config: {}, trusted, configWrites: [],
+    said: [], answers: [], watchers: [], config: {}, trusted, configWrites: [], quickPicks: [], external: [],
   };
   const answer = (kind) => async (message, ...rest) => {
     const buttons = rest.filter((b) => typeof b === 'string');
@@ -114,6 +119,16 @@ function create({ version = '1.145.0', trusted = true } = {}) {
       showWarningMessage: answer('warning'),
       showErrorMessage: answer('error'),
       setStatusBarMessage: () => new Disposable(() => {}),
+      createQuickPick: () => {
+        const accepted = new EventEmitter(), hidden = new EventEmitter();
+        const qp = { items: [], activeItems: [], selectedItems: [], title: '', placeholder: '', matchOnDetail: false, hidden: false,
+          onDidAccept: accepted.event, onDidHide: hidden.event,
+          show() { state.quickPicks.push(qp); if (state.onQuickPick) Promise.resolve().then(() => state.onQuickPick(qp)); },
+          hide() { if (qp.hidden) return; qp.hidden = true; hidden.fire(); },
+          accept(item) { qp.selectedItems = item ? [item] : []; accepted.fire(); },
+          dispose() { qp.disposed = true; } };
+        return qp;
+      },
       showTextDocument: async (uri) => { state.commands.push(['showTextDocument', uri]); },
     },
     commands: {
@@ -136,7 +151,8 @@ function create({ version = '1.145.0', trusted = true } = {}) {
       onDidChange: extChanged.event,
     },
     env: {
-      language: 'en', appName: 'Visual Studio Code', uriScheme: 'vscode', remoteName: undefined, appRoot: '',
+      language: 'en', appName: 'Visual Studio Code', uriScheme: 'vscode', remoteName: undefined, appRoot: '', machineId: 'test-machine',
+      openExternal: async (uri) => { state.external.push(String(uri)); return true; },
       clipboard: { writeText: async (t) => { state.clipboard = t; }, readText: async () => state.clipboard },
     },
     workspace: {
@@ -153,7 +169,10 @@ function create({ version = '1.145.0', trusted = true } = {}) {
           state.config[key] = v;
           state.configWrites.push([key, v]);
         },
-        inspect: () => undefined,
+        inspect: (k) => {
+          const key = section ? section + '.' + k : k;
+          return key in state.config ? { key, globalValue: state.config[key] } : { key };
+        },
       }),
       onDidChangeConfiguration: configChanged.event,
       onDidChangeWorkspaceFolders: foldersChanged.event,

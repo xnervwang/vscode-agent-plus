@@ -42,7 +42,7 @@ const NOTICE_DELAY_MS = 4000;
 /* Every command the manifest declares. They are registered at once, so none is ever missing, and handed to the views
    once those exist. */
 const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
-  'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit'];
+  'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit', 'chooseTokenMode'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {
@@ -57,8 +57,10 @@ const disposable = (fn) => (typeof vscode.Disposable === 'function' ? new vscode
 
 /*
  * `opts.views(host)` builds the views and returns { attach(entry), detach(entry), dispose() } (src/views.js); without
- * it, sources register and nothing is drawn. `opts.fetch` replaces fetch() for the gallery lookups and
- * `opts.noticeDelayMs` the wait before the one-off notices, in tests; `opts.viewOptions` is passed on to the views.
+ * it, sources register and nothing is drawn. `opts.limit` and `opts.tokenMode` build the request limit and the token
+ * mode's notice and status bar entry (src/request-limit.js, src/token-choice.js). `opts.fetch` replaces fetch() for the
+ * gallery lookups and `opts.noticeDelayMs` the wait before the one-off notices, in tests; `opts.viewOptions` is passed
+ * on to the views.
  */
 function start(context, log, opts = {}) {
   const say = (m) => { try { if (log) log.appendLine(`${new Date().toISOString()} ${m}`); } catch (_) { /* no log */ } };
@@ -77,9 +79,16 @@ function start(context, log, opts = {}) {
 
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
   const limit = typeof opts.limit === 'function' ? opts.limit(host, { home: opts.home }) : null;
+  /* Built before the first look for dependents below: that look writes to globalState, and this has to read it as an
+     earlier version left it. */
+  let choice = null;
+  if (typeof opts.tokenMode === 'function') {
+    try { choice = opts.tokenMode(host, { home: opts.home }); } catch (e) { say(`the token mode could not start: ${(e && e.stack) || e}`); choice = null; }
+  }
 
   /* ── Whether anything uses this extension ── */
   let deps = [];
+  host.dependents = () => deps.slice();
   let active = null;
   const setActive = (on) => {
     if (on === active) return;
@@ -90,6 +99,7 @@ function start(context, log, opts = {}) {
       if (views) for (const entry of registry.list()) attachSafely(entry);
     }
     if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
+    if (choice) { try { choice.setActive(on); } catch (e) { say(`token mode entry: ${(e && e.message) || e}`); } }
   };
   const attachSafely = (entry) => { try { views.attach(entry); } catch (e) { say(`could not show ${entry.id}: ${(e && e.message) || e}`); } };
   const rescan = () => {
@@ -162,11 +172,15 @@ function start(context, log, opts = {}) {
   const armNotice = () => {
     if (closing) return;
     if (noticeTimer) { clearTimeout(noticeTimer); timers.delete(noticeTimer); }
-    noticeTimer = later(() => { noticeTimer = 0; tellIfAlone().catch((e) => say(`alone notice: ${(e && e.message) || e}`)); }, noticeWait);
+    noticeTimer = later(() => {
+      noticeTimer = 0;
+      tellIfAlone().catch((e) => say(`alone notice: ${(e && e.message) || e}`));
+      if (choice) choice.ask().catch((e) => say(`token mode notice: ${(e && e.message) || e}`));
+    }, noticeWait);
   };
   armNotice();
   later(() => checkDeclared(), noticeWait);
-  context.subscriptions.push(vscode.extensions.onDidChange(() => { rescan(); checkDeclared(); armNotice(); }));
+  context.subscriptions.push(vscode.extensions.onDidChange(() => { rescan(); checkDeclared(); armNotice(); if (choice) choice.paint(); }));
   /* Trusting the workspace is when an extension disabled with the agent it extends comes back, and the first point at
      which being alone means anything. */
   if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
@@ -241,6 +255,7 @@ function start(context, log, opts = {}) {
       `Agent Plus ${core.version}: protocol ${core.protocol}, accepts ${core.accepts.join(', ')}`,
       `Workspace trusted: ${host.trusted() ? 'yes' : 'no (Restricted Mode: read only)'}`,
       `Extensions using it: ${deps.map((d) => `${d.id} ${d.version} (protocol ${d.protocol || 'not declared'})`).join(', ') || 'none'}`,
+      ...(choice ? choice.statusLines() : []),
       ...(views ? views.commands.statusLines() : ['The views are not built: nothing here uses this extension.']),
     ];
     if (log) { for (const l of lines) log.appendLine(l); try { log.show(true); } catch (_) { /* no panel */ } }
@@ -249,6 +264,7 @@ function start(context, log, opts = {}) {
   const run = (name, args) => {
     if (name === 'showStatus') return status();
     if (name === 'restoreWebviewRequestLimit') return limit ? limit.putBack() : undefined;
+    if (name === 'chooseTokenMode') return choice ? choice.choose() : undefined;
     const fn = views && views.commands[name];
     return typeof fn === 'function' ? fn(...args) : undefined;
   };
@@ -267,12 +283,13 @@ function start(context, log, opts = {}) {
     timers.clear();
     if (views) { try { views.dispose(); } catch (_) { /* closing anyway */ } views = null; }
     if (limit) { try { limit.dispose(); } catch (_) { /* closing anyway */ } }
+    if (choice) { try { choice.dispose(); } catch (_) { /* closing anyway */ } }
     for (const entry of registry.list()) unhook(entry.subs);
     registry.clear();
   } });
-  host.dependents = () => deps.slice();
   host.api = agentPlus;
   host.views = () => views;
+  host.tokenChoice = () => choice;
   return agentPlus;
 }
 

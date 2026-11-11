@@ -11,16 +11,32 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | `N to decide` (questions waiting for you), or `Conversations M` (running ones) when there are none | Status bar |
 | Rows in a state this version does not know, and plans in a newer format, marked as such | Work plan and Conversations views |
 | VS Code's limit of 32 requests in flight for all webview tabs together, raised on request | VS Code's files |
+| The token mode: which features of Claude Code Plus and Codex Plus add to the agent's context ([What it costs in tokens](#what-it-costs-in-tokens)). Hover for what it adds, click to change it; choosing Custom opens the per-feature settings | Status bar |
 
 | Setting | Default | |
 | --- | --- | --- |
+| `agentPlus.tokenMode` | `all` | Which features may add to the agent's context: `interface`, `essential`, `all` or `custom` ([What it costs in tokens](#what-it-costs-in-tokens)) |
 | `agentPlus.workPlanView` | `true` | Show the Work plan view |
-| `agentPlus.conversationsView` | `true` | Show the Conversations and Answer views and the status bar entry |
+| `agentPlus.conversationsView` | `true` | Show the Conversations and Answer views and the Conversations entry in the status bar |
 | `agentPlus.webviewRequestLimit` | `ask` | Raise VS Code's request limit: `ask` once per VS Code version, `raise` without asking, or `leave` it |
 
 ## What it costs in tokens
 
-Agent Plus adds no tokens to conversations. Its views and status bar entry read files and draw in VS Code; raising the request limit edits one of VS Code's own files. The work plan plugins that Claude Code Plus and Codex Plus each install into their agents (Claude Code and Codex) add plans, reminders, and tools to conversation context; the Claude Code Plus and Codex Plus READMEs list each addition, its maximum, and the setting that turns it off.
+| Feature | What it adds to the agent's context | Interface features | Essential features | All features | Custom |
+| --- | --- | --- | --- | --- | --- |
+| Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | Per-feature setting |
+| Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | Per-feature setting |
+| Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | Per-feature setting |
+| Skill suggestions (Codex Plus) | The installed skills that best fit your message, before each turn | Off | Off | On | Per-feature setting |
+| Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | Per-feature setting |
+
+`agentPlus.tokenMode` controls which features of Claude Code Plus and Codex Plus add text to the agent's context. It defaults to All features. The Interface features mode adds nothing to the agent's context and unloads the work plan plugin from the agent. Choosing another mode puts the plugin back.
+
+Outside Custom, the per-feature settings in Claude Code Plus and Codex Plus have no effect. Modes do not change those settings. Each setting is on by default. Changing one outside Custom shows a notice with a Switch to Custom button.
+
+After a first install, a notice asks once for a mode; closing it keeps All features. If a per-feature setting was changed from its default in an earlier version, upgrading selects Custom so that setting keeps working. The token mode entry in the status bar shows the mode. Hover over it to see what the mode adds to the agent's context, or click it to choose from the four modes.
+
+In a running conversation, a mode change applies from the next message to work plan injection and reminders, the time-zone note, the conversation brief, skill suggestions, and wake-ups. Skill descriptions already in context stay there. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
 
 ## Install
 

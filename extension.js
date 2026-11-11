@@ -36,7 +36,8 @@ function activate(context) {
     const host = require('./src/host');
     const views = require('./src/views');
     const limit = require('./src/request-limit');
-    const agentPlus = host.start(context, log, { views: views.create, limit: limit.create });
+    const tokenChoice = require('./src/token-choice');
+    const agentPlus = host.start(context, log, { views: views.create, limit: limit.create, tokenMode: tokenChoice.create });
     const adopt = () => require('./src/old-settings').adopt(vscode, context).then((written) => {
       for (const [key, scope, value] of written) if (log) log.appendLine(`took over ${key} = ${value} (${scope}) from the old Claude Code extension's setting`);
     }, (e) => { if (log) log.appendLine(`taking over old settings: ${(e && e.message) || e}`); });
