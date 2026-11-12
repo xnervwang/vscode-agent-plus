@@ -57,7 +57,6 @@ const TEXT = {
     briefStale: 'May be out of date: the conversation has run since this was written.',
     briefAuto: 'Put together from the work plan, not written by the conversation.',
     briefLive: (state, rows) => `Now: ${state}${rows ? ' · ' + rows : ''}`,
-    briefQuestions: (n) => (n === 1 ? 'Waiting for your answer' : `Waiting for your answers (${n})`),
     briefNoRows: 'The work plan has no rows yet.',
     briefMoreRows: (n) => `and ${n} more`,
     briefNothingDoing: 'no row is doing',

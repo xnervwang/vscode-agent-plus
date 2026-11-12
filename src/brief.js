@@ -58,8 +58,7 @@ function page(b, t, age) {
   }
   return {
     type: 'brief', key: b.key, title: b.title || b.sessionId || '', sections, live, gone: b.gone ? t.briefGone : '',
-    auto: t.briefAuto, questionsHead: (b.questions || []).length ? t.briefQuestions((b.questions || []).length) : '',
-    questions: (b.questions || []).map((q) => ({ row: q.row, text: `${q.row}. ${q.question}`, when: q.since ? t.asked(age(q.since)) : '' })),
+    auto: t.briefAuto,
   };
 }
 

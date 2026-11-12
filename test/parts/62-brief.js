@@ -111,17 +111,15 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const p = a.last();
     const [summary, status] = p.sections;
     eq([summary.auto, summary.lines.map((l) => l.label + ' ' + l.text), status.auto, status.lines.map((l) => [l.label, l.text]),
-      p.auto, p.live, p.questionsHead, p.questions],
+      p.auto, p.live, 'questionsHead' in p, 'questions' in p, /Merge now|Waiting for your answer/.test(JSON.stringify(p))],
     [true, ['2. Brief view (doing)', '1. Old (done)'], true, [['Doing', '2. Brief view \u00b7 page half done'], ['Last active', '2m ago']],
       'Put together from the work plan, not written by the conversation.', 'Now: working \u00b7 2. Brief view (doing for 12m)',
-      'Waiting for your answer', [{ row: '3', text: '3. Merge now?', when: 'asked 4m ago' }]],
-    'with no brief, the page is put together from the top rows, the doing rows with their notes and the last activity, and says so');
-    a.send({ type: 'ask', key: p.key, row: '3' });
-    const asked = a.last();
+      false, false, false],
+    'with no brief, the page is put together from the top rows, the doing rows with their notes and the last activity, and says so; '
+      + 'the questions are left to the tree, which lists them under the conversation already');
     a.v.showBrief(conv.briefOf(C({ brief: written })));
     a.send({ type: 'open', key: a.last().key });
-    eq([asked.type, asked.question, a.opened], ['show', 'Merge now?', [{ sourceId: 'codex', sessionId: T, cwd: '/w', title: 'Ship the brief' }]],
-      'a question on the page opens it to be answered, and the page\'s button goes to the conversation');
+    eq(a.opened, [{ sourceId: 'codex', sessionId: T, cwd: '/w', title: 'Ship the brief' }], 'the page\'s button goes to the conversation');
     const z = answerView(root, 'zh-cn');
     z.v.showBrief(conv.briefOf(C({})));
     eq([z.last().auto, z.last().sections.map((s) => s.head)], ['\u8fd9\u662f\u81ea\u52a8\u62fc\u7684\uff0c\u4e0d\u662f\u5bf9\u8bdd\u81ea\u5df1\u5199\u7684\u3002',
@@ -142,8 +140,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const { els } = pg;
     const sections = els.bsections.children.map((c) => c.textContent);
     const shown = [els.brief.style.display, els.main.style.display, els.btitle.textContent, sections, els.blive.textContent,
-      els.bquestions.children.map((c) => c.textContent)];
-    pg.fire(els.bquestions.children[1], 'click');
+      'bquestions' in els, /Waiting for your answer/.test(a.v.html())];
     pg.fire(els.bopen, 'click');
     pg.post({ type: 'show', key: 'k', conversation: 'c', row: 'r', question: 'Q', note: '', detail: '', draft: '', running: true, busy: false,
       notRunning: '', status: '', failed: false });
@@ -152,9 +149,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
         ['Summarywritten 2h agoAdds the brief to the Conversations panel.',
           'Where it standswritten 10m agoMay be out of date: the conversation has run since this was written.'
             + 'DoingWriting testsLatestShared hooks passNextCommit'],
-        'Now: working \u00b7 2. Brief view (doing for 12m)', ['Waiting for your answer', '3. Merge now?asked 4m ago']],
-      [{ type: 'ask', key: a.last().key, row: '3' }, { type: 'open', key: a.last().key }], 'none', 'flex'],
-    'the page draws the brief, a question on it asks to be answered, its button asks for the conversation, and a question replaces it');
+        'Now: working \u00b7 2. Brief view (doing for 12m)', false, false],
+      [{ type: 'open', key: a.last().key }], 'none', 'flex'],
+    'the page draws the brief with no list of questions, its button asks for the conversation, and a question replaces it');
   }
 
   undo();

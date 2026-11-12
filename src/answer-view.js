@@ -100,10 +100,6 @@ class AnswerView {
     if (!this.current || m.key !== this.current.key) return;
     if (this.current.mode === 'brief') {
       if (m.type === 'open' && this.current.open) this.open(this.current.open);
-      else if (m.type === 'ask') {
-        const q = (this.current.questions || []).find((x) => x.row === m.row);
-        if (q) this.show(q);
-      }
       return;
     }
     if (m.type === 'draft' && typeof m.text === 'string') {
@@ -312,8 +308,6 @@ class AnswerView {
   .stale { color: var(--vscode-editorWarning-foreground, var(--vscode-descriptionForeground)); }
   .line { white-space: pre-wrap; overflow-wrap: anywhere; }
   #blive { color: var(--vscode-charts-blue, var(--vscode-foreground)); }
-  .q { cursor: pointer; color: var(--vscode-textLink-foreground); }
-  .q:hover, .q:focus { text-decoration: underline; outline: none; }
 </style></head><body>
 <div id="empty">${attr(t.answerEmpty)}</div>
 <div id="main">
@@ -331,7 +325,6 @@ class AnswerView {
   <div id="bgone"></div>
   <div id="blive"></div>
   <div id="bsections"></div>
-  <div id="bquestions"></div>
 </div>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
@@ -367,19 +360,6 @@ class AnswerView {
         sec.appendChild(line);
       }
       box.appendChild(sec);
-    }
-    const qs = $('bquestions');
-    qs.textContent = '';
-    if (m.questionsHead) qs.appendChild(el('div', 'head', m.questionsHead));
-    for (const q of m.questions) {
-      const row = el('div', 'q line', q.text);
-      row.tabIndex = 0;
-      row.setAttribute('role', 'button');
-      if (q.when) row.appendChild(el('span', 'when', q.when));
-      const ask = () => vscode.postMessage({ type: 'ask', key, row: q.row });
-      row.addEventListener('click', ask);
-      row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ask(); } });
-      qs.appendChild(row);
     }
   };
   window.addEventListener('message', (e) => {

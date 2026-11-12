@@ -51,7 +51,6 @@ module.exports = {
   briefStale: '可能已过时：写完之后对话又跑过。',
   briefAuto: '这是自动拼的，不是对话自己写的。',
   briefLive: (state, rows) => `现在：${state}${rows ? ' · ' + rows : ''}`,
-  briefQuestions: (n) => `在等你回答（${n}）`,
   briefNoRows: '工作计划里还没有行。',
   briefMoreRows: (n) => `还有 ${n} 行`,
   briefNothingDoing: '没有在做的行',
