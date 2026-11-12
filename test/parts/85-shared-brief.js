@@ -87,6 +87,13 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
     const off = fresh('codex', 'off', { nodes: [] }, { brief: false });
     eq(run('codex', 'plan-row.py', [off.file, 'summary', 'Still written.']).status, 0,
       'with the brief switched off for the hooks, the commands still write');
+    for (const [agent, prefix] of [['claude', 'claudeCodePlus'], ['codex', 'codexPlus']]) {
+      const planOff = fresh(agent, 'plan-off', { nodes: [{ title: 'A', state: 'todo' }] }, { enabled: false });
+      const r = run(agent, 'plan-row.py', [planOff.file, 'set', '1', 'doing']);
+      eq([r.status, /agentPlus\.tokenMode/.test(r.stderr), r.stderr.includes(`${prefix}.workPlan when that mode is Custom`),
+        planOff.read().nodes[0].state], [1, true, true, 'todo'],
+        `${agent}: with work plans off, a write is refused naming the token mode, and the editor's own setting for Custom`);
+    }
   }
 
   /* ── The end-of-turn reminder ── */
