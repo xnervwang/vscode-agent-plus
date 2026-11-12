@@ -14,8 +14,12 @@ const path = require('path');
 const AGENTS = ['claude', 'codex'];
 const SID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const NOTICE = 'Steward notice from Claude Code Plus, not a message from the user: "Fix the build" is waiting for you.';
-const WRAPPED = 'Another Claude session sent a message:\n<cross-session-message from="uds:/run/user/1/cc-socks/9.sock" '
-  + `from-name="claude-code-plus" from-mode="prompting">\n${NOTICE}\n</cross-session-message>`;
+/* The three lines Claude Code 2.1.322 puts before a message from another session, each with and without the tag. */
+const LEADS = ['Another Claude session sent a message:', 'Another Claude session sent a message while you were working:',
+  'A peer session sent a message while you were working:'];
+const TAG = '<cross-session-message from="uds:/run/user/1/cc-socks/9.sock" from-name="claude-code-plus" from-mode="prompting">';
+const DELIVERED = LEADS.flatMap((lead, i) => [[`after lead ${i + 1}`, `${lead}\n${NOTICE}`],
+  [`after lead ${i + 1} and the tag`, `${lead}\n${TAG}\n${NOTICE}\n</cross-session-message>`]]);
 const OTHER_PEER = 'Another Claude session sent a message:\n<cross-session-message from="uds:/run/user/1/cc-socks/9.sock" '
   + 'from-name="some-session" from-mode="prompting">\nThe build is green.\n</cross-session-message>';
 const QUOTED = `What does "${NOTICE}" mean?`;
@@ -65,8 +69,9 @@ module.exports = async ({ eq, note, tmp, root }) => {
       }
     }
     const tr = path.join(data, 't.jsonl');
+    const began = typeof mark.began === 'number' ? mark.began : Date.now() / 1000;
     const lines = [1, 2, 3].map((i) => {
-      const ts = new Date((now + i) * 1000).toISOString();
+      const ts = new Date((began + i) * 1000).toISOString();
       return JSON.stringify(agent === 'claude'
         ? { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'touch x' } }] } }
         : { timestamp: ts, type: 'response_item', payload: { type: 'function_call', name: 'exec_command', arguments: '{"cmd":"touch x"}' } });
@@ -81,13 +86,13 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const plain = turn(agent, 'plain', 'Fix the build.');
     eq([plain.notice, plain.reminded, /status/i.test(plain.stopped)], [false, 1, true],
       `${agent}: an ordinary turn that works without a doing row is reminded once and asked for its status at the end`);
-    for (const [label, prompt] of [['as Claude Code wraps it', WRAPPED], ['on its own', NOTICE]]) {
-      const n = turn(agent, `notice-${label.length}`, prompt);
+    for (const [i, [label, prompt]] of [['on its own', NOTICE], ...DELIVERED].entries()) {
+      const n = turn(agent, `notice-${i}`, prompt);
       eq([n.notice, n.reminded, n.stopped], [true, 0, ''],
         `${agent}: a turn begun by a steward notice ${label} is marked so, and neither reminder speaks in it`);
     }
-    for (const [label, prompt] of [['a message from another session', OTHER_PEER], ['a message that quotes a notice', QUOTED]]) {
-      const n = turn(agent, `other-${label.length}`, prompt);
+    for (const [i, [label, prompt]] of [['a message from another session', OTHER_PEER], ['a message that quotes a notice', QUOTED]].entries()) {
+      const n = turn(agent, `other-${i}`, prompt);
       eq([n.notice, n.reminded, /status/i.test(n.stopped)], [false, 1, true], `${agent}: ${label} is not a steward notice`);
     }
   }

@@ -638,9 +638,12 @@ def turn_began(plan, payload):
     return float(began) if isinstance(began, (int, float)) and not isinstance(began, bool) else None
 
 
-# What Claude Code Plus sends a steward conversation; Claude Code delivers it wrapped as a message from another session.
+# What Claude Code Plus sends a steward conversation. Claude Code puts one of its lines for a message from another session
+# before it, with or without a cross-session-message tag.
 STEWARD_NOTICE = "Steward notice from Claude Code Plus"
-PEER_WRAPPER = re.compile(r"\s*(?:Another Claude session sent a message:\s*<cross-session-message\b[^>]*>\s*)?")
+PEER_WRAPPER = re.compile(r"\s*(?:(?:Another Claude session sent a message(?: while you were working)?"
+                          r"|A peer session sent a message while you were working):\s*)?"
+                          r"(?:<cross-session-message\b[^>]*>\s*)?")
 
 
 def steward_notice(prompt):
