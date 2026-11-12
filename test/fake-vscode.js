@@ -58,6 +58,12 @@ class MarkdownString {
   appendMarkdown(s) { this.value += s; return this; }
 }
 class RelativePattern { constructor(base, pattern) { this.base = base; this.pattern = pattern; } }
+/* Positions here are offsets into the document's text, which is all the edits below need. */
+class Range { constructor(start, end) { this.start = start; this.end = end; } }
+class WorkspaceEdit {
+  constructor() { this.edits = []; }
+  replace(uri, range, text) { this.edits.push({ uri, range, text }); }
+}
 
 /*
  * `answers` maps a notification's text (matched as a substring) to the button the test's user picks; a function gets
@@ -75,7 +81,14 @@ function create({ version = '1.145.0', trusted = true } = {}) {
   const state = {
     commands: [], context: {}, extensions: [], clipboard: '', views: {}, webviews: {}, status: [], log: [], handlers: {},
     said: [], answers: [], watchers: [], config: {}, trusted, configWrites: [], quickPicks: [], external: [],
+    documents: {}, shown: [],
   };
+  /* An open document over `state.documents[uri.path]`; edits applied to it change that text and leave it unsaved. */
+  const documentOf = (uri) => ({
+    uri, isDirty: false,
+    getText: () => state.documents[uri.path],
+    positionAt: (offset) => offset,
+  });
   const answer = (kind) => async (message, ...rest) => {
     const buttons = rest.filter((b) => typeof b === 'string');
     state.said.push({ kind, message, buttons });
@@ -88,7 +101,8 @@ function create({ version = '1.145.0', trusted = true } = {}) {
     packageJSON: e.packageJSON || {} }));
   const vscode = {
     EventEmitter, Disposable, Uri, TabInputCustom, TabInputText, TabInputWebview, ThemeIcon, ThemeColor, TreeItem, MarkdownString,
-    RelativePattern,
+    RelativePattern, Range, WorkspaceEdit,
+    UIKind: { Desktop: 1, Web: 2 },
     version,
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     StatusBarAlignment: { Left: 1, Right: 2 },
@@ -129,7 +143,12 @@ function create({ version = '1.145.0', trusted = true } = {}) {
           dispose() { qp.disposed = true; } };
         return qp;
       },
-      showTextDocument: async (uri) => { state.commands.push(['showTextDocument', uri]); },
+      showTextDocument: async (target, opts) => {
+        state.commands.push(['showTextDocument', target]);
+        const editor = { document: target, options: opts, revealed: [], revealRange(range) { editor.revealed.push(range); } };
+        state.shown.push(editor);
+        return editor;
+      },
     },
     commands: {
       executeCommand: async (cmd, ...args) => {
@@ -158,6 +177,17 @@ function create({ version = '1.145.0', trusted = true } = {}) {
     workspace: {
       get isTrusted() { return state.trusted; },
       onDidGrantWorkspaceTrust: trustGranted.event,
+      openTextDocument: async (uri) => {
+        if (typeof state.documents[uri.path] !== 'string') throw new Error(`cannot open ${uri.path}`);
+        return documentOf(uri);
+      },
+      applyEdit: async (edit) => {
+        for (const { uri, range, text } of edit.edits.slice().sort((a, b) => b.range.start - a.range.start)) {
+          const was = state.documents[uri.path];
+          state.documents[uri.path] = was.slice(0, range.start) + text + was.slice(range.end);
+        }
+        return true;
+      },
       workspaceFolders: [],
       getConfiguration: (section) => ({
         get: (k, d) => {

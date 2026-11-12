@@ -40,6 +40,8 @@ const HOLD_FILE = 'webview-limit.lock';
 const HOLD_STALE_MS = 120000;
 const HOLD_TRIES = 40;
 const HOLD_POLL_MS = 250;
+const COPY_BUTTON = 'Copy the command';
+const EDIT_BUTTON = 'Change It in an Editor';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const alive = (pid) => {
@@ -187,9 +189,38 @@ function create(host, opts = {}) {
       return;
     }
     const how = webviewLimit.byHand(failed[0].install, process.platform, from, to);
-    const why = /NoPermissions|EACCES|EPERM/.test(failed[0].why) ? 'no permission to write the file' : failed[0].why;
-    if (await vscode.window.showWarningMessage(`Agent Plus: could not change VS Code's request limit (${why}). To change it yourself: ${how}`,
-      'Copy the command') === 'Copy the command') await vscode.env.clipboard.writeText(how);
+    const denied = /NoPermissions|EACCES|EPERM/.test(failed[0].why);
+    const why = denied ? 'no permission to write the file' : failed[0].why;
+    /* The desktop app can retry an editor's save of a file on the client with the reader's password; the web one cannot. */
+    const web = vscode.UIKind && vscode.env.uiKind === vscode.UIKind.Web;
+    const editable = denied && !web && typeof vscode.workspace.openTextDocument === 'function';
+    const pick = await vscode.window.showWarningMessage(`Agent Plus: could not change VS Code's request limit (${why}). To change it yourself: ${how}`,
+      ...(editable ? [EDIT_BUTTON, COPY_BUTTON] : [COPY_BUTTON]));
+    if (pick === COPY_BUTTON) await vscode.env.clipboard.writeText(how);
+    else if (pick === EDIT_BUTTON) await editInEditor(failed[0].install, from, to);
+  };
+  const editInEditor = async (install, from, to) => {
+    try {
+      const doc = await vscode.workspace.openTextDocument(install.uri);
+      const text = doc.getText();
+      const was = `${webviewLimit.NAME}=${from},`;
+      const at = text.indexOf(was);
+      if (at < 0 || text.indexOf(was, at + 1) >= 0) {
+        vscode.window.showWarningMessage(`Agent Plus: the file no longer names the request limit ${from} once, so nothing was changed.`);
+        return;
+      }
+      const range = new vscode.Range(doc.positionAt(at), doc.positionAt(at + was.length));
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(doc.uri, range, `${webviewLimit.NAME}=${to},`);
+      if (!(await vscode.workspace.applyEdit(edit))) throw new Error('the editor did not take the change');
+      const editor = await vscode.window.showTextDocument(doc, { preview: false });
+      if (editor && typeof editor.revealRange === 'function') editor.revealRange(range);
+      say(`webview request limit: ${install.root} ${from} -> ${to} made in an editor, left for the reader to save`);
+      vscode.window.showInformationMessage(`Agent Plus: the request limit reads ${to} in the editor; save the file, choose Retry as Root `
+        + '(or Retry as Admin) when VS Code offers it, enter your password, then quit and reopen VS Code.');
+    } catch (e) {
+      vscode.window.showWarningMessage(`Agent Plus: could not open the file to change the request limit (${(e && e.message) || e}).`);
+    }
   };
   /* A failed replacement can leave the file missing, and nothing else puts it back until the next start, so that is
      done before the reader is told; the command to make the change by hand also needs the file to be there. */
