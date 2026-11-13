@@ -47,8 +47,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
     try { const o = JSON.parse(out); return (o.hookSpecificOutput ? o.hookSpecificOutput.additionalContext : o.reason) || ''; } catch (_) { return out; }
   };
 
-  /* One turn begun by `prompt`: the injection, three working tool calls, and the Stop at its end. */
-  const turn = (agent, name, prompt) => {
+  /* One turn begun by `prompt`: the injection, three tool calls running `command`, and the Stop at its end. */
+  const turn = (agent, name, prompt, command = 'touch x') => {
     const data = tmp(`steward-${agent}-${name}`);
     const file = path.join(data, SID + '.json');
     fs.writeFileSync(file, JSON.stringify({ nodes: [{ title: 'A', state: 'todo', opened: old }],
@@ -60,12 +60,12 @@ module.exports = async ({ eq, note, tmp, root }) => {
     try { mark = JSON.parse(fs.readFileSync(file.replace(/\.json$/, '.turn'), 'utf8')); } catch (_) { /* none */ }
     const reminded = [];
     if (agent === 'claude') {
-      const calls = [1, 2, 3].map(() => ({ tool_name: 'Bash', tool_input: { command: 'touch x' } }));
+      const calls = [1, 2, 3].map(() => ({ tool_name: 'Bash', tool_input: { command } }));
       reminded.push(said(run(agent, 'remind-work-plan.py', [data], JSON.stringify({ ...base, hook_event_name: 'PostToolBatch', tool_calls: calls }))));
     } else {
       for (let i = 0; i < 3; i++) {
         reminded.push(said(run(agent, 'remind-work-plan.py', [data],
-          JSON.stringify({ ...base, hook_event_name: 'PostToolUse', tool_name: 'exec_command', tool_input: { cmd: 'touch x' } }))));
+          JSON.stringify({ ...base, hook_event_name: 'PostToolUse', tool_name: 'exec_command', tool_input: { cmd: command } }))));
       }
     }
     const tr = path.join(data, 't.jsonl');
@@ -73,13 +73,13 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const lines = [1, 2, 3].map((i) => {
       const ts = new Date((began + i) * 1000).toISOString();
       return JSON.stringify(agent === 'claude'
-        ? { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'touch x' } }] } }
-        : { timestamp: ts, type: 'response_item', payload: { type: 'function_call', name: 'exec_command', arguments: '{"cmd":"touch x"}' } });
+        ? { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', name: 'Bash', input: { command } }] } }
+        : { timestamp: ts, type: 'response_item', payload: { type: 'function_call', name: 'exec_command', arguments: JSON.stringify({ cmd: command }) } });
     });
     fs.writeFileSync(tr, lines.join('\n') + '\n');
     const stopped = said(run(agent, 'nudge-work-plan.py', [data], JSON.stringify({ ...base, hook_event_name: 'Stop', transcript_path: tr,
       last_assistant_message: '-', stop_hook_active: false })));
-    return { notice: mark.notice === true, reminded: reminded.filter(Boolean).length, stopped };
+    return { notice: mark.notice === true, peer: mark.peer === true, reminded: reminded.filter(Boolean).length, stopped };
   };
 
   for (const agent of AGENTS) {
@@ -94,6 +94,14 @@ module.exports = async ({ eq, note, tmp, root }) => {
     for (const [i, [label, prompt]] of [['a message from another session', OTHER_PEER], ['a message that quotes a notice', QUOTED]].entries()) {
       const n = turn(agent, `other-${i}`, prompt);
       eq([n.notice, n.reminded, /status/i.test(n.stopped)], [false, 1, true], `${agent}: ${label} is not a steward notice`);
+    }
+    const reading = turn(agent, 'plain-reading', 'What is in the folder?', 'ls');
+    eq([reading.reminded, /status/i.test(reading.stopped)], [1, true],
+      `${agent}: an ordinary turn that only reads is still reminded and asked for its status`);
+    for (const [i, [label, prompt]] of [['from another session', OTHER_PEER], ['after lead 3', `${LEADS[2]}\nThe build is green.`]].entries()) {
+      const n = turn(agent, `peer-reading-${i}`, prompt, 'ls');
+      eq([n.peer, n.reminded, n.stopped], [true, 0, ''],
+        `${agent}: a turn begun by a message ${label} that changes nothing is asked for nothing at its end and is not reminded`);
     }
   }
 };
