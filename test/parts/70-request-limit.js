@@ -12,7 +12,7 @@ const path = require('path');
 const fake = require('../fake-vscode');
 const { client } = require('../limit-fs');
 
-module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
+module.exports = async ({ ok, bad, eq, root, tmp }) => {
   const wl = require(path.join(root, 'src', 'webview-limit.js'));
   const APP = '/opt/code/resources/app';
   const SW = `${APP}/${wl.SW}`;
@@ -98,10 +98,16 @@ module.exports = async ({ ok, bad, eq, root, tmp, wait }) => {
      first one's lock. The one whose lock was replaced must not go on to change the file. */
   const clobber = fresh(32, {}, { slowRename: true });
   let bodies = 0;
+  /* The body waits for the other window's call to return, so the result does not depend on how long that window takes
+     to give up. If both get in, the second one releases both instead of hanging. */
+  let release;
+  const gone = new Promise((r) => { release = r; });
+  const body = async () => { if (++bodies === 2) release(); await gone; return 'ran'; };
+  const settle = (p) => p.then((v) => { release(); return v; });
   const hold = { wait: () => new Promise((r) => setTimeout(r, 1)) };
   const two = await Promise.all([
-    wl.withLock(clobber.fs, clobber.at(SW), async () => { bodies++; await wait(60); return 'ran'; }, hold),
-    wl.withLock(clobber.fs, clobber.at(SW), async () => { bodies++; await wait(60); return 'ran'; }, fast),
+    settle(wl.withLock(clobber.fs, clobber.at(SW), body, hold)),
+    settle(wl.withLock(clobber.fs, clobber.at(SW), body, fast)),
   ]);
   if (bodies === 1 && two.includes('ran') && two.includes('locked')) {
     ok('when the exclusive rename is really a look then a move, only the window the lock ends up naming goes ahead');
