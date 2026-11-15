@@ -282,15 +282,14 @@ def brief_how(path, parts):
         MCP_SERVER, " and ".join(forms[p] for p in parts), path)
 
 
-# The end of a turn asks for the status after any turn that did work (nudge-work-plan.py), so the brief is current
-# whenever a turn ends.
+# The Stop hook (nudge-work-plan.py) asks for the status after every turn that did work and did not write it.
 BRIEF_AFTER_MOVES = False
 
 
 def status_ahead(path, whole):
-    """The sentence the injected block carries while the brief is on, so that the status is written within the turn,
-    beside its other calls, rather than when the end of the turn asks for it, which takes two more model calls. `whole`
-    names the tool's fields as well."""
+    """The sentence that ends the injected block while the brief is on. It asks for set_status during the turn, so that
+    the call goes out with the turn's other tool calls; asked for by the Stop hook instead, the status costs two more
+    model calls."""
     if not whole:
         return "When this turn does work, call set_status before your final reply, not after it."
     return ("When this turn does work, call set_status (doing, progress and next, plan=%s) before your final reply rather "

@@ -197,21 +197,20 @@ def brief_how(path, parts):
     return "Write %s with %s." % (" and ".join("the " + p for p in parts), " and ".join(forms[p] for p in parts))
 
 
-# The end of a turn asks for the brief only when a row of the plan changed state during the turn (nudge-work-plan.py).
-# A turn that moved no row leaves the brief as it was, which then lags until a row moves, rather than spending two more
-# model calls on rewriting it.
+# The Stop hook (nudge-work-plan.py) asks about the brief only after a turn in which a row of the plan changed state.
+# After any other turn the brief stays as it was until a row moves, and nothing is spent on rewriting it.
 BRIEF_AFTER_MOVES = True
 
 
 def status_ahead(path, whole):
-    """The sentence the injected block carries while the brief is on, so that the status is written within the turn,
-    beside its other calls, rather than when the end of the turn asks for it, which takes two more model calls. `whole`
-    gives the command as well."""
+    """The sentence that ends the injected block while the brief is on. It asks for the status during the turn, so that
+    the call goes out with the turn's other tool calls; asked for by the Stop hook instead, the status costs two more
+    model calls."""
     if not whole:
-        return "When this turn moves a row, write the status before your final reply, not after it."
+        return "If you move a row during this turn, write the status before your final reply."
     from plan_common import row_command
-    return ("When this turn moves a row to another state, write the status before your final reply rather than after it, "
-            "in the same message as the turn's last other tool call if it has one: %s status --doing TEXT --progress TEXT "
+    return ("If you move a row to another state during this turn, write the status before your final reply, and send "
+            "it with your last other tool call if there is one. The command is %s status --doing TEXT --progress TEXT "
             "--next TEXT." % row_command(path))
 
 

@@ -169,8 +169,8 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
       const p = fresh(agent, 'off', { nodes: rows }, { brief: false });
       cases.push(['the brief switched off in config.json', stop(agent, p, { calls: 3, planAge: 1 }), false, false]);
     }
-    /* Claude Code is asked for the brief only after a turn that moved a row (BRIEF_AFTER_MOVES in its plan_agent.py), and
-       no row above moved during its turn. */
+    /* No row above moved during its turn, and Claude Code is asked about the brief only after a turn that moved one
+       (BRIEF_AFTER_MOVES in shared/plugin/claude/plan_agent.py). */
     const followsMoves = agent === 'claude';
     for (const [label, said, status, summary] of cases) {
       const want = followsMoves ? [false, false] : [status, summary];
@@ -200,8 +200,7 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
         brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
       eq(asksSummary(stop(agent, p)), true, `${agent}: a top-level row added after the summary asks for a new one`);
     }
-    /* For Claude Code the turns below also move a row, a second one closed during the turn, so that what is tested is
-       when the summary is due rather than whether the turn moved anything. */
+    /* For Claude Code each plan below also has a row, Z, that moved to done during the turn. */
     const mover = followsMoves ? [{ title: 'Z', state: 'done', opened: iso(now - 7200), since: iso(now - 30) }] : [];
     {
       const p = fresh(agent, 'removed', { nodes: rows.concat(mover, [{ title: 'B', state: 'todo', opened: iso(now - 7200) }]),
@@ -290,7 +289,7 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
   }
 
   /* ── The status asked for before the final reply ── */
-  const ahead = { claude: /When this turn moves a row[\s\S]{0,40}?, write the status before your final reply/,
+  const ahead = { claude: /If you move a row[\s\S]{0,40}? during this turn, write the status before your final reply/,
     codex: /When this turn does work, call set_status[\s\S]{0,400}?before your final reply/ };
   for (const agent of AGENTS) {
     const turns = (config) => {

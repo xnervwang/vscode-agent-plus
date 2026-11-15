@@ -458,10 +458,10 @@ def summary_owed(path, plan, brief, kept, keep):
 
 
 def moved_since(nodes, started):
-    """Whether a row of `nodes`, at any depth, changed state, was added or was closed at or after `started`.
+    """Whether any row in `nodes` or below them was added, closed or changed state at or after `started`.
 
-    The row command stamps each of those on the row (`since`, `opened`, `closed`), to the second, so the comparison is to
-    the second too."""
+    The row command writes these times (`opened`, `closed`, `since`) in whole seconds, so `started` is cut to whole
+    seconds before the comparison."""
     for node in nodes:
         if not isinstance(node, dict):
             continue
@@ -486,8 +486,6 @@ def brief_due(payload, path, shape, limits):
         return None
     if not isinstance(plan, dict):
         return None
-    # An agent whose brief follows only the plan's moves (plan_agent.BRIEF_AFTER_MOVES) is asked nothing after a turn that
-    # moved no row, and keeps the brief it had.
     if BRIEF_AFTER_MOVES and (shape[0] is None or not moved_since(listed(plan.get("nodes")), shape[0])):
         return None
     brief = brief_of(plan)
