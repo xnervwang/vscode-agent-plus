@@ -135,7 +135,10 @@ def row_help(path, command, quoted):
             "without an approval in the sandbox.%s"
             % (MCP_TOOLS, path, command, " In PowerShell, put & and a space in front of that command line." if quoted else ""),
             "Codex's own update_plan checklist is a different thing: use it for the steps of this turn if you like, and "
-            "keep this plan for work that outlives the turn."]
+            "keep this plan for work that outlives the turn.",
+            "Send set_row or add_row in the same reply as the tool call it goes with, not in a reply of its own: a reply "
+            "that holds only a plan call costs a whole model call. If these tools have to be found before use, find "
+            "set_row, add_row and set_status with one search."]
 
 
 def row_gist(path, command):
@@ -277,6 +280,21 @@ def brief_how(path, parts):
     forms = {"summary": "set_summary with text", "status": "set_status with doing, progress and next"}
     return "Use the `%s` MCP server's %s (plan=%s). No approval is needed." % (
         MCP_SERVER, " and ".join(forms[p] for p in parts), path)
+
+
+# The end of a turn asks for the status after any turn that did work (nudge-work-plan.py), so the brief is current
+# whenever a turn ends.
+BRIEF_AFTER_MOVES = False
+
+
+def status_ahead(path, whole):
+    """The sentence the injected block carries while the brief is on, so that the status is written within the turn,
+    beside its other calls, rather than when the end of the turn asks for it, which takes two more model calls. `whole`
+    names the tool's fields as well."""
+    if not whole:
+        return "When this turn does work, call set_status before your final reply, not after it."
+    return ("When this turn does work, call set_status (doing, progress and next, plan=%s) before your final reply rather "
+            "than after it, in the same reply as the turn's last other tool call if it has one." % path)
 
 
 """The reminder when a turn starts working with nothing `doing` (remind-work-plan.py)."""

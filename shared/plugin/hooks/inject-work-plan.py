@@ -25,6 +25,11 @@ Every turn gets something, so that the plan stays in front of the model, but onl
     (INJECTED_SUFFIX). The brief is not compared: the agent writes its status at the end of most turns that did work, so
     counting it would leave almost no plan unchanged.
 
+While the brief is on, each of the three ends with a sentence asking for the status before the final reply
+(plan_agent.status_ahead). Left to the end of the turn, it is written only when nudge-work-plan.py asks, and an agent
+answers that request with two more model calls, each sending the whole context again; asked for at the start, it goes
+out beside the turn's other calls. The request at the end stays, for the turn that forgot.
+
 A `doing` row and a row asking the user carry their note or question, cut at NOTED_CHARS; every other row is its title,
 cut at TITLE_CHARS. The whole text stays within MAX_CHARS, the brief included, and says how many open rows it left
 out. Claude Code saves a hook's output of more than 10,000 characters to a file and shows the model the first 2,000,
@@ -54,8 +59,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from plan_path import (COMPACTED_SUFFIX, INJECTED_SUFFIX, OPEN_STATES, QUESTION_WORD, STATUS_PARTS, TURN_FIELD,
                        WAITING_ON, WAITING_ON_WORD, any_in, brief_of, children, epoch, launcher_quoted, listed, plan_file,
-                       peer_message, read_payload, row_command, row_gist, row_help, settings, side_file, steward_notice,
-                       write_quietly, write_turn)
+                       peer_message, read_payload, row_command, row_gist, row_help, settings, side_file, status_ahead,
+                       steward_notice, write_quietly, write_turn)
 
 GLYPH = {"discussing": "?", "todo": "o", "doing": ">", "waiting": "~", "parked": "=", "done": "+", "dropped": "x"}
 LEGEND = "> doing, ? discussing, o todo, ~ waiting, = parked"
@@ -268,6 +273,8 @@ def block(plan, nodes, path, head, missing, out, left, now, whole, with_brief):
                  "someone: %s." % (head or "nothing open", path, LEGEND, row_gist(path, command))]
         if doing:
             lines.append(left_doing)
+    if with_brief:
+        lines.append(status_ahead(path, whole))
     if missing:
         lines.append("%s %s not say who %s for (row%s %s). Give each one %s when you next touch it." % (
             "%d waiting row%s" % (len(missing), "" if len(missing) == 1 else "s"), "does" if len(missing) == 1 else "do",
@@ -334,6 +341,8 @@ def main():
         text = ("This conversation's work plan has not changed since it was last shown: %d doing, %d waiting, %d open in "
                 "all; the file is %s. Set a row to `doing` as you start on it." % (
                     n.get("doing", 0), n.get("waiting", 0), sum(n.get(s, 0) for s in OPEN_STATES), path))
+        if limits["brief"]:
+            text += " " + status_ahead(path, False)
     else:
         text = block(plan, nodes, path, head, missing, out, left, now, whole, limits["brief"])
     write_quietly(side_file(path, INJECTED_SUFFIX), json.dumps(

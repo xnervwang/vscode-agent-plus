@@ -70,6 +70,11 @@ module.exports = async ({ eq, note, tmp, root }) => {
     }
     const tr = path.join(data, 't.jsonl');
     const began = typeof mark.began === 'number' ? mark.began : Date.now() / 1000;
+    /* A row closed during the turn: Claude Code is asked for its status only after a turn that moved a row. */
+    const plan = JSON.parse(fs.readFileSync(file, 'utf8'));
+    plan.nodes.push({ title: 'Z', state: 'done', opened: old, since: new Date((began + 2) * 1000).toISOString().replace(/\.\d+Z$/, '+00:00') });
+    fs.writeFileSync(file, JSON.stringify(plan));
+    fs.utimesSync(file, now - 120, now - 120);
     const lines = [1, 2, 3].map((i) => {
       const ts = new Date((began + i) * 1000).toISOString();
       return JSON.stringify(agent === 'claude'

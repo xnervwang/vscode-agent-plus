@@ -169,8 +169,24 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
       const p = fresh(agent, 'off', { nodes: rows }, { brief: false });
       cases.push(['the brief switched off in config.json', stop(agent, p, { calls: 3, planAge: 1 }), false, false]);
     }
+    /* Claude Code is asked for the brief only after a turn that moved a row (BRIEF_AFTER_MOVES in its plan_agent.py), and
+       no row above moved during its turn. */
+    const followsMoves = agent === 'claude';
     for (const [label, said, status, summary] of cases) {
-      eq([asksStatus(said), asksSummary(said)], [status, summary], `${agent}: ${label}: ${status ? 'asks' : 'no'} status, ${summary ? 'asks' : 'no'} summary`);
+      const want = followsMoves ? [false, false] : [status, summary];
+      eq([asksStatus(said), asksSummary(said)], want,
+        `${agent}: ${label}: ${want[0] ? 'asks' : 'no'} status, ${want[1] ? 'asks' : 'no'} summary`);
+    }
+    {
+      const moved = (name, nodes) => stop(agent, fresh(agent, name, { nodes, brief: both }), { calls: 3 });
+      const deep = [{ title: 'A', state: 'todo', opened: iso(now - 7200),
+        children: [{ title: 'A.1', state: 'doing', opened: iso(now - 7200), since: iso(now - 30) }] }];
+      const before = [{ title: 'A', state: 'doing', opened: iso(now - 7200), since: iso(now - 120) }];
+      eq([asksStatus(moved('moved', [{ title: 'A', state: 'done', opened: iso(now - 7200), since: iso(now - 30) }])),
+        asksStatus(moved('moved-child', deep)), asksStatus(moved('moved-before', before))],
+      [true, true, !followsMoves],
+      `${agent}: a working turn that moved a row, or a row below another, asks for the status; one whose rows moved only `
+        + `before it began ${followsMoves ? 'asks nothing' : 'still asks, since it did work'}`);
     }
     {
       const p = fresh(agent, 'closed', { nodes: [{ title: 'A', state: 'done', opened: iso(now - 7200), closed: iso(now - 30) }],
@@ -184,8 +200,11 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
         brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
       eq(asksSummary(stop(agent, p)), true, `${agent}: a top-level row added after the summary asks for a new one`);
     }
+    /* For Claude Code the turns below also move a row, a second one closed during the turn, so that what is tested is
+       when the summary is due rather than whether the turn moved anything. */
+    const mover = followsMoves ? [{ title: 'Z', state: 'done', opened: iso(now - 7200), since: iso(now - 30) }] : [];
     {
-      const p = fresh(agent, 'removed', { nodes: rows.concat([{ title: 'B', state: 'todo', opened: iso(now - 7200) }]),
+      const p = fresh(agent, 'removed', { nodes: rows.concat(mover, [{ title: 'B', state: 'todo', opened: iso(now - 7200) }]),
         brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
       const before = stop(agent, p);
       const plan = p.read();
@@ -195,14 +214,14 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
         `${agent}: a top-level row taken out of the file after the summary asks for a new one`);
     }
     {
-      const p = fresh(agent, 'compacted', { nodes: rows, brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
+      const p = fresh(agent, 'compacted', { nodes: rows.concat(mover), brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
       const first = stop(agent, p, { marker: iso(now - 20) }), second = stop(agent, p);
-      const p2 = fresh(agent, 'compacted-before', { nodes: rows, brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
+      const p2 = fresh(agent, 'compacted-before', { nodes: rows.concat(mover), brief: Object.assign({}, both, { statusAt: iso(now - 10) }) });
       eq([asksSummary(first), asksSummary(second), asksSummary(stop(agent, p2, { marker: iso(now - 7200) }))], [true, false, false],
         `${agent}: the first turn to end after a compaction later than the summary asks for one, once; an earlier compaction does not`);
     }
     {
-      const p = fresh(agent, 'together', { nodes: rows });
+      const p = fresh(agent, 'together', { nodes: rows.concat(mover) });
       const said = stop(agent, p, { calls: 3 });
       eq([asksStatus(said), asksSummary(said), !/^not one JSON/.test(said), /stepped away/.test(said), /language/.test(said)],
         [true, true, true, true, true],
@@ -218,7 +237,9 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
     ? { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: '/tmp/x', content: 'y' } }] } }
     : { timestamp: ts, type: 'response_item', payload: { type: 'custom_tool_call', name: 'apply_patch', input: '*** Begin Patch' } });
   for (const agent of AGENTS) {
-    const p = fresh(agent, 'stops', { nodes: [{ title: 'A', state: 'todo', opened: iso(now - 7200) }] }, { brief: true });
+    /* The row moves in each of the two turns, which Claude Code needs before it is asked for anything. */
+    const p = fresh(agent, 'stops', { nodes: [{ title: 'A', state: 'doing', opened: iso(now - 7200), since: iso(now - 300) }] },
+      { brief: true });
     const tr = path.join(p.data, 't.jsonl');
     const lines = [];
     for (let i = 0; i < 3; i++) lines.push(userLine(agent, new Date((now - 600 + i * 60) * 1000).toISOString()));
@@ -231,6 +252,10 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
       try { const o = JSON.parse(r.stdout); return (o.hookSpecificOutput ? o.hookSpecificOutput.additionalContext : o.reason) || ''; } catch (_) { return ''; }
     };
     const asked = [once(), once(), once(), once()].map(asksStatus);
+    const plan = p.read();
+    plan.nodes[0].since = iso(now - 50);
+    fs.writeFileSync(p.file, JSON.stringify(plan));
+    fs.utimesSync(p.file, now - 3600, now - 3600);
     fs.appendFileSync(tr, [userLine(agent, new Date((now - 100) * 1000).toISOString()),
       ...[0, 1, 2].map((i) => writeLine(agent, new Date((now - 90 + i) * 1000).toISOString()))].join('\n') + '\n');
     asked.push(asksStatus(once()));
@@ -262,6 +287,40 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
     eq([/Shipping the brief view\./.test(on), /2h ago/.test(on), /Tests/.test(on) && /5m ago/.test(on), /work plan/.test(off),
       /Shipping the brief view/.test(off)], [true, true, true, true, false],
     `${agent}: the injected plan carries the brief and how long ago each part was written, and leaves it out when switched off`);
+  }
+
+  /* ── The status asked for before the final reply ── */
+  const ahead = { claude: /When this turn moves a row[\s\S]{0,40}?, write the status before your final reply/,
+    codex: /When this turn does work, call set_status[\s\S]{0,400}?before your final reply/ };
+  for (const agent of AGENTS) {
+    const turns = (config) => {
+      const p = fresh(agent, `ahead-${config ? 'off' : 'on'}`, { nodes: [{ title: 'A', state: 'todo' }] }, config);
+      const inject = () => {
+        const r = run(agent, 'inject-work-plan.py', [p.data], JSON.stringify({ session_id: SID, [turnField[agent]]: 't1',
+          hook_event_name: 'UserPromptSubmit' }));
+        try { return JSON.parse(r.stdout).hookSpecificOutput.additionalContext; } catch (_) { return ''; }
+      };
+      const whole = inject(), same = inject();
+      const plan = p.read();
+      plan.nodes.push({ title: 'B', state: 'todo' });
+      fs.writeFileSync(p.file, JSON.stringify(plan));
+      return [whole, inject(), same];
+    };
+    const on = turns(), off = turns({ brief: false });
+    const shapes = [/Only open rows are shown/, /changed since it was last shown/, /has not changed since it was last shown/];
+    eq([on.map((t, i) => shapes[i].test(t)), on.map((t) => ahead[agent].test(t)), off.map((t) => ahead[agent].test(t)),
+      /status --doing TEXT|set_status \(doing, progress and next, plan=/.test(on[0])],
+    [[true, true, true], [true, true, true], [false, false, false], true],
+    `${agent}: the whole block, the short head and the one line each ask for the status before the final reply while the `
+      + 'brief is on, the whole block with how to write it, and none does with the brief off');
+  }
+  {
+    const p = fresh('codex', 'batch', { nodes: [{ title: 'A', state: 'todo' }] });
+    const r = run('codex', 'inject-work-plan.py', [p.data], JSON.stringify({ session_id: SID, turn_id: 't1', hook_event_name: 'UserPromptSubmit' }));
+    let text = '';
+    try { text = JSON.parse(r.stdout).hookSpecificOutput.additionalContext; } catch (_) { /* left empty */ }
+    eq([/same reply as the tool call it goes with/.test(text), /set_row, add_row and set_status with one search/.test(text)],
+      [true, true], 'codex: the whole block asks for plan calls to go beside other calls and for the plan tools to be found in one search');
   }
 
   /* ── The compaction mark ── */

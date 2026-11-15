@@ -61,10 +61,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from changes import changes
 from changes import shell_command  # noqa: F401  (kept beside changes so both read a call the same way)
-from plan_path import (AFTER_OFFER, BRIEF_WIDTH, BRIEFED_SUFFIX, CLOSED_STATES, COMPACTED_SUFFIX, MAYBE_CALL, MAYBE_USER,
-                       NOTE_WORD, NUDGED_SUFFIX, OFFERED_SUFFIX, QUESTION_WORD, SETTLED_SUFFIX, STOP_REENTERS,
-                       WAITING_ON_WORD, ask_how, brief_how, brief_of, children, epoch, listed, notice_turn, offer_how,
-                       open_tail, peer_turn, plan_file, read_payload, settings, settle_how, side_file, spoke,
+from plan_path import (AFTER_OFFER, BRIEF_AFTER_MOVES, BRIEF_WIDTH, BRIEFED_SUFFIX, CLOSED_STATES, COMPACTED_SUFFIX,
+                       MAYBE_CALL, MAYBE_USER, NOTE_WORD, NUDGED_SUFFIX, OFFERED_SUFFIX, QUESTION_WORD, SETTLED_SUFFIX,
+                       STOP_REENTERS, WAITING_ON_WORD, ask_how, brief_how, brief_of, children, epoch, listed, notice_turn,
+                       offer_how, open_tail, peer_turn, plan_file, read_payload, settings, settle_how, side_file, spoke,
                        stop_output, tool_calls, turn_began, write_quietly)
 
 # Every threshold this uses is in plan_path.DEFAULTS, where the editor's settings can override it.
@@ -457,6 +457,21 @@ def summary_owed(path, plan, brief, kept, keep):
     return "; it ".join(reasons) or None
 
 
+def moved_since(nodes, started):
+    """Whether a row of `nodes`, at any depth, changed state, was added or was closed at or after `started`.
+
+    The row command stamps each of those on the row (`since`, `opened`, `closed`), to the second, so the comparison is to
+    the second too."""
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if any((epoch(node.get(k)) or 0) >= int(started) for k in ("since", "opened", "closed")):
+            return True
+        if moved_since(children(node), started):
+            return True
+    return False
+
+
 def brief_due(payload, path, shape, limits):
     """One paragraph asking for whichever parts of the brief are out of date, or None.
 
@@ -470,6 +485,10 @@ def brief_due(payload, path, shape, limits):
     except Exception:
         return None
     if not isinstance(plan, dict):
+        return None
+    # An agent whose brief follows only the plan's moves (plan_agent.BRIEF_AFTER_MOVES) is asked nothing after a turn that
+    # moved no row, and keeps the brief it had.
+    if BRIEF_AFTER_MOVES and (shape[0] is None or not moved_since(listed(plan.get("nodes")), shape[0])):
         return None
     brief = brief_of(plan)
     kept = read_briefed(path)
