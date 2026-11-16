@@ -41,12 +41,12 @@ In a running conversation, a mode change applies from the next message to work p
 ## Install
 
 - From the marketplace: install Claude Code Plus or Codex Plus; VS Code installs this with it.
-- From `.vsix` files, while this is not on the marketplace: install this one first, then the extension that uses it.
+- From `.vsix` files: install this one first, then the extension that uses it.
 
 ```sh
 bash build/pack.sh
-code --install-extension build/xnervwang.agent-plus-1.0.0.vsix --force
-code --install-extension xnervwang.codex-plus-0.1.0.vsix --force
+code --install-extension build/xnervwang.agent-plus-<version>.vsix --force
+code --install-extension xnervwang.codex-plus-<version>.vsix --force
 ```
 
 - `--force` installs a `.vsix` whose version number is already installed, which a rebuilt one is.
