@@ -24,6 +24,12 @@
  * gives the program whose build did not fit ("Codex", "Claude Code").
  */
 
+/* How the error of an edit that fits no shape ends: the agent is a build this extension does not know yet. */
+const NOT_SUPPORTED = 'build is not supported yet';
+
+/** Whether a patch's failure message is that error. */
+const notSupported = (message) => typeof message === 'string' && message.endsWith(` ${NOT_SUPPORTED}`);
+
 /** An edit's alternative shapes. A single-shape edit is written inline without the wrapper, and is the common case. */
 function shapesOf(edit) {
   return edit.shapes || [{ re: edit.re, to: edit.to, note: edit.note }];
@@ -49,7 +55,7 @@ function pickShape(src, edit, agent = 'agent') {
   const detail = counts.length === 1
     ? `matched ${counts[0]} times (expected 1)`
     : `matched ${counts.join(' / ')} times across its ${counts.length} known shapes (expected one of them to match once)`;
-  return { error: `"${edit.name}" ${detail} - this ${agent} build is not supported yet` };
+  return { error: `"${edit.name}" ${detail} - this ${agent} ${NOT_SUPPORTED}` };
 }
 
 /*
@@ -72,4 +78,4 @@ function applyEdits(src, edits, agent = 'agent') {
   return { out, chosen };
 }
 
-module.exports = { shapesOf, pickShape, applyEdits };
+module.exports = { shapesOf, pickShape, applyEdits, notSupported };

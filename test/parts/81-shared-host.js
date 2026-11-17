@@ -21,9 +21,15 @@ function layout(root, dir) {
 
 module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   const mod = layout(root, path.join(tmp('ext'), 'src'));
-  const { applyEdits } = mod('edits.js');
-  eq(applyEdits('a', [{ name: 'x', re: /b/g, to: 'c' }], 'Codex').error, '"x" matched 0 times (expected 1) - this Codex build is not supported yet',
+  const { applyEdits, notSupported } = mod('edits.js');
+  const unfit = applyEdits('a', [{ name: 'x', re: /b/g, to: 'c' }], 'Codex').error;
+  eq(unfit, '"x" matched 0 times (expected 1) - this Codex build is not supported yet',
     'an edit that does not fit names the agent whose build it is');
+  const twoShapes = applyEdits('bb', [{ name: 'y', shapes: [{ re: /b/g, to: 'c' }, { re: /d/g, to: 'e' }] }], 'Claude Code').error;
+  const ownFault = applyEdits('b', [{ name: 'z', re: /b/, to: 'c' }], 'Codex').error;
+  eq([notSupported(unfit), notSupported(twoShapes), notSupported(ownFault), notSupported('the manifest is not JSON: x'), notSupported(undefined)],
+    [true, true, false, false, false],
+    'an edit that fits no shape, of one shape or of several, reads as a build not supported yet; a pattern without the g flag and other failures do not');
 
   {
     const { patchTarget, applyAll } = mod('patch-target.js');
