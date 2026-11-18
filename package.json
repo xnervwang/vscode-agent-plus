@@ -234,7 +234,7 @@
           "enumDescriptions": [
             "Adds nothing to the agent's context, and unloads the work plan plugin.",
             "Adds the work plan and the time-zone note, nothing else.",
-            "Adds every feature, including the brief, skill suggestions and wake-ups.",
+            "Adds every feature, including the brief, wake-ups and detached-command notices.",
             "Each feature follows its own setting; all are on until you turn one off."
           ],
           "default": "all",

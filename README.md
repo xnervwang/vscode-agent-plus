@@ -29,6 +29,7 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | Per-feature setting |
 | Skill suggestions (Codex Plus) | The installed skills that best fit your message, before each turn | Off | Off | On | Per-feature setting |
 | Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | Per-feature setting |
+| Detached-command notices | A notice to the conversation that left a command running detached, once that command is no longer running | Off | Off | On | Per-feature setting |
 
 `agentPlus.tokenMode` controls which features of Claude Code Plus and Codex Plus add text to the agent's context. It defaults to All features. The Interface features mode adds nothing to the agent's context and unloads the work plan plugin from the agent. Choosing another mode puts the plugin back.
 
@@ -36,7 +37,7 @@ Outside Custom, the per-feature settings in Claude Code Plus and Codex Plus have
 
 After a first install, a notice asks once for a mode; closing it keeps All features. If a per-feature setting was changed from its default in an earlier version, upgrading selects Custom so that setting keeps working. The token mode entry in the status bar shows the mode. Hover over it to see what the mode adds to the agent's context, or click it to choose from the four modes.
 
-In a running conversation, a mode change applies from the next message to work plan injection and reminders, the time-zone note, the conversation brief, skill suggestions, and wake-ups. Skill descriptions already in context stay there. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
+In a running conversation, a mode change applies from the next message to work plan injection and reminders, the time-zone note, the conversation brief, skill suggestions, wake-ups, and detached-command notices. Skill descriptions already in context stay there. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
 
 ## Install
 

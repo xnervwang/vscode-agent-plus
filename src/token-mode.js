@@ -27,7 +27,7 @@ const MODES = Object.freeze([
   { id: 'essential', label: 'Essential features', short: 'Essential', note: '',
     detail: 'Adds the work plan and the time-zone note, nothing else.' },
   { id: 'all', label: 'All features', short: 'All', note: 'default',
-    detail: 'Adds every feature, including the brief, skill suggestions and wake-ups.' },
+    detail: 'Adds every feature, including the brief, wake-ups and detached-command notices.' },
   { id: CUSTOM, label: 'Custom', short: 'Custom', note: '',
     detail: 'Each feature follows its own setting; all are on until you turn one off.' },
 ].map((m) => Object.freeze(m)));
@@ -39,6 +39,7 @@ const FEATURES = Object.freeze([
   { id: 'conversationBrief', name: 'conversation brief', modes: ['all'] },
   { id: 'skillRouting', name: 'skill suggestions', modes: ['all'] },
   { id: 'wakeUps', name: 'wake-ups', modes: ['all'] },
+  { id: 'detachedEndNotices', name: 'notices when a detached command stops', modes: ['all'] },
 ].map((f) => Object.freeze(f)));
 
 /* Each extension's own setting for each of those features. Agent Plus reads this list to carry an earlier install's
@@ -47,11 +48,13 @@ const SWITCHES = Object.freeze([
   { key: 'claudeCodePlus.workPlan', feature: 'workPlan', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.tellClaudeYourTimeZone', feature: 'timeZone', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.claude-code-plus', default: true },
+  { key: 'claudeCodePlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'codexPlus.workPlan', feature: 'workPlan', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.tellCodexYourTimeZone', feature: 'timeZone', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.skillRouting', feature: 'skillRouting', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.wakeUps', feature: 'wakeUps', extension: 'xnervwang.codex-plus', default: true },
+  { key: 'codexPlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.codex-plus', default: true },
 ].map((s) => Object.freeze(s)));
 
 /* The sentence each of those settings ends its description with. */
