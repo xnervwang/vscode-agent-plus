@@ -100,6 +100,10 @@ DEFAULTS = {
     # Whether the model is told the time zone the user reads the panel in when it differs from this machine's
     # (tell-time-zone.py). Separate from `enabled`: it has nothing to do with the plan.
     "tellTimeZone": True,
+    # Whether the model is told that the panel shows images in its replies, and how to write them
+    # (tell-reply-images.py). Off unless the extension writes it on, which it does only while the token mode runs the
+    # feature and its panel really draws them, so a model is never told to write image links nothing will show.
+    "replyImages": False,
     # Whether the Stop hook asks the agent for the brief (see BRIEF_WIDTH below) and the injected block shows it. The
     # two commands that write it work either way.
     "brief": True,
@@ -133,7 +137,7 @@ def settings(directory=None):
     except Exception:
         return out
     if extension_gone(given):
-        for key in ("enabled", "tellTimeZone") + A.OFF_WHEN_GONE:
+        for key in ("enabled", "tellTimeZone", "replyImages") + A.OFF_WHEN_GONE:
             out[key] = False
         return out
     for key, fallback in DEFAULTS.items():
@@ -352,6 +356,7 @@ SETTLED_SUFFIX = ".settled"      # which `doing` rows the end of a turn last ask
 OFFERED_SUFFIX = ".offered"      # that a conversation with no plan was offered one (nudge-work-plan.py)
 WATERMARK_SUFFIX = ".watermark"  # which context marks have asked (refresh-work-plan.py)
 TOLD_SUFFIX = ".tz"              # what the user's time zone was last told as (tell-time-zone.py)
+IMAGES_TOLD_SUFFIX = ".images-told"  # whether the model was last told the panel shows images (tell-reply-images.py)
 COMPACTED_SUFFIX = ".compacted"  # when the context was last compacted (resume-work-plan.py)
 BRIEFED_SUFFIX = ".briefed"      # what the end of a turn last asked about the brief (nudge-work-plan.py)
 INJECTED_SUFFIX = ".injected"    # what the plan looked like when it was last injected (inject-work-plan.py)

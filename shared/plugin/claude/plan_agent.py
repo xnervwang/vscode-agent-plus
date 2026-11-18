@@ -8,6 +8,7 @@ calls things. plan_common.py imports this module, which imports nothing from the
 """
 import json
 import os
+import re
 
 AGENT = "Claude Code"
 SETTING_PREFIX = "claudeCodePlus"
@@ -20,7 +21,7 @@ FALLBACK = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.p
                         "plugins", "data", "agent-work-plan-claude-code-extras")
 
 EXTRA_DEFAULTS = {}
-# Settings besides `enabled` and `tellTimeZone` that are off once the extension is gone from every editor.
+# Settings besides `enabled`, `tellTimeZone` and `replyImages` that are off once the extension is gone from every editor.
 OFF_WHEN_GONE = ()
 
 # The field of a hook's input that names the turn: one id from a prompt until the next.
@@ -234,3 +235,33 @@ def remind_how(path):
     command = row_command(path)
     return ("- or, if this is new work the user asked for or something they asked you to look into, add it as `doing`:\n"
             "  %s set <row> doing\n  %s add doing TITLE [--under <row>]\n" % (command, command))
+
+
+"""Where a conversation is shown, and the folder it keeps its own files in (tell-reply-images.py)."""
+# What Claude Code sets CLAUDE_CODE_ENTRYPOINT to, in its own environment and so in its hooks', when the conversation runs
+# in the VS Code panel. The terminal and `claude -p` set other values, and nothing there draws a reply's images.
+PANEL_ENTRYPOINT = "claude-vscode"
+
+
+def in_panel(payload):
+    """Whether the conversation runs in Claude Code's VS Code panel."""
+    return os.environ.get("CLAUDE_CODE_ENTRYPOINT") == PANEL_ENTRYPOINT
+
+
+def scratch_dir(payload):
+    """The conversation's own folder: ~/.claude/scratch/<project folder name>/<session id>/, the project folder name
+    being the one its transcript sits in under projects/. None without a session id."""
+    session = str(payload.get("session_id") or "").strip()
+    if not re.match(r"^[0-9A-Fa-f][0-9A-Fa-f-]{7,}$", session):
+        return None
+    transcript = str(payload.get("transcript_path") or "")
+    project = os.path.basename(os.path.dirname(transcript)) if transcript else ""
+    if not project:
+        project = re.sub(r"[^A-Za-z0-9]", "-", str(payload.get("cwd") or "")) or "-"
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+    return os.path.join(base, "scratch", project, session)
+
+
+def fixture_session_meta(originator, cwd="/work/repo"):
+    """Claude Code's transcript has no record of where it runs; the self-tests set the environment instead."""
+    return ""

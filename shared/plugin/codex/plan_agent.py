@@ -48,7 +48,7 @@ EXTRA_DEFAULTS = {
     # default, since Codex cannot run them.
     "skillRouteClaudePlugins": [],
 }
-# Settings besides `enabled` and `tellTimeZone` that are off once the extension is gone from every editor.
+# Settings besides `enabled`, `tellTimeZone` and `replyImages` that are off once the extension is gone from every editor.
 OFF_WHEN_GONE = ("skillRoute",)
 
 # The field of a hook's input that names the turn: one id from a prompt until the turn ends.
@@ -313,3 +313,54 @@ def keeps_plan(tool, given, plan_name):
 def remind_how(path):
     return ("with %s (plan=%s): set_row with state doing, or add_row with state doing if this is new work the user "
             "asked for or something they asked you to look into. " % (MCP_TOOLS, path))
+
+
+"""Where a conversation is shown, and the folder it keeps its own files in (tell-reply-images.py)."""
+# The client that started a conversation, as its rollout's first record names it. Codex's VS Code panel draws the images
+# a reply links to; `codex exec` and the terminal client do not.
+PANEL_ORIGINATOR = "codex_vscode"
+META_FIELD = re.compile(r'"(originator|cwd)"\s*:\s*"((?:[^"\\]|\\.)*)"')
+# Enough of the first record to reach both fields, which Codex writes ahead of the long instructions.
+META_HEAD = 256 * 1024
+
+
+def session_meta(path):
+    """The originator and cwd of the rollout at `path`, from the start of its first record; {} when it cannot be read."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(META_HEAD)
+    except (OSError, TypeError, ValueError):
+        return {}
+    first = head.split(b"\n", 1)[0].decode("utf-8", "replace")
+    if '"session_meta"' not in first:
+        return {}
+    out = {}
+    for key, value in META_FIELD.findall(first):
+        if key not in out:
+            try:
+                out[key] = json.loads('"%s"' % value)
+            except ValueError:
+                pass
+    return out
+
+
+def in_panel(payload):
+    """Whether the conversation was started in Codex's VS Code panel."""
+    return session_meta(payload.get("transcript_path")).get("originator") == PANEL_ORIGINATOR
+
+
+def scratch_dir(payload):
+    """The conversation's own folder: $CODEX_HOME/scratch/<its cwd with every character other than a letter or digit
+    replaced by "-">/<session id>/, the layout Claude Code's projects folder uses. None without a session id."""
+    session = str(payload.get("session_id") or "").strip()
+    if not re.match(r"^[0-9A-Fa-f][0-9A-Fa-f-]{7,}$", session):
+        return None
+    cwd = str(payload.get("cwd") or "") or session_meta(payload.get("transcript_path")).get("cwd", "")
+    return os.path.join(codex_home(), "scratch", re.sub(r"[^A-Za-z0-9]", "-", cwd) or "-", session)
+
+
+def fixture_session_meta(originator, cwd="/work/repo"):
+    """The first record of a rollout, for the hooks' self-tests."""
+    return json.dumps({"timestamp": "2026-01-01T00:00:00Z", "type": "session_meta", "payload": {
+        "id": "5e000000-0000-0000-0000-000000000000", "cwd": cwd, "originator": originator,
+        "base_instructions": {"text": "x" * 2000}}})

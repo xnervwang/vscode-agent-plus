@@ -73,7 +73,7 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
   }
 
   for (const agent of AGENTS) {
-    for (const hook of ['changes.py', 'resume-work-plan.py', 'tell-time-zone.py', 'skill_route.py'].filter((h) => !ONLY[h] || ONLY[h].includes(agent))) {
+    for (const hook of ['changes.py', 'resume-work-plan.py', 'tell-time-zone.py', 'tell-reply-images.py', 'skill_route.py'].filter((h) => !ONLY[h] || ONLY[h].includes(agent))) {
       const r = run([path.join(hooksOf[agent], hook), '--selftest'], '', { TZ: 'UTC' });
       if (r.status === 0 && /all checks pass/.test(r.stdout)) ok(`${hook} passes its self-test with ${agent}'s input shapes`);
       else bad(`${hook} --selftest with ${agent}: ${(r.stdout + r.stderr).split('\n').filter((l) => /FAIL|Error/.test(l)).slice(0, 3).join(' | ') || r.status}`);
