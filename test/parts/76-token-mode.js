@@ -13,9 +13,9 @@ const { CODEX, CLAUDE } = require('../boot');
 
 const MODES = ['interface', 'essential', 'all', 'custom'];
 const CODEX_KEYS = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'codexPlus.conversationBrief', 'codexPlus.skillRouting', 'codexPlus.wakeUps',
-  'codexPlus.detachedEndNotices', 'codexPlus.replyImages'];
+  'codexPlus.detachedEndNotices'];
 const CLAUDE_KEYS = ['claudeCodePlus.workPlan', 'claudeCodePlus.tellClaudeYourTimeZone', 'claudeCodePlus.conversationBrief',
-  'claudeCodePlus.detachedEndNotices', 'claudeCodePlus.replyImages'];
+  'claudeCodePlus.detachedEndNotices'];
 
 /* A stand-in VS Code holding only settings, for the pure functions. */
 function settings(config = {}) {
@@ -57,24 +57,24 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   /* ── What each mode turns on ── */
   {
     const want = {
-      interface: [false, false, false, false, false, false, false],
-      essential: [true, true, false, false, false, false, false],
-      all: [true, true, true, true, true, true, true],
+      interface: [false, false, false, false, false, false],
+      essential: [true, true, false, false, false, false],
+      all: [true, true, true, true, true, true],
     };
-    /* Claude Code Plus's features are the first three of Codex Plus's and the last two. */
-    const claudeWant = (w) => [...w.slice(0, 3), ...w.slice(-2)];
+    /* Claude Code Plus's features are the first three of Codex Plus's and the last one. */
+    const claudeWant = (w) => [...w.slice(0, 3), w[w.length - 1]];
     for (const mode of ['interface', 'essential', 'all']) {
       const { vscode } = settings({ 'agentPlus.tokenMode': mode, ...Object.fromEntries(CODEX_KEYS.map((k) => [k, mode === 'all' ? false : true])) });
-      eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), want[mode], `${mode}: the seven Codex Plus features run as the table says, whatever their own settings are`);
-      eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), claudeWant(want[mode]), `${mode}: and Claude Code Plus's five`);
+      eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), want[mode], `${mode}: the six Codex Plus features run as the table says, whatever their own settings are`);
+      eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), claudeWant(want[mode]), `${mode}: and Claude Code Plus's four`);
     }
     const custom = { 'codexPlus.workPlan': false, 'codexPlus.tellCodexYourTimeZone': true, 'codexPlus.skillRouting': false, 'claudeCodePlus.conversationBrief': false };
     const { vscode, control } = settings({ 'agentPlus.tokenMode': 'custom', ...custom });
-    eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), [false, true, true, false, true, true, true], 'custom: each feature follows its own setting, one not set being on');
-    eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false, true, true], 'custom: Claude Code Plus\'s too');
+    eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), [false, true, true, false, true, true], 'custom: each feature follows its own setting, one not set being on');
+    eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false, true], 'custom: Claude Code Plus\'s too');
     for (const mode of ['interface', 'essential', 'all', 'custom']) control.state.config['agentPlus.tokenMode'] = mode;
     eq([CODEX_KEYS.map((k) => tm.effective(vscode, k)), Object.fromEntries(Object.keys(custom).map((k) => [k, control.state.config[k]]))],
-      [[false, true, true, false, true, true, true], custom], 'switching to the other modes and back to Custom finds every setting as it was');
+      [[false, true, true, false, true, true], custom], 'switching to the other modes and back to Custom finds every setting as it was');
     eq([tm.modeNow(settings().vscode), tm.modeNow(settings({ 'agentPlus.tokenMode': 'max' }).vscode)], ['all', 'all'],
       'nothing set is All features, and so is a value no mode has');
     eq(MODES.map((m) => tm.unloadsPlugin(m)), [true, false, false, false], 'only Interface features takes the work plan plugin out of the agent');
@@ -151,7 +151,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await wait(20);
     eq([custom.control.state.configWrites, custom.control.state.commands.filter((c) => c[0] === 'workbench.action.openSettings')],
       [[['agentPlus.tokenMode', 'custom']], [['workbench.action.openSettings', '@id:codexPlus.workPlan,codexPlus.tellCodexYourTimeZone,'
-        + 'codexPlus.conversationBrief,codexPlus.skillRouting,codexPlus.wakeUps,codexPlus.detachedEndNotices,codexPlus.replyImages']]],
+        + 'codexPlus.conversationBrief,codexPlus.skillRouting,codexPlus.wakeUps,codexPlus.detachedEndNotices']]],
       'Custom from the notice opens the Settings editor on the feature settings of Codex Plus, the one extension installed');
     custom.close();
     const b = host({});
@@ -245,7 +245,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([!!item, item && item.shown, item && item.text, item && item.command], [true, true, '$(dashboard) All', 'agentPlus.chooseTokenMode'],
       'the status bar entry shows the mode\'s short name and opens the list');
     eq(item.tooltip.split('\n'), ['Token mode: All features',
-      'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops, images in replies',
+      'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops',
       'What the extensions show in VS Code costs no tokens.', 'Click to choose another mode.'],
     'its hover says what the mode adds to the agent\'s context, and that the rest costs nothing');
     const texts = {};
@@ -255,15 +255,15 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       texts[mode] = [item.text, item.tooltip.split('\n')[1], item.tooltip.split('\n')[2]];
     }
     eq(texts, {
-      interface: ['$(dashboard) Interface', 'Adds to the agent\'s context: nothing', 'Left out: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops, images in replies'],
-      essential: ['$(dashboard) Essential', 'Adds to the agent\'s context: work plan, time-zone note', 'Left out: conversation brief, skill suggestions, wake-ups, notices when a detached command stops, images in replies'],
-      all: ['$(dashboard) All', 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops, images in replies', 'What the extensions show in VS Code costs no tokens.'],
-      custom: ['$(dashboard) Custom', 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops, images in replies', 'What the extensions show in VS Code costs no tokens.'],
+      interface: ['$(dashboard) Interface', 'Adds to the agent\'s context: nothing', 'Left out: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops'],
+      essential: ['$(dashboard) Essential', 'Adds to the agent\'s context: work plan, time-zone note', 'Left out: conversation brief, skill suggestions, wake-ups, notices when a detached command stops'],
+      all: ['$(dashboard) All', 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops', 'What the extensions show in VS Code costs no tokens.'],
+      custom: ['$(dashboard) Custom', 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops', 'What the extensions show in VS Code costs no tokens.'],
     }, 'each mode is drawn as soon as it is chosen');
     a.control.state.config['claudeCodePlus.conversationBrief'] = false;
     a.control.state.config['codexPlus.wakeUps'] = false;
     a.control.changeConfig(['codexPlus.wakeUps']);
-    eq(item.tooltip.split('\n').slice(1, 3), ['Adds to the agent\'s context: work plan, time-zone note, conversation brief (Codex Plus), skill suggestions, notices when a detached command stops, images in replies',
+    eq(item.tooltip.split('\n').slice(1, 3), ['Adds to the agent\'s context: work plan, time-zone note, conversation brief (Codex Plus), skill suggestions, notices when a detached command stops',
       'Left out: conversation brief (Claude Code Plus), wake-ups'], 'in Custom it follows each extension\'s own settings, naming the extension where they differ');
     a.control.state.config['agentPlus.tokenMode'] = 'essential';
     a.control.changeConfig(['agentPlus.tokenMode']);
@@ -289,8 +289,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     a.control.state.onQuickPick = (qp) => qp.hide();
     eq([await a.control.state.handlers['agentPlus.chooseTokenMode'](), a.control.state.configWrites.length], ['', 1], 'closing the list changes nothing');
     const query = '@id:claudeCodePlus.workPlan,claudeCodePlus.tellClaudeYourTimeZone,claudeCodePlus.conversationBrief,claudeCodePlus.detachedEndNotices,'
-      + 'claudeCodePlus.replyImages,codexPlus.workPlan,codexPlus.tellCodexYourTimeZone,codexPlus.conversationBrief,codexPlus.skillRouting,codexPlus.wakeUps,'
-      + 'codexPlus.detachedEndNotices,codexPlus.replyImages';
+      + 'codexPlus.workPlan,codexPlus.tellCodexYourTimeZone,codexPlus.conversationBrief,codexPlus.skillRouting,codexPlus.wakeUps,codexPlus.detachedEndNotices';
     for (const pass of [1, 2]) {
       a.control.state.onQuickPick = (qp) => qp.accept(qp.items.find((i) => i.mode === 'custom'));
       await a.control.state.handlers['agentPlus.chooseTokenMode']();
@@ -310,7 +309,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const a = host({ memento: earlier(), extensions: [CLAUDE()] });
     await wait(20);
     const item = a.control.state.status.find((s) => s.id === 'agentPlus.tokenMode');
-    eq(item.tooltip.split('\n')[1], 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, notices when a detached command stops, images in replies', 'with only Claude Code Plus installed, only its features are listed');
+    eq(item.tooltip.split('\n')[1], 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, notices when a detached command stops', 'with only Claude Code Plus installed, only its features are listed');
     a.close();
     const alone = host({ memento: earlier(), extensions: [] });
     await wait(20);

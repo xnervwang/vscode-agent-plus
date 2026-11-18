@@ -14,8 +14,9 @@ image link to a web address only as a plain link and never fetch it, so that an 
 cannot carry anything out; a downloaded copy is how a web image is shown.
 
 It is said only while all of this holds, so that a model is never told to write links that nothing will draw:
-  - the extension wrote `replyImages` on in config.json, which it does only while the token mode runs the feature and
-    its panel really draws them (the panel patch is in place, or the agent's build is one the extension has checked);
+  - the extension wrote `replyImages` on in config.json, which it does only while its option for images in replies is
+    on and its panel really draws them (the panel patch is in place, or the agent's build is one the extension has
+    checked). The same option decides whether the panel draws them, so the two are on and off together;
   - the conversation is one the VS Code panel shows (plan_agent.in_panel), not `claude -p`, `codex exec` or a terminal.
 Once it stops holding after the model was told, the next message says that images are no longer shown.
 

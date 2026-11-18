@@ -101,8 +101,8 @@ DEFAULTS = {
     # (tell-time-zone.py). Separate from `enabled`: it has nothing to do with the plan.
     "tellTimeZone": True,
     # Whether the model is told that the panel shows images in its replies, and how to write them
-    # (tell-reply-images.py). Off unless the extension writes it on, which it does only while the token mode runs the
-    # feature and its panel really draws them, so a model is never told to write image links nothing will show.
+    # (tell-reply-images.py). Off unless the extension writes it on, which it does only while its own option for images
+    # in replies is on and its panel really draws them, so a model is never told to write image links nothing will show.
     "replyImages": False,
     # Whether the Stop hook asks the agent for the brief (see BRIEF_WIDTH below) and the injected block shows it. The
     # two commands that write it work either way.
