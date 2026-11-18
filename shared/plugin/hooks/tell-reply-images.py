@@ -18,7 +18,8 @@ It is said only while all of this holds, so that a model is never told to write 
     on and its panel really draws them (the panel patch is in place, or the agent's build is one the extension has
     checked). The same option decides whether the panel draws them, so the two are on and off together;
   - the conversation is one the VS Code panel shows (plan_agent.in_panel), not `claude -p`, `codex exec` or a terminal.
-Once it stops holding after the model was told, the next message says that images are no longer shown.
+While it does not hold, nothing is said, so the option off costs no tokens. The one exception is a conversation told
+the note since its last compaction: its next message gets a single short sentence saying images are no longer shown.
 
 What was said is kept per conversation beside its plan (IMAGES_TOLD_SUFFIX), swept with it.
 """
@@ -35,8 +36,9 @@ from plan_path import (IMAGES_TOLD_SUFFIX, fixture_compacted, fixture_reply, fix
                        latest_reply_matches, open_tail, plan_file, read_payload, scratch_dir, settings, side_file,
                        write_quietly)
 
-NO_LONGER = ("Images in your replies are no longer shown in this panel: describe them in words, or give the file's "
-             "path.")
+# Said once, and only to a conversation that was told the note and has not been compacted since: without it, that
+# model goes on linking images nothing draws. Kept short because it is the one thing said while the option is off.
+NO_LONGER = "Images in replies are no longer shown; give the file's path instead."
 
 
 def folder_for(payload):
