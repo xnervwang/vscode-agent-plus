@@ -48,11 +48,10 @@ def folder_for(payload):
 
 
 def note(folder):
-    return ("This panel shows images in your replies. To show one (a chart, a diagram, a screenshot), save it as a PNG "
-            "or SVG file with an ASCII name in %s (create the folder if it is missing) and put "
-            "![what it shows](%s/<name>.png) in the reply, with that absolute path; do not use relative paths or data: "
-            "URLs. To show an image from the web, download it into that folder with a command and link the local file; "
-            "an image link to a web address is shown only as a link." % (folder, folder))
+    return ("This panel shows images in your replies. To show a chart, diagram or screenshot, save it as a PNG or SVG "
+            "file with an ASCII name in %s (create the folder if needed) and write ![what it shows](<the file's "
+            "absolute path>); do not use relative paths or data: URLs. For an image from the web, download it there "
+            "first: an image link to a web address shows only as a link." % folder)
 
 
 def told_file(payload, directory=None):
@@ -153,7 +152,7 @@ def selftest():
         check("  naming the conversation's own folder", folder and folder in said and folder.endswith(
             "/scratch/-work-repo/5e000000-0000-0000-0000-000000000000"))
         check("  and asking for an absolute path, and for an image from the web to be downloaded first",
-              "absolute path" in said and "download it into that folder" in said)
+              "absolute path" in said and "download it there first" in said)
         check("the next message is not told again", respond(message, tmp) == "")
         check("a compaction tells it again", respond(compacted, tmp).startswith("This panel shows images"))
         check("and the message after it is not told a third time", respond(message, tmp) == "")
