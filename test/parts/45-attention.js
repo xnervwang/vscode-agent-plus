@@ -113,4 +113,43 @@ module.exports = async ({ eq, tmp, root }) => {
   eq(warmShown, [], 'what a window finds in its first seconds was there before it started, and is not announced');
   for (const w of [b, c, a2]) w.att.dispose();
   warm.dispose();
+
+  /* The user looking at a conversation in the window with the focus. */
+  const win = (wdir, name, focus, looking) => {
+    const w = { focused: focus, looking, shown: [], painted: [] };
+    w.att = at.createAttention({ dir: wdir, windowId: `${name}-00000000`, now: () => clock,
+      focused: () => w.focused, lookedAt: (it) => w.looking.includes(it.sessionId), settings: () => settings, warmupMs: 0, batchMs: 10,
+      show: (text) => { const s = { text, open: true }; w.shown.push(s); return { update(x) { s.text = x; }, close() { s.open = false; } }; },
+      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.state}`).sort(); },
+      links: { open: (it) => `open:${it.sessionId}`, list: () => 'list' } });
+    return w;
+  };
+  const solo = win(path.join(tmp('solo'), 'attention'), 's', true, ['solo']);
+  solo.att.publish(lists(conv('solo', 'working', 'Solo')));
+  solo.att.refresh();
+  solo.att.publish(lists(conv('solo', 'unread', 'Solo')));
+  solo.att.refresh();
+  await settle();
+  solo.att.refresh();
+  eq([solo.shown.length, solo.painted], [0, []], 'one window with one conversation, watched until its turn finishes: no notification and no count');
+
+  const fdir = path.join(tmp('front'), 'attention');
+  const p = win(fdir, 'p', true, ['mine']), q = win(fdir, 'q', false, []);
+  p.att.publish(lists(conv('mine', 'prompt', 'Mine'), conv('other', 'prompt', 'Other')));
+  p.att.refresh(); q.att.refresh();
+  await settle();
+  p.att.refresh(); q.att.refresh();
+  eq([open(p), p.painted, q.painted], [['"Other" is waiting for you. [Open](open:other)'], ['other:prompt'], ['other:prompt']],
+    'a conversation waiting in front of the user in the focused window is neither announced nor counted, there or in another window');
+  p.looking = ['other'];
+  p.att.refresh(); q.att.refresh();
+  await settle();
+  eq([open(p), p.painted, q.painted], [[], ['mine:prompt'], ['mine:prompt']],
+    'bringing the other to the front closes its notification, and the one the user left is counted again without being announced');
+  p.focused = false;
+  p.att.refresh(); q.att.refresh();
+  await settle();
+  eq([open(p), p.painted, q.painted], [[], ['mine:prompt', 'other:prompt'], ['mine:prompt', 'other:prompt']],
+    'once no window has the focus, both count again, and neither is announced');
+  for (const w of [solo, p, q]) w.att.dispose();
 };

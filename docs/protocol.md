@@ -114,10 +114,10 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Item | Rule |
 | --- | --- |
 | What counts | A running conversation whose state is `prompt` (waiting for the user) or `unread` (its turn finished) |
-| Shared | Each window writes the ones its sources report to `attention/<window>.json` under the shared folder, rewritten at least every 20 seconds; a file older than a minute is a window that has gone. Every window reads all of them |
+| Shared | Each window writes the ones its sources report to `attention/<window>.json` under the shared folder, rewritten at least every 20 seconds; a file older than a minute is a window that has gone. While a window has the focus, its file also lists, as `front`, those of them it shows in front. Every window reads all of them |
 | When | A conversation that enters that set, or moves between the two states. What a window reads in its first 10 seconds, and a conversation whose window went away and came back in the same state within two minutes, is not new |
-| Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window counts the set in a status bar entry |
-| Closing | A notification closes once none of its conversations is in that state any more, or when one is opened from it |
+| Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window counts the set in a status bar entry, less the conversations the window with the focus shows in front |
+| Closing | A conversation leaves a notification once it is in another state, once the window with the focus shows it in front, or when it is opened from the notification; the notification closes when none is left |
 | Opening | `open()` when the source has it; else `reveal` in this window, then a request in `open/` under the shared folder that the window whose tab shows the conversation takes, reveals it, and brings itself to the front with VS Code's command line. A request nobody takes in 5 seconds is withdrawn |
 | Settings | `agentPlus.notifications.enabled`, `.finished`, `.waiting` |
 

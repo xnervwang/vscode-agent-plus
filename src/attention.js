@@ -17,6 +17,9 @@
  * shown as one. A notification is closed, from whichever window showed it, once none of its conversations is in that
  * state any more: the user has looked at it in some window, or it moved on. Every window counts the union in its
  * status bar.
+ *
+ * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
+ * in any window.
  */
 const fs = require('fs');
 const path = require('path');
@@ -56,18 +59,21 @@ function itemsOf(lists) {
 
 /*
  * Every live window's items, by key, each with `from`, the windows that reported it. A permission prompt outranks an
- * unread reply when two windows disagree. `live` is the set of windows whose file is fresh.
+ * unread reply when two windows disagree. `live` is the set of windows whose file is fresh; `front` maps each of them to
+ * the keys it shows in front while it has the focus.
  */
 function readAll(dir, now) {
-  const merged = new Map(), live = new Set();
+  const merged = new Map(), live = new Set(), front = new Map();
   let names = [];
-  try { names = fs.readdirSync(dir); } catch (_) { return { merged, live }; }
+  try { names = fs.readdirSync(dir); } catch (_) { return { merged, live, front }; }
   for (const n of names) {
     if (!WINDOW.test(n)) continue;
     let d;
     try { d = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); } catch (_) { continue; }
     if (!d || d.format !== FORMAT || !Array.isArray(d.items) || !(now - d.at < STALE_MS)) continue;
     live.add(n);
+    front.set(n, new Set((Array.isArray(d.front) ? d.front.slice(0, MAX_ITEMS) : [])
+      .filter((p) => Array.isArray(p) && typeof p[0] === 'string' && typeof p[1] === 'string').map((p) => keyOf(p[0], p[1]))));
     for (const it of d.items.slice(0, MAX_ITEMS)) {
       if (!it || !KIND[it.state] || typeof it.sourceId !== 'string' || typeof it.sessionId !== 'string') continue;
       const k = keyOf(it.sourceId, it.sessionId);
@@ -76,7 +82,7 @@ function readAll(dir, now) {
       merged.get(k).from.add(n);
     }
   }
-  return { merged, live };
+  return { merged, live, front };
 }
 
 /* The notification's text for `items`. `open` and `list` give the command URIs of its links. */
@@ -101,26 +107,39 @@ function message(items, { several, open, list }) {
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
   settings, canWrite = () => true, show, paint = () => {}, links, several = () => false, log = () => {}, batchMs = BATCH_MS,
   warmupMs = WARMUP_MS }) {
-  const own = path.join(dir, `${windowId}.json`);
+  const ownName = `${windowId}.json`;
+  const own = path.join(dir, ownName);
   const startedAt = now();
   let written = '', writtenAt = 0, union = null, timer = null, closed = false;
+  /* What this window last reported, and the keys it shows in front, sorted. */
+  let ownItems = [], ownFront = [];
+  /* The keys some window with the focus shows in front, as of the last refresh. */
+  let looking = new Set();
   const pending = new Map();
   const shown = [];
   /* key -> { state, at, from }: each conversation as last seen in the union. */
   const last = new Map();
 
-  function publish(lists) {
+  function write() {
     if (closed || !canWrite()) return;
-    const items = itemsOf(lists);
-    const text = JSON.stringify(items);
+    const front = ownFront.map((k) => JSON.parse(k));
+    const text = JSON.stringify([ownItems, front]);
     if (text === written && now() - writtenAt < BEAT_MS) return;
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-      writeAtomic(own, JSON.stringify({ format: FORMAT, at: now(), items }) + '\n', 0o600);
+      writeAtomic(own, JSON.stringify({ format: FORMAT, at: now(), items: ownItems, front }) + '\n', 0o600);
       written = text;
       writtenAt = now();
     } catch (e) { log('attention: writing ' + own + ': ' + ((e && e.message) || e)); }
   }
+
+  function publish(lists) {
+    if (closed || !canWrite()) return;
+    ownItems = itemsOf(lists);
+    write();
+  }
+
+  const inFront = (it) => { try { return lookedAt(it) === true; } catch (_) { return false; } };
 
   function flush() {
     timer = null;
@@ -132,7 +151,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     });
     pending.clear();
     if (!s.enabled || !items.length || !focused()) return;
-    const fresh = items.filter((it) => { try { return !lookedAt(it); } catch (_) { return true; } });
+    const fresh = items.filter((it) => !looking.has(it.key) && !inFront(it));
     if (!fresh.length) return;
     const text = message(fresh, { several: several(), open: links.open, list: links.list });
     let handle = null;
@@ -140,11 +159,16 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     if (handle) shown.push({ items: new Map(fresh.map((it) => [it.key, it.state])), handle });
   }
 
-  /* Reads every window's file and acts on what changed since the last read. Returns the union, newest first. */
+  /* Reads every window's file and acts on what changed since the last read. Returns the union less the conversations
+     the user is looking at. */
   function refresh() {
     if (closed) return [];
     const t = now();
-    const { merged: next, live } = readAll(dir, t);
+    const { merged: next, live, front } = readAll(dir, t);
+    const mine = focused() ? [...next.values()].filter(inFront).map((it) => it.key).sort() : [];
+    if (mine.join('\n') !== ownFront.join('\n')) { ownFront = mine; write(); }
+    looking = new Set(mine);
+    for (const [n, keys] of front) if (n !== ownName) for (const k of keys) looking.add(k);
     const warm = t - startedAt >= warmupMs;
     for (const [k, it] of next) {
       const was = last.get(k);
@@ -162,12 +186,12 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     union = next;
     for (let i = shown.length - 1; i >= 0; i--) {
       const n = shown[i];
-      for (const [k, state] of [...n.items]) { const cur = next.get(k); if (!cur || cur.state !== state) n.items.delete(k); }
+      for (const [k, state] of [...n.items]) { const cur = next.get(k); if (!cur || cur.state !== state || looking.has(k)) n.items.delete(k); }
       if (!n.items.size) { try { n.handle.close(); } catch (_) { /* gone */ } shown.splice(i, 1); continue; }
       const left = [...n.items.keys()].map((k) => next.get(k));
       try { n.handle.update(message(left, { several: several(), open: links.open, list: links.list })); } catch (_) { /* gone */ }
     }
-    const all = [...next.values()];
+    const all = [...next.values()].filter((it) => !looking.has(it.key));
     try { paint(settings().enabled ? all : []); } catch (_) { /* the next refresh */ }
     return all;
   }
@@ -190,7 +214,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     if (written) { try { fs.unlinkSync(own); } catch (_) { /* gone */ } }
   }
 
-  return { publish, refresh, dismiss, dispose, items: () => (union ? [...union.values()] : []), _shown: shown };
+  return { publish, refresh, dismiss, dispose, items: () => (union ? [...union.values()].filter((it) => !looking.has(it.key)) : []), _shown: shown };
 }
 
 module.exports = { createAttention, itemsOf, readAll, message, keyOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, WARMUP_MS, REMEMBER_MS };
