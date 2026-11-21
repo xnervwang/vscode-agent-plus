@@ -47,7 +47,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   fs.writeFileSync(path.join(claudeDir, T + '.json'), JSON.stringify({ nodes: [{ title: 'claude row', state: 'todo' }] }));
   const logo = path.join(tmp('logo'), 'blossom.svg');
   fs.writeFileSync(logo, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M1 1h4"/></svg>');
-  const timing = { listWaitMs: 40, slowMs: 300, refreshMs: 1e9 };
+  const timing = { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100 };
 
   {
     const b = boot(root, tmp, { viewOptions: timing });
@@ -98,8 +98,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       'a focus report is taken only when the source still says that conversation is in front');
 
     await control.state.handlers['agentPlus.openConversation']({ sourceId: 'codex', sessionId: T, title: 'Codex task', cwd: ws });
-    eq([s.state.revealed, control.state.said.some((m) => /could not be brought to front/.test(m.message))], [[T], true],
-      'a row\'s reveal() goes to its source, and a false answer is said');
+    eq([s.state.revealed, control.state.said.some((m) => /is not open in any VS Code window/.test(m.message))], [[T], true],
+      'a row\'s reveal() goes to its source, and when no window has it either, that is said');
 
     /* A slow source: its first list never arrives until released. */
     let calls = 0, release = null;
@@ -295,7 +295,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       'alone, no view and no status bar entry is created');
     b.control.state.extensions.push(CODEX());
     b.control.fireExtensions();
-    eq([Object.keys(b.control.state.views).length, b.control.state.status.length], [2, 1], 'they are created when an extension that uses it is installed');
+    eq([Object.keys(b.control.state.views).length, b.control.state.status.length], [2, 2],
+      'they are created when an extension that uses it is installed: the Conversations entry and the one for conversations that need the user');
     b.close();
     /* A source registering in a window where nothing declared the dependency builds the views, and is attached once. */
     const c = boot(root, tmp, { extensions: [], viewOptions: timing });

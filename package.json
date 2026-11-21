@@ -94,6 +94,14 @@
         "command": "agentPlus.goToConversation",
         "title": "Agent Plus: Go to the Conversation",
         "icon": "$(arrow-right)"
+      },
+      {
+        "command": "agentPlus.showAttention",
+        "title": "Agent Plus: Show the Conversations That Need You"
+      },
+      {
+        "command": "agentPlus.openAttention",
+        "title": "Agent Plus: Open a Conversation That Needs You"
       }
     ],
     "viewsContainers": {
@@ -210,6 +218,14 @@
         {
           "command": "agentPlus.goToConversation",
           "when": "false"
+        },
+        {
+          "command": "agentPlus.showAttention",
+          "when": "!agentPlus.alone"
+        },
+        {
+          "command": "agentPlus.openAttention",
+          "when": "false"
         }
       ]
     },
@@ -249,6 +265,21 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show the **Conversations** and **Answer** views in the panel, and the Conversations entry in the status bar."
+        },
+        "agentPlus.notifications.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a notification in the focused VS Code window when a conversation in any window on this machine finishes a turn or waits for you, and count those conversations in the status bar. No notification is shown while no VS Code window has the focus."
+        },
+        "agentPlus.notifications.finished": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Include conversations whose turn has finished (a red dot). Needs `#agentPlus.notifications.enabled#`."
+        },
+        "agentPlus.notifications.waiting": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Include conversations waiting for your permission or answer (a blue dot). Needs `#agentPlus.notifications.enabled#`."
         },
         "agentPlus.webviewRequestLimit": {
           "type": "string",

@@ -6,7 +6,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 
 | Part | Who | Does |
 | --- | --- | --- |
-| Core | Agent Plus | Work plan view, Conversations view, Answer view, the Conversations and token mode entries in the status bar, the token mode setting, reading plan files, answers across windows, VS Code's webview request limit |
+| Core | Agent Plus | Work plan view, Conversations view, Answer view, the Conversations and token mode entries in the status bar, the token mode setting, reading plan files, answers across windows, notifications of conversations that need the user, opening a conversation in the window that shows it, VS Code's webview request limit |
 | Source | Each feature extension (Claude Code Plus, Codex Plus) | One agent's conversations, plans, tabs, focus, answer typing |
 
 ## Setting up a feature extension
@@ -32,7 +32,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | Views | `agentPlus.workPlan`, `agentPlus.conversations`, `agentPlus.answer` |
 | Context key | `agentPlus.alone`: set to true only once the core finds nothing installed that depends on it and no source registered. The views, the status bar entries and the commands are hidden by `!agentPlus.alone`, so an unset key shows them: the key does not exist until the core has activated, and a window's panel is put back before that |
 | Commands | `agentPlus.*` |
-| Settings | `agentPlus.tokenMode`, `agentPlus.workPlanView`, `agentPlus.conversationsView`, `agentPlus.webviewRequestLimit` |
+| Settings | `agentPlus.tokenMode`, `agentPlus.workPlanView`, `agentPlus.conversationsView`, `agentPlus.notifications.*`, `agentPlus.webviewRequestLimit` |
 
 ## The interface
 
@@ -85,12 +85,14 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `isFocused(sessionId)` | Whether that conversation is still in front; the core asks before taking an `onDidFocus` report |
 | `listConversations()` | `Promise<Conversation[]>`; the array may carry a string `problem`, shown above the source's rows |
 | `onDidChangeConversations` | `vscode.Event<void>` |
-| `reveal(sessionId, row)` | `Promise<boolean>`; `row` is `{ title, cwd }`. Focus a tab already in this window; never open a second copy of a conversation running elsewhere. `false` makes the core say it could not be brought to front |
+| `reveal(sessionId, row)` | `Promise<boolean>`; `row` is `{ title, cwd }`. Focus a tab already in this window; never open a second copy of a conversation running elsewhere. `false` makes the core try the other windows (see Notifications, Opening) |
 | `canDeliver(sessionId)` | Whether this window can type into that conversation now |
 | `deliverAnswer(sessionId, text, { deliveryId })` | `Promise<{ outcome, reason? }>`, see Answers |
 | `planNotice()` | `null` or `{ title, description, detail, command, arguments }`: a row above the plan, such as a plugin that failed to install |
 | `onDidChangePlanNotice` | `vscode.Event<void>` |
 | `timeZone()` | The reader's IANA time zone, when the source knows it |
+| `listAllConversations()` | `Promise<Conversation[]>`, the same shape as `listConversations()`, covering every conversation on this machine rather than this window's, with states every window agrees on. Read for notifications only; without it the core reads `listConversations()` |
+| `open(sessionId, row)` | `Promise<'here'\|'sent'\|'nowhere'>`: bring the conversation to the front in whichever window shows it, and that window with it. Without it the core does this itself through `reveal` in each window (see Notifications) |
 
 ## Conversations
 
@@ -106,6 +108,18 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 
 - The core derives "needs you" from the questions in the plan. Order: prompt, needs you, working, unread, idle.
 - A stopped conversation (`running: false`) is listed while its plan has open rows, was written in the last 7 days, and its `cwd` is in a workspace folder.
+
+## Notifications
+
+| Item | Rule |
+| --- | --- |
+| What counts | A running conversation whose state is `prompt` (waiting for the user) or `unread` (its turn finished) |
+| Shared | Each window writes the ones its sources report to `attention/<window>.json` under the shared folder, rewritten at least every 20 seconds; a file older than a minute is a window that has gone. Every window reads all of them |
+| When | A conversation that enters that set, or moves between the two states. What a window reads in its first 10 seconds, and a conversation whose window went away and came back in the same state within two minutes, is not new |
+| Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window counts the set in a status bar entry |
+| Closing | A notification closes once none of its conversations is in that state any more, or when one is opened from it |
+| Opening | `open()` when the source has it; else `reveal` in this window, then a request in `open/` under the shared folder that the window whose tab shows the conversation takes, reveals it, and brings itself to the front with VS Code's command line. A request nobody takes in 5 seconds is withdrawn |
+| Settings | `agentPlus.notifications.enabled`, `.finished`, `.waiting` |
 
 ## Plan files
 

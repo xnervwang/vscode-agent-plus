@@ -25,6 +25,8 @@ const sourceIcons = require('./sourceicons');
 const { AnswerView, questionKey } = require('./answer-view');
 const answers = require('./answers');
 const { sharedHome } = require('./files');
+const attention = require('./attention');
+const windowOpen = require('./window-open');
 
 const CONFIG = 'agentPlus';
 const REFRESH_MS = 30000;
@@ -155,6 +157,95 @@ function create(host, opts = {}) {
     statusEntry.show();
   };
 
+  /* ── Conversations that need the user, in any window (src/attention.js) ── */
+  const windowId = `${Date.now().toString(36)}-${require('crypto').randomBytes(4).toString('hex')}`;
+  const shared = (name) => path.join(opts.home || sharedHome(), name);
+  const notifySettings = () => ({ enabled: cfg().get('notifications.enabled', true) !== false,
+    finished: cfg().get('notifications.finished', true) !== false, waiting: cfg().get('notifications.waiting', true) !== false });
+  const commandUri = (name, args) => `command:agentPlus.${name}${args ? '?' + encodeURIComponent(JSON.stringify(args)) : ''}`;
+  const attentionEntry = keep(vscode.window.createStatusBarItem('agentPlus.attention', vscode.StatusBarAlignment.Right, 101));
+  attentionEntry.name = 'Conversations that need you';
+  attentionEntry.command = 'agentPlus.showAttention';
+  const paintAttention = (items) => {
+    if (!active || !items.length) { attentionEntry.hide(); return; }
+    attentionEntry.text = `$(bell-dot) ${items.length}`;
+    attentionEntry.tooltip = `${items.length === 1 ? '1 conversation needs' : `${items.length} conversations need`} you:\n`
+      + items.slice(0, 10).map((it) => `${it.state === 'prompt' ? 'Waiting' : 'Finished'}: ${it.title}`).join('\n')
+      + (items.length > 10 ? `\nand ${items.length - 10} more` : '');
+    attentionEntry.show();
+  };
+  /* A progress notification, which unlike a plain message the extension can close itself. */
+  const notify = (text) => {
+    let progress = null, latest = text, finish = null;
+    const done = new Promise((r) => { finish = r; });
+    vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, cancellable: true }, (p, token) => {
+      progress = p;
+      p.report({ message: latest });
+      if (token && typeof token.onCancellationRequested === 'function') token.onCancellationRequested(() => finish());
+      return done;
+    });
+    return {
+      update(t) { latest = t; if (progress) progress.report({ message: t }); },
+      close() { finish(); },
+    };
+  };
+  const windowFocused = () => { try { return vscode.window.state.focused === true; } catch (_) { return false; } };
+  const lookedAt = (it) => {
+    const source = registry.get(it.sourceId);
+    return !!source && windowFocused() && sources.call(source, 'isFocused', [it.sessionId], false) === true;
+  };
+  const needs = keep(attention.createAttention({ dir: shared(attention.ATTENTION_DIR), windowId, focused: windowFocused,
+    lookedAt, settings: notifySettings, canWrite: trusted, show: notify, paint: paintAttention, several: () => registry.size > 1,
+    links: { open: (it) => commandUri('openAttention', [it.sourceId, it.sessionId]), list: () => commandUri('showAttention') }, log: say }));
+  /* Whether this window shows a conversation: a tab of it, or the source has it in front (in a sidebar, say). */
+  const showsHere = (sourceId, sessionId) => {
+    const source = registry.get(sourceId);
+    if (!source) return false;
+    if (sources.call(source, 'isFocused', [sessionId], false) === true) return true;
+    for (const g of (vscode.window.tabGroups || {}).all || []) for (const t of g.tabs || []) if (sources.call(source, 'sessionForTab', [t], null) === sessionId) return true;
+    return false;
+  };
+  const revealHere = async (sourceId, sessionId, row) => {
+    const source = registry.get(sourceId);
+    if (!source) return false;
+    try { return (await sources.call(source, 'reveal', [sessionId, row], false)) === true; } catch (_) { return false; }
+  };
+  const opener = keep(windowOpen.createWindowOpen({ dir: shared(windowOpen.OPEN_DIR), windowId, here: showsHere, reveal: revealHere,
+    front: () => windowOpen.bringToFront(vscode, say), log: say, waitMs: Number.isFinite(opts.openWaitMs) ? opts.openWaitMs : windowOpen.WAIT_MS }));
+  /* Opens a conversation from wherever the user is: through the source's own open() when it has one, else in this
+     window or the window that shows it. Says so when no window has it. */
+  const openAnywhere = async (target) => {
+    const source = registry.get(target.sourceId);
+    if (!source) return 'nowhere';
+    const row = { title: String(target.title || ''), cwd: String(target.cwd || '') };
+    let r;
+    if (typeof sources.get(source, 'open') === 'function') {
+      try { r = await sources.call(source, 'open', [target.sessionId, row], 'nowhere'); } catch (_) { r = 'nowhere'; }
+    } else r = await opener.open(Object.assign({}, target, row));
+    if (r === 'nowhere') vscode.window.showInformationMessage(`"${row.title || target.sessionId}" is not open in any VS Code window on this machine.`);
+    return r;
+  };
+  let attentionLists = [];
+  const listAll = async (entry, fallback) => {
+    if (typeof sources.get(entry.source, 'listAllConversations') !== 'function') return fallback;
+    try { return sources.conversations(await Promise.race([sources.call(entry.source, 'listAllConversations', [], []),
+      new Promise((r) => after(() => r(null), listWait))])) || fallback; } catch (_) { return fallback; }
+  };
+  /* After each list pass: what every source lists, through listAllConversations() where a source has it. */
+  const publishAttention = async (pairs) => {
+    if (!notifySettings().enabled) { attentionLists = []; needs.publish([]); needs.refresh(); return; }
+    attentionLists = await Promise.all(pairs.map(async ({ entry, list }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
+      conversations: await listAll(entry, list) })));
+    if (closing) return;
+    needs.publish(attentionLists);
+    needs.refresh();
+  };
+  const attentionTick = setInterval(() => {
+    try { needs.refresh(); } catch (e) { say('attention: ' + ((e && e.message) || e)); }
+    opener.take().catch((e) => say('open: ' + ((e && e.message) || e)));
+  }, Number.isFinite(opts.attentionMs) ? opts.attentionMs : 1000);
+  keep({ dispose: () => clearInterval(attentionTick) });
+
   /* Each source's list is asked for when it registers, when it fires onDidChangeConversations, on the tick and on a
      folder or settings change. A pass waits LIST_WAIT_MS for it and otherwise draws its previous list; a list that
      arrives later triggers one repaint from the cached lists, which asks no source. A call still outstanding is never
@@ -254,11 +345,18 @@ function create(host, opts = {}) {
       if (!conversationsOn()) {
         conversationsTree.set(NO_CONVERSATIONS, '', conversationsLang());
         paintConversations();
+        if (notifySettings().enabled) {
+          const asked = registry.list();
+          const got = await Promise.all(asked.map((entry) => listFor(entry, cachedOnly)));
+          if (!closing) await publishAttention(asked.map((entry, i) => ({ entry, list: got[i].list })).filter((x) => registry.has(x.entry)));
+        }
         return;
       }
       const asked = registry.list();
       const got = await Promise.all(asked.map((entry) => listFor(entry, cachedOnly)));
       if (closing) return;
+      publishAttention(asked.map((entry, i) => ({ entry, list: got[i].list })).filter((x) => registry.has(x.entry)))
+        .catch((e) => say('attention: ' + ((e && e.message) || e)));
       const roots = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
       const lists = [], problems = [];
       const inFolder = folderTestFor(roots);
@@ -591,19 +689,27 @@ function create(host, opts = {}) {
       return commands.openConversation({ sourceId: (c.source && c.source.id) || c.sourceId || '', sessionId: c.sessionId, cwd: c.cwd, title: c.title });
     },
     showConversations: () => vscode.commands.executeCommand('agentPlus.conversations.focus'),
-    /* A conversation row goes to its conversation through its source. An extension cannot bring another window
-       forward, so a source answers false for one that is open elsewhere, and then this says so. */
+    /* A row of the Conversations view opens through openAnywhere, so a conversation in another window comes to the front
+       there. */
     openConversation: async (target) => {
-      if (!target || !target.sessionId) return;
-      const source = registry.get(target.sourceId);
-      if (!source) return;
-      let shown = false;
-      const row = { title: typeof target.title === 'string' ? target.title : '', cwd: typeof target.cwd === 'string' ? target.cwd : '' };
-      try { shown = (await sources.call(source, 'reveal', [target.sessionId, row], false)) === true; } catch (_) { shown = false; }
-      if (shown) return;
-      const where = row.cwd ? ` (folder ${row.cwd})` : '';
-      vscode.window.showInformationMessage(`"${row.title || target.sessionId}" could not be brought to front from this window${where}. `
-        + 'It may be open in another window.');
+      if (!target || !target.sessionId || !registry.get(target.sourceId)) return;
+      await openAnywhere({ sourceId: target.sourceId, sessionId: target.sessionId,
+        title: typeof target.title === 'string' ? target.title : '', cwd: typeof target.cwd === 'string' ? target.cwd : '' });
+    },
+    openAttention: async (sourceId, sessionId) => {
+      if (typeof sourceId !== 'string' || typeof sessionId !== 'string') return;
+      const it = needs.items().find((x) => x.sourceId === sourceId && x.sessionId === sessionId) || {};
+      needs.dismiss(attention.keyOf(sourceId, sessionId));
+      await openAnywhere({ sourceId, sessionId, title: it.title, cwd: it.cwd });
+    },
+    showAttention: async () => {
+      const items = needs.items();
+      if (!items.length) { vscode.window.showInformationMessage('No conversation needs you now.'); return; }
+      const several = registry.size > 1;
+      const pick = await vscode.window.showQuickPick(items.map((it) => ({ label: it.title,
+        description: `${it.state === 'prompt' ? 'waiting for you' : 'finished'}${several ? ' · ' + it.source : ''}`, detail: it.cwd || undefined, it })),
+      { placeHolder: 'Conversations that need you' });
+      if (pick) await commands.openAttention(pick.it.sourceId, pick.it.sessionId);
     },
     statusLines: () => [
       `Answers folder: ${answersDir()} (${courier ? 'in use' : 'not made yet'})`,
@@ -643,7 +749,7 @@ function create(host, opts = {}) {
     commands,
     setActive(on) { active = !!on; paintConversations(); },
     /* For tests. */
-    _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, answerView, focus, courier: () => courier,
+    _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, attentionEntry, needs, opener, answerView, focus, courier: () => courier,
       plans: () => [...plans.keys()] },
     dispose() {
       closing = true;
