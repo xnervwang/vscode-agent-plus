@@ -1,0 +1,103 @@
+# BSD 3-Clause License
+# Copyright (c) 2026, Xnerv Wang
+# All rights reserved.
+
+# Pushing a tag v<version> publishes that commit to the Visual Studio Marketplace and Open VSX. Neither needs a stored
+# token: both have this file in this repository set up as a trusted publisher.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VSCE: '@vscode/vsce@4.1.1'
+      OVSX: 'ovsx@1.4.0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Check that the tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main" >&2
+            exit 1
+          fi
+
+      - name: Check the tag and the version against both registries
+        run: |
+          node - <<'EOF'
+          const m = require('./package.json');
+          const tag = process.env.GITHUB_REF_NAME;
+          if (tag !== `v${m.version}`) { console.error(`tag ${tag} does not match package.json version ${m.version}`); process.exit(1); }
+          const rerun = Number(process.env.GITHUB_RUN_ATTEMPT) > 1;
+          const id = `${m.publisher}.${m.name}`;
+          const key = v => { const [core, pre] = v.split('-'); return [...core.split('.').map(Number), pre === undefined ? Infinity : -1]; };
+          const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
+          (async () => {
+            const q = await fetch('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json;api-version=7.2-preview.1' },
+              body: JSON.stringify({ filters: [{ criteria: [{ filterType: 7, value: id }] }], flags: 1 }),
+            });
+            const ex = (await q.json()).results[0].extensions;
+            const marketplace = ex.length ? ex[0].versions.map(v => v.version) : [];
+            const openvsx = [];
+            for (let offset = 0, total = 1; offset < total; offset += 100) {
+              const j = await (await fetch(`https://open-vsx.org/api/${m.publisher}/${m.name}/versions?size=100&offset=${offset}`)).json();
+              total = j.totalSize || 0;
+              openvsx.push(...Object.keys(j.versions || {}));
+            }
+            for (const [registry, list] of [['Marketplace', marketplace], ['Open VSX', openvsx]]) {
+              const top = list.reduce((a, b) => (a && cmp(a, b) >= 0 ? a : b), '');
+              console.log(`${registry}: highest published ${top || 'none'}, this release ${m.version}`);
+              if (!top || cmp(m.version, top) > 0) continue;
+              if (rerun && list.includes(m.version)) { console.log(`${registry} already has ${m.version}; its upload is skipped`); continue; }
+              console.error(`${m.version} is not above ${registry}'s highest published version ${top}`);
+              process.exit(1);
+            }
+          })().catch(e => { console.error(e); process.exit(1); });
+          EOF
+
+      # The checks build/pack.sh runs before it packs.
+      - name: node test/check.js
+        run: node test/check.js
+
+      # vsce packs the release, because build/pack.sh leaves the README's relative links as they are. .vscodeignore
+      # gives the two the same files.
+      - name: Package
+        run: |
+          npx --yes "$VSCE" package --out "$RUNNER_TEMP/extension.vsix" \
+            --baseImagesUrl "https://github.com/$GITHUB_REPOSITORY/raw/$GITHUB_SHA/" \
+            --baseContentUrl "https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ github.event.repository.name }}-${{ github.ref_name }}.vsix
+          path: ${{ runner.temp }}/extension.vsix
+          if-no-files-found: error
+
+      - name: Publish to the Visual Studio Marketplace
+        run: npx --yes "$VSCE" publish --oidc --skip-duplicate --packagePath "$RUNNER_TEMP/extension.vsix"
+
+      - name: Publish to Open VSX
+        run: npx --yes "$OVSX" publish "$RUNNER_TEMP/extension.vsix" --trusted-publishing --skip-duplicate
