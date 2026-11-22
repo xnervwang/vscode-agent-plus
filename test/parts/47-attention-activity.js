@@ -24,10 +24,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const w = { shown: [], painted: [] };
     w.att = at.createAttention({ dir, windowId: `${name}-00000000`, now: () => clock, focused: () => focused, settings: () => settings,
       warmupMs: 0, batchMs: 10, ...(stableMs === undefined ? {} : { stableMs }),
-      show: (text) => { const n = { text, open: true }; w.shown.push(n); return { update(t) { n.text = t; }, close() { n.open = false; } }; },
-      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`).sort(); },
-      links: { open: (it) => `open:${it.sessionId}`, list: () => 'list' } });
-    w.open = () => w.shown.filter((n) => n.open).map((n) => n.text);
+      show: (text) => { w.shown.push({ text }); },
+      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`).sort(); } });
+    w.texts = () => w.shown.map((n) => n.text);
     w.step = async (...cs) => { w.att.publish(lists(...cs)); w.att.refresh(); await settle(); w.att.refresh(); };
     return w;
   };
@@ -37,28 +36,26 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const dir = path.join(tmp('shared'), 'attention');
   const w = win(dir, 'a');
   await w.step(conv('x', 'working'), conv('y', 'working'));
-  eq([w.open(), w.painted], [[], []], 'conversations at work are neither announced nor counted');
+  eq([w.texts(), w.painted], [[], []], 'conversations at work are neither announced nor counted');
 
   await w.step(conv('x', 'waiting', false, 'Fix the build'), conv('y', 'working'));
-  eq([w.open(), w.painted], [['"Fix the build" is waiting for you. [Open](open:x)'], ['x:waiting']],
+  eq([w.texts(), w.painted], [['"Fix the build" is waiting for you.'], ['x:waiting']],
     'one that starts to wait for the user is announced and counted');
 
   await w.step(conv('x', 'working'), conv('y', 'stopped', true, 'Write the docs'));
-  eq([w.open(), w.painted], [[], ['y:finished']],
-    'one that stops with a reply not seen is counted at once but not announced yet, and the waiting one\'s notice closes once it works again');
+  eq([w.shown.length, w.painted], [1, ['y:finished']], 'one that stops with a reply not seen is counted at once but not announced yet');
   clock += 4999;
   await w.step(conv('x', 'working'), conv('y', 'stopped', true, 'Write the docs'));
-  eq(w.open(), [], 'not before the stable period is over');
+  eq(w.shown.length, 1, 'not before the stable period is over');
   clock += 1;
   await w.step(conv('x', 'working'), conv('y', 'stopped', true, 'Write the docs'));
-  eq(w.open(), ['"Write the docs" finished. [Open](open:y)'], 'and announced once it has stayed stopped for the stable period');
+  eq(w.texts().slice(1), ['"Write the docs" finished.'], 'and announced once it has stayed stopped for the stable period');
   clock += 60000;
   await w.step(conv('x', 'working'), conv('y', 'stopped', true, 'Write the docs'));
   eq(w.shown.length, 2, 'staying stopped does not announce it again');
 
   await w.step(conv('x', 'stopped', true, 'Fix the build'), conv('y', 'working', true));
-  eq([w.open(), w.painted], [[], ['x:finished']],
-    'the finished notice closes when its conversation starts working again, even with its reply still not seen, and that one is not counted');
+  eq([w.shown.length, w.painted], [2, ['x:finished']], 'one that starts working again is not counted, even with its reply still not seen');
   clock += 2000;
   await w.step(conv('x', 'working', true), conv('y', 'working', true));
   clock += 10000;
@@ -70,7 +67,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   await w.step(conv('x', 'stopped', true, 'Fix the build'), conv('y', 'working', true));
   clock += 5000;
   await w.step(conv('x', 'stopped', true, 'Fix the build'), conv('y', 'working', true));
-  eq(w.open(), ['"Fix the build" finished. [Open](open:x)'], 'a conversation whose background work ends with a reply not seen is announced too');
+  eq(w.texts().slice(2), ['"Fix the build" finished.'], 'a conversation whose background work ends with a reply not seen is announced too');
 
   const quiet = win(path.join(tmp('envelope'), 'attention'), 'e');
   await quiet.step(conv('p', 'working'), conv('q', 'working'));
@@ -113,14 +110,14 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   reader.att.refresh();
   await settle();
   reader.att.refresh();
-  eq([reader.painted, reader.open()], [['k:waiting', 'm:finished'], ['"Old prompt" is waiting for you. [Open](open:k)']],
+  eq([reader.painted, reader.texts()], [['k:waiting', 'm:finished'], ['"Old prompt" is waiting for you.']],
     'an older window\'s prompt and unread are read as waiting and as stopped with a reply not seen, and its prompt is announced');
   clock += 5000;
   older([item('k', 'prompt', 'Old prompt'), item('m', 'unread', 'Old reply')]);
   reader.att.refresh();
   await settle();
   reader.att.refresh();
-  eq(reader.open(), ['"Old prompt" is waiting for you. [Open](open:k)', '"Old reply" finished. [Open](open:m)'],
+  eq(reader.texts(), ['"Old prompt" is waiting for you.', '"Old reply" finished.'],
     'an unread reply from an older window, which never says a turn was running, is announced once it has stayed for the stable period');
   for (const x of [w, quiet, off, reader]) x.att.dispose();
 

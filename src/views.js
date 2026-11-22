@@ -163,7 +163,6 @@ function create(host, opts = {}) {
   const shared = (name) => path.join(opts.home || sharedHome(), name);
   const notifySettings = () => ({ enabled: cfg().get('notifications.enabled', true) !== false,
     finished: cfg().get('notifications.finished', true) !== false, waiting: cfg().get('notifications.waiting', true) !== false });
-  const commandUri = (name, args) => `command:agentPlus.${name}${args ? '?' + encodeURIComponent(JSON.stringify(args)) : ''}`;
   const attentionEntry = keep(vscode.window.createStatusBarItem('agentPlus.attention', vscode.StatusBarAlignment.Right, 101));
   attentionEntry.name = 'Conversations that need you';
   attentionEntry.command = 'agentPlus.showAttention';
@@ -175,20 +174,14 @@ function create(host, opts = {}) {
       + (items.length > 10 ? `\nand ${items.length - 10} more` : '');
     attentionEntry.show();
   };
-  /* A progress notification, which unlike a plain message the extension can close itself. */
-  const notify = (text) => {
-    let progress = null, latest = text, finish = null;
-    const done = new Promise((r) => { finish = r; });
-    vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, cancellable: true }, (p, token) => {
-      progress = p;
-      p.report({ message: latest });
-      if (token && typeof token.onCancellationRequested === 'function') token.onCancellationRequested(() => finish());
-      return done;
-    });
-    return {
-      update(t) { latest = t; if (progress) progress.report({ message: t }); },
-      close() { finish(); },
-    };
+  /* A plain message, as the extension API passes a progress notification one button only. An extension cannot close a
+     plain message, so once it leaves the screen it stays in VS Code's notification list. */
+  const notify = (text, items) => {
+    const one = items.length === 1 ? items[0] : null;
+    const go = one ? 'Open' : 'Show them';
+    Promise.resolve(vscode.window.showInformationMessage(text, go, 'Dismiss'))
+      .then((pick) => (pick !== go ? undefined : one ? commands.openAttention(one.sourceId, one.sessionId) : commands.showAttention()))
+      .catch((e) => say('attention: ' + ((e && e.message) || e)));
   };
   const windowFocused = () => { try { return vscode.window.state.focused === true; } catch (_) { return false; } };
   const lookedAt = (it) => {
@@ -196,8 +189,9 @@ function create(host, opts = {}) {
     return !!source && windowFocused() && sources.call(source, 'isFocused', [it.sessionId], false) === true;
   };
   const needs = keep(attention.createAttention({ dir: shared(attention.ATTENTION_DIR), windowId, focused: windowFocused,
-    lookedAt, settings: notifySettings, canWrite: trusted, show: notify, paint: paintAttention, several: () => registry.size > 1,
-    links: { open: (it) => commandUri('openAttention', [it.sourceId, it.sessionId]), list: () => commandUri('showAttention') }, log: say }));
+    lookedAt, settings: notifySettings, canWrite: trusted, show: notify, paint: paintAttention, several: () => registry.size > 1, log: say,
+    warmupMs: Number.isFinite(opts.attentionWarmupMs) ? opts.attentionWarmupMs : attention.WARMUP_MS,
+    batchMs: Number.isFinite(opts.attentionBatchMs) ? opts.attentionBatchMs : attention.BATCH_MS }));
   /* Whether this window shows a conversation: a tab of it, or the source has it in front (in a sidebar, say). */
   const showsHere = (sourceId, sessionId) => {
     const source = registry.get(sourceId);
@@ -704,7 +698,6 @@ function create(host, opts = {}) {
     openAttention: async (sourceId, sessionId) => {
       if (typeof sourceId !== 'string' || typeof sessionId !== 'string') return;
       const it = needs.items().find((x) => x.sourceId === sourceId && x.sessionId === sessionId) || {};
-      needs.dismiss(attention.keyOf(sourceId, sessionId));
       await openAnywhere({ sourceId, sessionId, title: it.title, cwd: it.cwd });
     },
     showAttention: async () => {

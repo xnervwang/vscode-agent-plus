@@ -18,9 +18,7 @@
  * announced.
  *
  * Only the window that has the focus shows a notification, so there is one on the screen however many windows are
- * open. Changes that come within BATCH_MS of each other are shown as one. A notification is closed, from whichever
- * window showed it, once each of its conversations has left the state it announced: the user has looked at it in
- * some window, or it moved on.
+ * open. Changes that come within BATCH_MS of each other are shown as one.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
  * in any window.
@@ -123,27 +121,27 @@ function readAll(dir, now) {
   return { merged, live, front };
 }
 
-/* The notification's text for `items`. `open` and `list` give the command URIs of its links. */
-function message(items, { several, open, list }) {
+/* The notification's text for `items`. */
+function message(items, { several }) {
   const name = (it) => `${several ? it.source + ': ' : ''}"${it.title}"`;
   if (items.length === 1) {
     const it = items[0];
-    return `${name(it)} ${it.kind === 'waiting' ? 'is waiting for you' : 'finished'}. [Open](${open(it)})`;
+    return `${name(it)} ${it.kind === 'waiting' ? 'is waiting for you' : 'finished'}.`;
   }
   const waiting = items.filter((it) => it.kind === 'waiting').length;
   const parts = [];
   if (waiting) parts.push(`${waiting} waiting for you`);
   if (items.length - waiting) parts.push(`${items.length - waiting} finished`);
   const shown = items.slice(0, 2).map(name).join(', ') + (items.length > 2 ? ` and ${items.length - 2} more` : '');
-  return `${items.length} conversations need you (${parts.join(', ')}): ${shown}. [Show them](${list()})`;
+  return `${items.length} conversations need you (${parts.join(', ')}): ${shown}.`;
 }
 
 /*
  * `lookedAt(item)` answers whether this window shows that conversation in front now; `canWrite()` is false in Restricted
- * Mode, where this window writes nothing; `show(text)` opens a notification and returns { update(text), close() }.
+ * Mode, where this window writes nothing; `show(text, items)` shows a notification about `items`.
  */
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
-  settings, canWrite = () => true, show, paint = () => {}, links, several = () => false, log = () => {}, batchMs = BATCH_MS,
+  settings, canWrite = () => true, show, paint = () => {}, several = () => false, log = () => {}, batchMs = BATCH_MS,
   warmupMs = WARMUP_MS, stableMs = STABLE_MS }) {
   const ownName = `${windowId}.json`;
   const own = path.join(dir, ownName);
@@ -154,7 +152,6 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   /* The keys some window with the focus shows in front, as of the last refresh. */
   let looking = new Set();
   const pending = new Map();
-  const shown = [];
   /* key -> { activity, kind, at, from, stoppedAt }: each conversation as last seen in the union. `stoppedAt` is when it
      stopped with an unread reply after working, until it is announced. */
   const last = new Map();
@@ -192,10 +189,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     if (!s.enabled || !items.length || !focused()) return;
     const fresh = items.filter((it) => !looking.has(it.key) && !inFront(it));
     if (!fresh.length) return;
-    const text = message(fresh, { several: several(), open: links.open, list: links.list });
-    let handle = null;
-    try { handle = show(text); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
-    if (handle) shown.push({ items: new Map(fresh.map((it) => [it.key, it.kind])), handle });
+    try { show(message(fresh, { several: several() }), fresh); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
   }
 
   /* Reads every window's file and acts on what changed since the last read. Returns the union less the conversations
@@ -230,38 +224,18 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       if ([...was.from].some((w) => live.has(w)) || t - was.at >= REMEMBER_MS) last.delete(k);
     }
     union = next;
-    for (let i = shown.length - 1; i >= 0; i--) {
-      const n = shown[i];
-      for (const [k, kind] of [...n.items]) { const cur = next.get(k); if (!cur || cur.kind !== kind || looking.has(k)) n.items.delete(k); }
-      if (!n.items.size) { try { n.handle.close(); } catch (_) { /* gone */ } shown.splice(i, 1); continue; }
-      const left = [...n.items.keys()].map((k) => next.get(k));
-      try { n.handle.update(message(left, { several: several(), open: links.open, list: links.list })); } catch (_) { /* gone */ }
-    }
     const all = [...next.values()].filter((it) => it.kind && !looking.has(it.key));
     try { paint(settings().enabled ? all : []); } catch (_) { /* the next refresh */ }
     return all;
   }
 
-  /* Takes a conversation out of the notifications showing it, as when the user opens it from one. */
-  function dismiss(key) {
-    for (let i = shown.length - 1; i >= 0; i--) {
-      const n = shown[i];
-      if (!n.items.delete(key)) continue;
-      if (!n.items.size) { try { n.handle.close(); } catch (_) { /* gone */ } shown.splice(i, 1); continue; }
-      const left = [...n.items.keys()].map((k) => union && union.get(k)).filter(Boolean);
-      try { n.handle.update(message(left, { several: several(), open: links.open, list: links.list })); } catch (_) { /* gone */ }
-    }
-  }
-
   function dispose() {
     closed = true;
     if (timer) clearTimeout(timer);
-    for (const n of shown.splice(0)) { try { n.handle.close(); } catch (_) { /* gone */ } }
     if (written) { try { fs.unlinkSync(own); } catch (_) { /* gone */ } }
   }
 
-  return { publish, refresh, dismiss, dispose, items: () => (union ? [...union.values()].filter((it) => it.kind && !looking.has(it.key)) : []),
-    _shown: shown };
+  return { publish, refresh, dispose, items: () => (union ? [...union.values()].filter((it) => it.kind && !looking.has(it.key)) : []) };
 }
 
 module.exports = { createAttention, itemsOf, readAll, message, keyOf, kindOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, STABLE_MS,
