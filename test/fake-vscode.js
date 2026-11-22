@@ -73,6 +73,8 @@ class WorkspaceEdit {
  */
 function create({ version = '1.145.0', trusted = true } = {}) {
   const tabsChanged = new EventEmitter();
+  const themeChanged = new EventEmitter();
+  const theme = { kind: 2 };
   const groupsChanged = new EventEmitter();
   const extChanged = new EventEmitter();
   const trustGranted = new EventEmitter();
@@ -110,6 +112,8 @@ function create({ version = '1.145.0', trusted = true } = {}) {
     ConfigurationTarget: { Global: 1, Workspace: 2 },
     ProgressLocation: { Notification: 15 },
     window: {
+      activeColorTheme: theme,
+      onDidChangeActiveColorTheme: themeChanged.event,
       tabGroups: {
         get all() { return groups; },
         get activeTabGroup() { return groups.find((g) => g.isActive) || groups[0]; },
@@ -226,6 +230,8 @@ function create({ version = '1.145.0', trusted = true } = {}) {
   };
   /* Test controls. */
   const control = {
+    /* vscode.ColorThemeKind: 1 light, 2 dark, 3 high contrast, 4 high contrast light. */
+    setTheme(kind) { theme.kind = kind; themeChanged.fire(theme); },
     state,
     groups,
     setTabs(list, active = 0) {

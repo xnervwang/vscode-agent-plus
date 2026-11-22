@@ -138,7 +138,7 @@ function create(host, opts = {}) {
   };
 
   /* ── Conversations ── */
-  const conversationsTree = new ConversationsProvider();
+  const conversationsTree = keep(new ConversationsProvider());
   const conversationsView = keep(vscode.window.createTreeView('agentPlus.conversations', { treeDataProvider: conversationsTree }));
   keep(vscode.window.registerFileDecorationProvider(conversationsTree.decorations));
   const conversationsOn = () => cfg().get('conversationsView', true) !== false;

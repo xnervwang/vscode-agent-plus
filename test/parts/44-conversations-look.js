@@ -15,10 +15,11 @@ const fake = require('../fake-vscode');
 const { boot } = require('../boot');
 
 const ENVELOPE = '\u2709\uFE0F';
+const ENVELOPE_TEXT = '\u2709\uFE0E';
 
 module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
   {
-    const { vscode } = fake.create();
+    const { vscode, control } = fake.create();
     const undo = fake.install(vscode);
     fake.fresh(root);
     const cv = require(path.join(root, 'src', 'conversations-view.js'));
@@ -41,6 +42,22 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const badge = (it) => { const d = it.resourceUri ? deco.provideFileDecoration(it.resourceUri) : undefined; return d ? d.badge : ''; };
     eq(items.map(badge), ['', ENVELOPE, '', ENVELOPE, '', '', ENVELOPE, ENVELOPE],
       'a reply not seen is an envelope badge at the row end, beside whatever the icon place shows, the logo included');
+    const long = 'A conversation title far longer than any side bar is wide, '.repeat(6).trim();
+    const longTree = new cv.ConversationsProvider();
+    longTree.set({ running: [row('long', 'stopped', true, { title: long })], stopped: [], asks: 0 }, '', 'en');
+    const longItem = longTree.getTreeItem(longTree.getChildren().filter((e) => e.kind === 'conversation')[0]);
+    const longText = [typeof longItem.label === 'string' ? longItem.label : longItem.label.label, longItem.description || ''].join(' ');
+    const longBadge = longItem.resourceUri ? longTree.decorations.provideFileDecoration(longItem.resourceUri) : undefined;
+    eq([longText.includes(long.slice(0, 40)), /\u2709/.test(longText), longBadge && longBadge.badge], [true, false, ENVELOPE],
+      'a title too long for the row keeps the envelope out of the label VS Code cuts short: it is a badge drawn after the cut');
+    let redrawn = 0;
+    deco.onDidChangeFileDecorations(() => { redrawn++; });
+    control.setTheme(1);
+    eq([redrawn, items.map(badge)], [1, ['', ENVELOPE_TEXT, '', ENVELOPE_TEXT, '', '', ENVELOPE_TEXT, ENVELOPE_TEXT]],
+      'in a light theme the envelope is the same character in its text form, since a colour font draws it white, and a theme change redraws it');
+    control.setTheme(4);
+    eq(badge(items[1]), ENVELOPE_TEXT, 'and so in a high contrast light theme');
+    control.setTheme(2);
     const d = deco.provideFileDecoration(items[1].resourceUri);
     eq([d.color, typeof d.tooltip === 'string' && d.tooltip.length > 0, deco.provideFileDecoration(vscode.Uri.file('/w/a.txt')),
       new Set(items.filter((it) => it.resourceUri).map((it) => String(it.resourceUri))).size],

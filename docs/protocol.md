@@ -110,7 +110,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `hasPlan` | Used only when the source gives no `planPath` |
 
 - The core derives "needs you" from the questions in the plan. Order: prompt, needs you, working, unread, idle.
-- The Conversations view draws `activity` in the row's icon: a green dot working, a green ring background, a red dot waiting, nothing stopped. An envelope at the end of the row shows `unseen`.
+- The Conversations view draws `activity` in the row's icon: a green dot working, a green ring background, a red dot waiting, nothing stopped. An envelope at the end of the row shows `unseen`. In a light theme it is the text form ✉︎ (U+2709 U+FE0E) rather than the colour emoji ✉️, which draws white; `src/envelope.js` picks between them for any extension that draws the envelope too.
 - A stopped conversation (`running: false`) is listed while its plan has open rows, was written in the last 7 days, and its `cwd` is in a workspace folder.
 
 ## Notifications

@@ -21,6 +21,7 @@
 const vscode = require('vscode');
 const { ageSince } = require('./workplan-view');
 const { textFor } = require('./conversations-text');
+const { envelope, onEnvelopeChange } = require('./envelope');
 const { keyPart } = require('./sources');
 
 /* The icon for each activity. A stopped conversation has a blank of the same size, so its title stays where the others'
@@ -32,7 +33,6 @@ const LOOK = {
   stopped: ['blank', ''],
 };
 const UNSEEN_SCHEME = 'agent-plus-unseen';
-const ENVELOPE = '\u2709\uFE0F';
 
 /*
  * The question a row is asking, in the shape the Answer view is handed it in. Built in one place, so the question the
@@ -74,8 +74,13 @@ class ConversationsProvider {
     this.decorations = {
       onDidChangeFileDecorations: badges.event,
       provideFileDecoration: (uri) => (uri && uri.scheme === UNSEEN_SCHEME
-        ? new vscode.FileDecoration(ENVELOPE, textFor(this.lang).unseen) : undefined),
+        ? new vscode.FileDecoration(envelope(vscode), textFor(this.lang).unseen) : undefined),
     };
+    this._theme = onEnvelopeChange(vscode, () => badges.fire(undefined));
+  }
+
+  dispose() {
+    this._theme.dispose();
   }
 
   /* Returns whether the tree changed; ages are part of the comparison. */
@@ -175,4 +180,4 @@ class ConversationsProvider {
   }
 }
 
-module.exports = { ConversationsProvider, questionOf, briefOf, briefKey, LOOK, UNSEEN_SCHEME, ENVELOPE };
+module.exports = { ConversationsProvider, questionOf, briefOf, briefKey, LOOK, UNSEEN_SCHEME };
