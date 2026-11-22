@@ -179,8 +179,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     let listed = [{ sessionId: 'n', title: 'Needs you', cwd: '/w', state: 'prompt', activity: 'waiting', running: true }];
     b.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', listConversations: async () => [],
       listAllConversations: async () => listed, open: async (id) => { opened.push(id); return 'here'; } });
-    await wait(300);
     const said = () => control.state.said.filter((m) => /need|waiting|finished/.test(m.message)).map((m) => [m.kind, m.message, m.buttons]);
+    for (let i = 0; i < 100 && !(said().length && opened.length); i++) await wait(50);
     eq([said(), opened], [[['info', '"Needs you" is waiting for you.', ['Open', 'Dismiss']]], ['n']],
       'one conversation gets a plain message with Open and Dismiss, and Open opens it');
     b.close();
@@ -191,7 +191,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       { sessionId: 'q', title: 'Two', cwd: '/w', state: 'prompt', activity: 'waiting', running: true }];
     two.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', listConversations: async () => [],
       listAllConversations: async () => listed });
-    await wait(300);
+    for (let i = 0; i < 100 && !two.control.state.said.some((m) => /need you/.test(m.message)); i++) await wait(50);
     eq(two.control.state.said.filter((m) => /need you/.test(m.message)).map((m) => [m.message, m.buttons]),
       [['2 conversations need you (2 waiting for you): "One", "Two".', ['Show them', 'Dismiss']]], 'several get Show them and Dismiss');
     two.close();
