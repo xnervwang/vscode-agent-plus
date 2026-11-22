@@ -13,7 +13,9 @@
  *
  * HOME (USERPROFILE on Windows), VS Code's user data and extensions folders, the shared folder of every window
  * (~/.agent-work-plan) and the stand-in source's plans all point into a new folder under RUNNER_TEMP or the system's
- * temporary folder. It still refuses to run outside CI unless --local is given, as Codex Plus's runner does.
+ * temporary folder. It still refuses to run outside CI unless --local is given, as Codex Plus's runner does. A run
+ * changes the request limit in its VS Code's own service-worker.js and puts it back, so two runs at once must not share
+ * the one --vscode names.
  *
  * After the download the window stage runs as a child of this script, with a proxy that does not exist for every
  * program it starts: nothing here needs the network.
