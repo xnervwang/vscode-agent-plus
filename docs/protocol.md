@@ -73,7 +73,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Member | Meaning |
 | --- | --- |
 | `protocol` | `1` |
-| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation |
+| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation. `'shows'` and `'openHere'`: it has the members of those names |
 | `id` | Source id, such as `'codex'` or `'claude-code'` |
 | `label` | Shown in tooltips and in the work plan view's description |
 | `extensionId` | The extension that registered it, such as `'xnervwang.codex-plus'`; used for update notices |
@@ -92,6 +92,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `onDidChangePlanNotice` | `vscode.Event<void>` |
 | `timeZone()` | The reader's IANA time zone, when the source knows it |
 | `listAllConversations()` | `Promise<Conversation[]>`, the same shape as `listConversations()`, covering every conversation on this machine rather than this window's, with states every window agrees on. Read for notifications only; without it the core reads `listConversations()` |
+| `shows(sessionId)` | With the feature `'shows'`. Whether this window shows that conversation where `sessionForTab` cannot see it, such as a sidebar. A window that shows it takes another window's request to open it (see Opening) |
+| `openHere(sessionId, row)` | With the feature `'openHere'`. `Promise<boolean>`: open the conversation in this window. The core calls it only after no window took the request to open it and the user picked Open it here |
 | `open(sessionId, row)` | `Promise<'here'\|'sent'\|'nowhere'>`: bring the conversation to the front in whichever window shows it, and that window with it. Without it the core does this itself through `reveal` in each window (see Notifications) |
 
 ## Conversations
@@ -123,7 +125,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | When | A conversation that becomes `waiting`. A conversation that goes from `working` or `background` to `stopped` and `unseen`, once it has stayed that way for 5 seconds. Not one that only becomes `unseen`, nor one that starts working again within those 5 seconds. An older window's `unread` is announced when it appears, after the 5 seconds. What a window reads in its first 10 seconds, and a conversation whose window went away and came back the same within two minutes, is not new |
 | Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window's status bar entry counts the waiting conversations and the stopped `unseen` ones, less the conversations the window with the focus shows in front |
 | Buttons | A plain message with two buttons: Dismiss, and Open, or Show them when it is about several conversations. Open brings the conversation to the front (see Opening). The core cannot close the message: VS Code moves it into its notification list after a few seconds |
-| Opening | `open()` when the source has it; else `reveal` in this window, then a request in `open/` under the shared folder that the window whose tab shows the conversation takes, reveals it, and brings itself to the front with VS Code's command line. A request nobody takes in 5 seconds is withdrawn |
+| Opening | `open()` when the source has it; else `reveal` in this window, then a request in `open/` under the shared folder that the window showing the conversation (in a tab, or by `shows`) takes, reveals it, and brings itself to the front with VS Code's command line. A request nobody takes in 5 seconds is withdrawn, and the user is told no window has the conversation, with an Open it here button when the source has `openHere` |
 | Settings | `agentPlus.notifications.enabled`, `.finished`, `.waiting` |
 
 ## Plan files

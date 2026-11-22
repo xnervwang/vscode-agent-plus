@@ -191,11 +191,14 @@ function create(host, opts = {}) {
     lookedAt, settings: notifySettings, canWrite: trusted, show: notify, paint: paintAttention, several: () => registry.size > 1, log: say,
     warmupMs: Number.isFinite(opts.attentionWarmupMs) ? opts.attentionWarmupMs : attention.WARMUP_MS,
     batchMs: Number.isFinite(opts.attentionBatchMs) ? opts.attentionBatchMs : attention.BATCH_MS }));
-  /* Whether this window shows a conversation: a tab of it, or the source has it in front (in a sidebar, say). */
+  /* Whether this window shows a conversation: a tab of it, the source has it in front, or the source says it shows it
+     elsewhere (in a sidebar, say). */
   const showsHere = (sourceId, sessionId) => {
     const source = registry.get(sourceId);
     if (!source) return false;
     if (sources.call(source, 'isFocused', [sessionId], false) === true) return true;
+    const shows = sources.optional(source, 'shows');
+    if (shows) { try { if (shows(sessionId) === true) return true; } catch (_) { /* not shown */ } }
     for (const g of (vscode.window.tabGroups || {}).all || []) for (const t of g.tabs || []) if (sources.call(source, 'sessionForTab', [t], null) === sessionId) return true;
     return false;
   };
@@ -216,7 +219,14 @@ function create(host, opts = {}) {
     if (typeof sources.get(source, 'open') === 'function') {
       try { r = await sources.call(source, 'open', [target.sessionId, row], 'nowhere'); } catch (_) { r = 'nowhere'; }
     } else r = await opener.open(Object.assign({}, target, row));
-    if (r === 'nowhere') vscode.window.showInformationMessage(`"${row.title || target.sessionId}" is not open in any VS Code window on this machine.`);
+    if (r !== 'nowhere') return r;
+    const text = `"${row.title || target.sessionId}" is not open in any VS Code window on this machine.`;
+    const openHere = sources.optional(source, 'openHere');
+    if (!openHere) { vscode.window.showInformationMessage(text); return r; }
+    const go = 'Open it here';
+    Promise.resolve(vscode.window.showInformationMessage(text, go))
+      .then((pick) => (pick === go ? openHere(target.sessionId, row) : undefined))
+      .catch((e) => say('open: ' + ((e && e.message) || e)));
     return r;
   };
   let attentionLists = [];
