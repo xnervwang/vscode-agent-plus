@@ -113,6 +113,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock += 6000;
   await short.step(conv('p', 'working'), before, Object.assign(quick(clock - 6000), { lastReplyAt: second }));
   eq(short.shown.length, 2, 'renamed and marked unread, a conversation whose lastReplyAt has not moved is not announced');
+  /* Read as it stops, a conversation is no longer written to the shared file, so its last active time comes from the list. */
+  const watched = (activity, unseen, active) => Object.assign(conv('w', activity, unseen, 'Watched'), { lastActiveAt: active });
+  await short.step(conv('p', 'working'), before, watched('working', false, clock));
+  clock += 1000;
+  const ended = clock;
+  await short.step(conv('p', 'working'), before, watched('stopped', false, ended));
+  clock += 1000;
+  await short.step(conv('p', 'working'), before, watched('stopped', true, ended));
+  clock += 6000;
+  await short.step(conv('p', 'working'), before, watched('stopped', true, ended));
+  eq(short.shown.length, 2, 'a turn watched to its end and read as it stopped, marked unread later, is not announced');
   short.att.dispose();
 
   settings.finished = false;

@@ -72,16 +72,18 @@ function reading(c) {
  * The running conversations of `lists` that other windows need to hear about: all but those stopped with no reply
  * unseen. `lists` is [{ sourceId, label, conversations }]. Past MAX_ITEMS the ones that need the user are kept.
  */
+const activeAt = (c) => (Number.isFinite(c.lastReplyAt) && c.lastReplyAt > 0 ? c.lastReplyAt : Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0);
+const unwritten = (activity, unseen) => !activity || (activity === 'stopped' && !unseen);
+
 function itemsOf(lists) {
   const out = [];
   for (const { sourceId, label, conversations } of lists || []) {
     for (const c of conversations || []) {
       if (!c || c.running === false || !c.sessionId) continue;
       const { activity, unseen } = reading(c);
-      if (!activity || (activity === 'stopped' && !unseen)) continue;
+      if (unwritten(activity, unseen)) continue;
       out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
-        state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true,
-        lastActiveAt: Number.isFinite(c.lastReplyAt) && c.lastReplyAt > 0 ? c.lastReplyAt : Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0,
+        state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true, lastActiveAt: activeAt(c),
         title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
     }
   }
@@ -181,8 +183,25 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     } catch (e) { log('attention: writing ' + own + ': ' + ((e && e.message) || e)); }
   }
 
+  const seeActive = (k, active) => {
+    if (activeSeen.has(k) && !(active > activeSeen.get(k))) return;
+    activeSeen.delete(k);
+    activeSeen.set(k, active);
+    if (activeSeen.size > MAX_SEEN) activeSeen.delete(activeSeen.keys().next().value);
+  };
+
   function publish(lists) {
-    if (closed || !canWrite()) return;
+    if (closed) return;
+    /* A conversation read as it stopped is no longer written, so the reply it stopped with is taken from the list here;
+       marked unread later, it would otherwise pass for a turn that ran between two reads. */
+    for (const { sourceId, conversations } of lists || []) {
+      for (const c of conversations || []) {
+        if (!c || c.running === false || !c.sessionId) continue;
+        const { activity, unseen } = reading(c);
+        if (activity && unwritten(activity, unseen)) seeActive(keyOf(sourceId, c.sessionId), activeAt(c));
+      }
+    }
+    if (!canWrite()) return;
     ownItems = itemsOf(lists);
     write();
   }
@@ -229,11 +248,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
         if (rec.stoppedAt && t - rec.stoppedAt >= stableMs) { rec.stoppedAt = 0; queue(k, it); }
       }
       last.set(k, rec);
-      if (!activeSeen.has(k) || it.lastActiveAt > activeSeen.get(k)) {
-        activeSeen.delete(k);
-        activeSeen.set(k, it.lastActiveAt);
-        if (activeSeen.size > MAX_SEEN) activeSeen.delete(activeSeen.keys().next().value);
-      }
+      seeActive(k, it.lastActiveAt);
     }
     /* A conversation that left the union moved on if a window that reported it is still writing; if all its windows
        went, it is remembered for a while. */
