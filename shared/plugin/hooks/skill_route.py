@@ -115,9 +115,14 @@ how what which who why can do does did not no yes if then than into about one tw
 please help so any all some there here was were been being have has had will would should could may might also its
 ok okay thanks thank sure go on other another think fine now done good great right yeah""".split())
 # Pairs of characters that turn up in Chinese requests of every kind: matching one says nothing about which skill fits.
-CJK_STOP = set("""一下 一个 这个 那个 怎么 什么 为什么 帮我 我们 你们 他们 可以 能不 不能 是不 不是 就是 还是 如果 然后 因为
-所以 现在 已经 没有 这样 那样 继续 好的 谢谢 看看 看一 一看 一些 这些 那些 的话 我的 你的 一样 时候 问题 东西 需要 知道
-觉得 应该 是否 有没 没什 做一 做吧 吧我 下这 下那 下吧""".split())
+CJK_STOP = set(u"""\u4e00\u4e0b \u4e00\u4e2a \u8fd9\u4e2a \u90a3\u4e2a \u600e\u4e48 \u4ec0\u4e48 \u4e3a\u4ec0\u4e48
+\u5e2e\u6211 \u6211\u4eec \u4f60\u4eec \u4ed6\u4eec \u53ef\u4ee5 \u80fd\u4e0d \u4e0d\u80fd
+\u662f\u4e0d \u4e0d\u662f \u5c31\u662f \u8fd8\u662f \u5982\u679c \u7136\u540e \u56e0\u4e3a
+\u6240\u4ee5 \u73b0\u5728 \u5df2\u7ecf \u6ca1\u6709 \u8fd9\u6837 \u90a3\u6837 \u7ee7\u7eed
+\u597d\u7684 \u8c22\u8c22 \u770b\u770b \u770b\u4e00 \u4e00\u770b \u4e00\u4e9b \u8fd9\u4e9b
+\u90a3\u4e9b \u7684\u8bdd \u6211\u7684 \u4f60\u7684 \u4e00\u6837 \u65f6\u5019 \u95ee\u9898
+\u4e1c\u897f \u9700\u8981 \u77e5\u9053 \u89c9\u5f97 \u5e94\u8be5 \u662f\u5426 \u6709\u6ca1
+\u6ca1\u4ec0 \u505a\u4e00 \u505a\u5427 \u5427\u6211 \u4e0b\u8fd9 \u4e0b\u90a3 \u4e0b\u5427""".split())
 CJK = re.compile(u"[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff]+")
 WORD = re.compile(r"[a-z0-9][a-z0-9_.+/-]*[a-z0-9]|[a-z0-9]")
 CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
@@ -646,13 +651,15 @@ def scan(home, cwd, given, repos=()):
 
 """Claude Code's skills.
 
-What Claude Code 2.1 offers the model, read from its bundled code and its documentation (code.claude.com/docs/en/skills):
+What Claude Code 2.1 offers the model, read from its bundled code and its documentation
+(code.claude.com/docs/en/skills):
 
-- Folders holding <folder>/SKILL.md, one level down: the managed folder's .claude/skills (CLAUDE_CODE_DISABLE_POLICY_SKILLS
-  turns it off), $CLAUDE_CONFIG_DIR/skills, and .claude/skills in the working directory and in each folder above it up
-  to the repository's root, never in the home folder itself (outside a repository, up to the home folder). In a linked
-  worktree the main checkout's .claude/skills is read as well. Folders added with --add-dir, and .claude/skills folders
-  found deeper while working, cannot be seen from a hook and are left out.
+- Folders holding <folder>/SKILL.md, one level down: the managed folder's .claude/skills
+  (CLAUDE_CODE_DISABLE_POLICY_SKILLS turns it off), $CLAUDE_CONFIG_DIR/skills, and .claude/skills in the working
+  directory and in each folder above it up to the repository's root, never in the home folder itself (outside a
+  repository, up to the home folder). In a linked worktree the main checkout's .claude/skills is read as well. Folders
+  added with --add-dir, and .claude/skills folders found deeper while working, cannot be seen from a hook and are left
+  out.
 - The skills of each plugin enabledPlugins turns on ("<plugin>@<marketplace>": true; managed settings over local, local
   over the project's, the project's over the user's) that has an install record applying here in
   plugins/installed_plugins.json: one of user or managed scope, or one made for this project. A plugin that a
@@ -922,7 +929,7 @@ def yes(value):
 
 
 def claude_scan(home, cwd):
-    """claude_scan is scan() for Claude Code: {"skills": [...], "files": {path: stamp}, "dirs": {path: stamp}, "conf"}."""
+    """scan() for Claude Code: {"skills": [...], "files": {path: stamp}, "dirs": {path: stamp}, "conf", "project"}."""
     conf = claude_conf(home, cwd)
     files = {p: stamp(p) for p in conf["files"]}
     dirs, skills, names, real = {}, [], set(), set()
@@ -1445,10 +1452,10 @@ def vector_wanted(given, conf):
 
 
 def claude_bedrock(conf):
-    """An `aws` table for the account and region Claude Code sends the conversation to, or None when Claude Code does not
-    use Bedrock (CLAUDE_CODE_USE_BEDROCK, in the environment or in the settings' env).
+    """An `aws` table for the account and region Claude Code sends the conversation to, or None when Claude Code does
+    not use Bedrock (CLAUDE_CODE_USE_BEDROCK, in the environment or in the settings' env).
 
-    Claude Code takes credentials from awsCredentialExport first and then from the AWS SDK's own order: the environment's
+    Claude Code takes credentials from awsCredentialExport first and then in the AWS SDK's own order: the environment's
     keys, then AWS_PROFILE's profile, then the default profile. awsAuthRefresh is a sign-in a person may have to answer,
     so it is never run here; when the credentials have run out the search stays on keywords.
     """
@@ -1519,7 +1526,7 @@ def watched_settings(given):
 
 def vectors_for(directory, skills, aws, given, region, old_model, deadline, sent=None, also_keep=()):
     """(model, {i: vector}) for the skills, from the cache and then from Bedrock; partial when a request failed.
-    `sent` collects how many texts each request carried, and `also_keep` holds the cache keys other indexes still use."""
+    `sent` collects how many texts each request carried; `also_keep` holds the cache keys other indexes still use."""
     cache_path = os.path.join(data_root(directory), EMBED_CACHE)
     cache = load_pickle(cache_path)
     cache = cache if isinstance(cache, dict) else {}
@@ -2099,8 +2106,8 @@ def claude_given_earlier(plan, transcript):
         for name, desc in claude_blocks(row):
             given[name] = desc
     write_quietly(side_file(plan, ROUTED_SUFFIX), json.dumps(
-        {"format": ROUTED_FORMAT, "transcript": transcript, "offset": offset + end, "compacted": compacted, "given": given},
-        ensure_ascii=False))
+        {"format": ROUTED_FORMAT, "transcript": transcript, "offset": offset + end, "compacted": compacted,
+         "given": given}, ensure_ascii=False))
     return given
 
 
@@ -2238,10 +2245,12 @@ def selftest():
     one = {"name": "a:cr-create", "desc": "Publish a code review.", "path": "/x/SKILL.md"}
     if CLAUDE:
         block = render([one])
-        check(block.startswith(MARK) and "Skill tool" in block and block.endswith("\n- a:cr-create: Publish a code review."),
+        check(block.startswith(MARK) and "Skill tool" in block
+              and block.endswith("\n- a:cr-create: Publish a code review."),
               "the block gives each skill by the name the Skill tool takes, with no file")
         row = {"type": "attachment", "attachment": {"type": "hook_additional_context", "content": [block]}}
-        check(claude_blocks(row) == [("a:cr-create", "Publish a code review.")], "a block is read back from a transcript row")
+        check(claude_blocks(row) == [("a:cr-create", "Publish a code review.")],
+              "a block is read back from a transcript row")
         check(paths_set("---\npaths:\n  - '*.py'\n---\n") and not paths_set("---\npaths: []\n---\n"),
               "a skill that waits for a matching file is told apart")
     else:
