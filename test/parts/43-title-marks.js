@@ -14,9 +14,11 @@ module.exports = async ({ eq, root }) => {
   const env = require(path.join(root, 'src', 'envelope.js'));
   const C = '\u{1F451}', E = env.COLOUR, T = env.TEXT, BELL = '\u{1F6CE}\uFE0F', BELL0 = '\u{1F6CE}';
   const typed = ['Title', C + ' Title', C + ' ' + C + ' Title', 'Ti ' + C + ' tle', 'Title ' + C, 'Title ' + BELL, 'Title ' + BELL0,
-    C + ' Title ' + BELL, 'Title ' + E, E + ' Title ' + E + E, C + ' Title ' + E, '  ' + C + 'Title' + E + '  ', 'Title ' + T, 'Ti ' + T + ' tle \u2709'];
-  const want = ['Title', 'Title', 'Title', 'Ti tle', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Ti tle'];
-  eq(typed.map(tm.withoutMarks), want, 'every crown, envelope in either form and bell is taken off wherever it stands, and the spaces around it closed up');
+    C + ' Title ' + BELL, 'Title ' + E, E + ' Title ' + E + E, C + ' Title ' + E, '  ' + C + 'Title' + E + '  ', 'Title ' + T, 'Ti ' + T + ' tle \u2709',
+    '  Fix   the' + E + 'build  '];
+  const want = ['Title', 'Title', 'Title', 'Ti tle', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Title', 'Ti tle',
+    'Fix the build'];
+  eq(typed.map(tm.withoutMarks), want, 'every crown, envelope in either form and bell is taken off wherever it stands, and the runs of spaces left are closed up');
   eq(typed.map((t) => tm.withMarks(t, { steward: true, unseen: true })), want.map((w) => `${C} ${w} ${E}`), 'and a steward with a reply not read is shown with one crown first and one envelope last');
   eq(typed.map((t) => tm.withMarks(t, {})), want, 'and with no mark at all otherwise');
   eq([tm.withoutMarks(''), tm.withMarks(C, { steward: true }), tm.withEnvelope('Fix ' + E + ' it', true), tm.withEnvelope('Fix it ' + E, false),

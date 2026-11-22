@@ -20,13 +20,13 @@ const ENVELOPE = require('./envelope').COLOUR;
 const ENVELOPES = /\u2709[\uFE0E\uFE0F]?/gu;
 const MARKS = /(?:\u{1F451}|\u{1F6CE}|\u2709)[\uFE0E\uFE0F]?/gu;
 
-/* `text` with what `re` matches taken out, the spaces around each joined into one, and the ends trimmed. */
+/* `text` with what `re` matches taken out, each run of spaces left in it joined into one, and the ends trimmed. */
 function strip(text, re) {
   const s = String(text == null ? '' : text);
   re.lastIndex = 0;
   if (!re.test(s)) return s;
   re.lastIndex = 0;
-  return s.split(re).map((p) => p.trim()).filter(Boolean).join(' ');
+  return s.split(re).map((p) => p.trim()).filter(Boolean).join(' ').replace(/\s{2,}/g, ' ');
 }
 
 /** `title` without any envelope. */
