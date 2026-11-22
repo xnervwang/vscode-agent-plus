@@ -14,8 +14,9 @@
  *
  * A conversation is announced when it starts to wait, and when it stops with an unread reply after working or after
  * its background work, once it has stayed that way for STABLE_MS: a turn followed at once by another, as a queued
- * message makes it, is not announced. An unread reply turning up on a conversation that had already stopped is not
- * announced.
+ * message makes it, is not announced. A turn that ran between two reads counts as work when the conversation's
+ * lastActiveAt is newer than any read before. An unread reply turning up on a conversation that had already stopped,
+ * with nothing newer, is not announced.
  *
  * Only the window that has the focus shows a notification, so there is one on the screen however many windows are
  * open. Changes that come within BATCH_MS of each other are shown as one.
@@ -45,6 +46,7 @@ const STABLE_MS = 5000;
 const WARMUP_MS = 10000;
 const REMEMBER_MS = 120000;
 const MAX_ITEMS = 200;
+const MAX_SEEN = 2000;
 const MAX_TITLE = 120;
 /* When two windows report one conversation differently, the report that needs the user most wins. */
 const RANK = { waiting: 0, working: 1, background: 2, stopped: 3 };
@@ -79,6 +81,7 @@ function itemsOf(lists) {
       if (!activity || (activity === 'stopped' && !unseen)) continue;
       out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
         state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true,
+        lastActiveAt: Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0,
         title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
     }
   }
@@ -111,13 +114,14 @@ function readAll(dir, now) {
       const steward = typeof raw.steward === 'boolean' ? raw.steward : title.startsWith(titleMarks.CROWN);
       const it = { key: k, from: new Set([n]), sourceId: raw.sourceId, sessionId: raw.sessionId, source: clip(raw.source, 40) || raw.sourceId,
         title: titleMarks.withMarks(title, { steward }) || raw.sessionId, steward, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity,
-        unseen, legacy };
+        unseen, legacy, lastActiveAt: Number.isFinite(raw.lastActiveAt) ? raw.lastActiveAt : 0 };
       const had = merged.get(k);
       if (!had) { merged.set(k, it); continue; }
       const win = RANK[activity] < RANK[had.activity] ? it : had;
       win.from = new Set([...had.from, n]);
       win.unseen = had.unseen || unseen;
       win.legacy = had.legacy && legacy;
+      win.lastActiveAt = Math.max(had.lastActiveAt, it.lastActiveAt);
       merged.set(k, win);
     }
   }
@@ -159,6 +163,9 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   /* key -> { activity, kind, at, from, stoppedAt }: each conversation as last seen in the union. `stoppedAt` is when it
      stopped with an unread reply after working, until it is announced. */
   const last = new Map();
+  /* key -> the newest lastActiveAt this window has read for that conversation. A turn that starts and ends between two
+     reads is never seen working, and a newer lastActiveAt is what shows it ran. */
+  const activeSeen = new Map();
 
   function write() {
     if (closed || !canWrite()) return;
@@ -210,16 +217,22 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     const queue = (k, it) => { pending.set(k, it); if (!timer) timer = setTimeout(flush, batchMs); };
     for (const [k, it] of next) {
       const was = last.get(k);
+      const seenActive = activeSeen.has(k) ? activeSeen.get(k) : startedAt + warmupMs;
       const rec = { activity: it.activity, kind: it.kind, at: t, from: it.from, stoppedAt: 0 };
       if (it.kind === 'waiting') {
         if (warm && !(was && was.kind === 'waiting' && t - was.at < REMEMBER_MS)) queue(k, it);
       } else if (it.kind === 'finished') {
-        const worked = !!was && (was.activity === 'working' || was.activity === 'background');
+        const worked = (!!was && (was.activity === 'working' || was.activity === 'background')) || it.lastActiveAt > seenActive;
         if (was && was.stoppedAt) rec.stoppedAt = was.stoppedAt;
         else if (warm && (!was || was.kind !== 'finished') && (worked || it.legacy)) rec.stoppedAt = t;
         if (rec.stoppedAt && t - rec.stoppedAt >= stableMs) { rec.stoppedAt = 0; queue(k, it); }
       }
       last.set(k, rec);
+      if (!activeSeen.has(k) || it.lastActiveAt > activeSeen.get(k)) {
+        activeSeen.delete(k);
+        activeSeen.set(k, it.lastActiveAt);
+        if (activeSeen.size > MAX_SEEN) activeSeen.delete(activeSeen.keys().next().value);
+      }
     }
     /* A conversation that left the union moved on if a window that reported it is still writing; if all its windows
        went, it is remembered for a while. */

@@ -78,6 +78,35 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([quiet.shown.length, quiet.painted], [0, ['q:finished']],
     'a reply not seen turning up on a conversation that had already stopped is not announced, and is counted');
 
+  /* A turn that started and ended between two reads is never seen working; a lastActiveAt newer than anything read
+     before shows that it ran. */
+  const short = win(path.join(tmp('short-turn'), 'attention'), 'h');
+  const quick = (active, unseen = true) => Object.assign(conv('r', 'stopped', unseen, 'Quick one'), { lastActiveAt: active });
+  const before = Object.assign(conv('b', 'stopped', true, 'From before'), { lastActiveAt: clock - 60000 });
+  await short.step(conv('p', 'working'), before);
+  clock += 1000;
+  const first = clock;
+  await short.step(conv('p', 'working'), before, quick(first));
+  clock += 6000;
+  await short.step(conv('p', 'working'), before, quick(first));
+  eq([short.texts(), short.painted], [['"Quick one" finished.'], ['b:finished', 'r:finished']],
+    'a conversation that turns up stopped with an unread reply newer than this window\'s start is announced after the stable period; '
+    + 'one whose reply came before the window started is counted only');
+  await short.step(conv('p', 'working'), before);
+  clock += 1000;
+  await short.step(conv('p', 'working'), before, quick(first));
+  clock += 6000;
+  await short.step(conv('p', 'working'), before, quick(first));
+  eq(short.shown.length, 1, 'read, and then marked unread again with nothing newer, it is not announced again');
+  await short.step(conv('p', 'working'), before);
+  clock += 1000;
+  const second = clock;
+  await short.step(conv('p', 'working'), before, quick(second));
+  clock += 6000;
+  await short.step(conv('p', 'working'), before, quick(second));
+  eq(short.texts().slice(1), ['"Quick one" finished.'], 'a second short turn, with a newer lastActiveAt, is announced');
+  short.att.dispose();
+
   settings.finished = false;
   const off = win(path.join(tmp('off'), 'attention'), 'o', { stableMs: 100 });
   await off.step(conv('r', 'working'));
