@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { boot } = require('../boot');
+const fake = require('../fake-vscode');
 
 const conv = (id, state, title = id) => ({ sessionId: id, state, title, cwd: '/w', running: true });
 
@@ -210,4 +211,33 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq(at.itemsOf([{ sourceId: 'claude-code', label: 'Claude Code', conversations: [require(path.join(root, 'src', 'sources.js'))
     .conversation({ sessionId: 'm', title: 'Manager \u{1F6CE}', state: 'prompt', steward: true })] }]).map((it) => [it.title, it.steward]),
   [['\u{1F451} Manager', true]], 'and a window writes the drawn title with steward beside it');
+
+  /* agentPlus.notifications.enabled turned off and on again, with and without a conversation changing in between. */
+  {
+    const b = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20,
+      attentionWarmupMs: 0, attentionBatchMs: 10, debounceMs: 10 } });
+    const { control } = b;
+    const changed = new fake.EventEmitter();
+    const listed = [{ sessionId: 'w', title: 'Waits', cwd: '/w', state: 'prompt', activity: 'waiting', running: true }];
+    b.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', onDidChangeConversations: changed.event,
+      listConversations: async () => listed.map((c) => Object.assign({}, c)) });
+    await wait(300);
+    const bell = () => { const it = control.state.status.find((s) => s.id === 'agentPlus.attention'); return it && it.shown ? it.text : ''; };
+    const turn = async (on) => { control.state.config['agentPlus.notifications.enabled'] = on; control.changeConfig(['agentPlus.notifications.enabled']); await wait(300); };
+    const seen = [bell()];
+    await turn(false);
+    seen.push(bell());
+    await turn(true);
+    seen.push(bell());
+    await turn(false);
+    listed.push({ sessionId: 'v', title: 'Waits too', cwd: '/w', state: 'prompt', activity: 'waiting', running: true });
+    changed.fire();
+    await wait(300);
+    seen.push(bell());
+    await turn(true);
+    seen.push(bell());
+    eq(seen, ['$(bell-dot) 1', '', '$(bell-dot) 1', '', '$(bell-dot) 2'],
+      'the bell goes with the notifications turned off, and comes back as soon as they are turned on again, also after a conversation changed meanwhile');
+    b.close();
+  }
 };

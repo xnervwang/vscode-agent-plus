@@ -743,7 +743,8 @@ function create(host, opts = {}) {
   }
   keep(vscode.workspace.onDidChangeWorkspaceFolders(() => refreshConversations(true)));
   keep(vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration(`${CONFIG}.conversationsView`) || e.affectsConfiguration(`${CONFIG}.workPlanView`)) refreshConversations(true);
+    if (e.affectsConfiguration(`${CONFIG}.conversationsView`) || e.affectsConfiguration(`${CONFIG}.workPlanView`)
+      || e.affectsConfiguration(`${CONFIG}.notifications`)) refreshConversations(true);
   }));
   const tick = setInterval(() => {
     askAll();
