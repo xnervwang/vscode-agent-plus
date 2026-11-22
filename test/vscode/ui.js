@@ -590,7 +590,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   }, 20000, 300);
   const answerSays = (f) => f.evaluate(() => ({ row: document.getElementById('row').textContent, question: document.getElementById('question').textContent,
     status: document.getElementById('status').textContent, text: document.getElementById('text').value, send: !document.getElementById('send').disabled,
-    box: !document.getElementById('text').disabled }));
+    box: !document.getElementById('text').disabled, placeholder: document.getElementById('text').placeholder }));
   const answers = () => src('return src.state.answers;');
   let answer = null;
 
@@ -602,8 +602,9 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!answer, 'a click on the question shows it in the Answer view, under its conversation\'s title');
     if (!answer) return;
     const shown = await answerSays(answer);
-    check(shown.question === Q1 && /^Row 1: Pick the release branch · asked 1m ago$/.test(shown.row) && shown.box && !shown.send,
-      'with its row, how long ago it was asked, and an empty box to answer in, Send disabled until something is typed', shown);
+    check(shown.question === Q1 && /^Row 1: Pick the release branch · asked 1m ago$/.test(shown.row) && shown.box && !shown.send
+      && /Ctrl\+Enter sends it/.test(shown.placeholder),
+      'with its row, how long ago it was asked, and an empty box to answer in that says Ctrl+Enter sends, Send disabled until something is typed', shown);
     await look('answer-question', { expect: 'The Answer view, right of Conversations: Asked about the release branch in bold, Row 1: Pick the release branch · asked 1m ago, the question Release from main or from the hotfix branch?, a folded Row details, an empty box with its placeholder, and the buttons Go to the conversation and Send, Send greyed out.' },
       pane('agentPlus.answer'));
     const before = (await answers()).length;
@@ -1259,8 +1260,9 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await clickRow('agentPlus.conversations', `1. ${Q1}`);
     const f = await answerFrame({ title: 'Asked about the release branch' });
     const s = f && await answerSays(f);
-    check(!!s && s.status === 'Restricted Mode: this window does not send answers. Trust the workspace to send one.' && !s.box && !s.send,
-      'the Answer view shows the question, says Restricted Mode sends no answer, and has its box and Send disabled', s);
+    check(!!s && s.status === 'Restricted Mode: this window does not send answers. Trust the workspace to send one.' && !s.box && !s.send
+      && s.placeholder === '', 'the Answer view shows the question, says Restricted Mode sends no answer, and has its box and Send disabled, '
+      + 'with no placeholder saying Ctrl+Enter sends', s);
     const mine = (() => { try { return fs.readdirSync(path.join(profile.shared, 'attention')).filter((n) => fs.statSync(path.join(profile.shared, 'attention', n)).mtimeMs > launchedAt); } catch (_) { return []; } })();
     check(!mine.length, 'and the window writes nothing to the folder the windows share', mine);
     await look('restricted', { expect: 'The window in Restricted Mode (a Restricted Mode badge at the left of the status bar). The Conversations view lists Asked about the release branch with its question; the Answer view shows that question with a greyed-out box and Send, and says Restricted Mode: this window does not send answers. Trust the workspace to send one.' },

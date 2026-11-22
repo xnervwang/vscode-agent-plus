@@ -335,6 +335,7 @@ class AnswerView {
   const vscode = acquireVsCodeApi();
   const $ = (id) => document.getElementById(id);
   let key = '', running = false, busy = false;
+  const placeholder = $('text').placeholder;
   const ready = () => { $('send').disabled = !running || busy || !$('text').value.trim(); };
   const send = () => { if (!$('send').disabled) vscode.postMessage({ type: 'send', key, text: $('text').value }); };
   $('text').addEventListener('input', () => { ready(); vscode.postMessage({ type: 'draft', key, text: $('text').value }); });
@@ -397,6 +398,7 @@ class AnswerView {
     $('detail').textContent = more;
     if (fresh) { $('text').value = m.draft; $('more').open = false; }
     $('text').disabled = !running;
+    $('text').placeholder = running ? placeholder : '';
     $('status').textContent = running ? m.status : m.notRunning;
     $('status').className = m.failed ? 'failed' : '';
     ready();
