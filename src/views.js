@@ -191,8 +191,6 @@ function create(host, opts = {}) {
     lookedAt, settings: notifySettings, canWrite: trusted, show: notify, paint: paintAttention, several: () => registry.size > 1, log: say,
     warmupMs: Number.isFinite(opts.attentionWarmupMs) ? opts.attentionWarmupMs : attention.WARMUP_MS,
     batchMs: Number.isFinite(opts.attentionBatchMs) ? opts.attentionBatchMs : attention.BATCH_MS }));
-  /* Whether this window shows a conversation: a tab of it, the source has it in front, or the source says it shows it
-     elsewhere (in a sidebar, say). */
   const showsHere = (sourceId, sessionId) => {
     const source = registry.get(sourceId);
     if (!source) return false;
