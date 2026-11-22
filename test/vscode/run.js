@@ -128,6 +128,7 @@ async function testStage() {
     'breadcrumbs.enabled': false,
     /* A terminal put back in the panel of an untrusted window makes VS Code ask for trust. */
     'terminal.integrated.hideOnStartup': 'always',
+    'terminal.integrated.enablePersistentSessions': false,
     'workbench.secondarySideBar.defaultVisibility': 'hidden',
   }, LOOK ? ui.LOOK_SETTINGS : {}), null, 2));
 
