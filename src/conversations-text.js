@@ -12,6 +12,8 @@ const TEXT = {
   en: {
     view: 'Conversations',
     state: { prompt: 'at a permission prompt', needs: 'needs you', working: 'working', unread: 'replied, not read', idle: 'idle' },
+    activity: { working: 'Running a turn', background: 'Turn over, only background work running', waiting: 'Waiting for you', stopped: 'Stopped' },
+    unseen: 'Has a reply you have not read',
     questions: (n) => (n === 1 ? '1 question' : `${n} questions`),
     open: (n) => `${n} open`,
     noPlan: 'no work plan',

@@ -11,6 +11,10 @@
  * The host sets `source` ({ id, label }) on each row, `briefs` when that source lists 'brief' in its features, and, with
  * more than one source registered, `icon` when the logo can be drawn (src/sourceicons.js).
  *
+ * A conversation's row shows its activity as the row's icon and, while it has a reply the user has not read, an envelope
+ * at the row's end. The envelope is a file decoration badge on the row's `resourceUri`, which VS Code
+ * draws after the title and keeps in view when a long title is cut; `decorations` is the provider the host registers.
+ *
  * Clicking a conversation shows its brief in the Answer view when its source supports briefs, and goes to the
  * conversation otherwise. The arrow at the row's end goes to the conversation either way.
  */
@@ -19,14 +23,16 @@ const { ageSince } = require('./workplan-view');
 const { textFor } = require('./conversations-text');
 const { keyPart } = require('./sources');
 
-/* Shapes that differ, so the states can be told apart without colour. */
+/* The icon for each activity. A stopped conversation has a blank of the same size, so its title stays where the others'
+   are. The tooltip says the activity in words, for a reader who cannot tell the red dot from the green. */
 const LOOK = {
-  prompt: ['shield', 'charts.orange'],
-  needs: ['question', 'charts.orange'],
-  working: ['sync~spin', 'charts.blue'],
-  unread: ['circle-filled', 'charts.green'],
-  idle: ['circle-outline', 'descriptionForeground'],
+  working: ['circle-filled', 'charts.green'],
+  background: ['circle', 'charts.green'],
+  waiting: ['circle-filled', 'charts.red'],
+  stopped: ['blank', ''],
 };
+const UNSEEN_SCHEME = 'agent-plus-unseen';
+const ENVELOPE = '\u2709\uFE0F';
 
 /*
  * The question a row is asking, in the shape the Answer view is handed it in. Built in one place, so the question the
@@ -63,13 +69,21 @@ class ConversationsProvider {
     this.problem = '';
     this.lang = 'en';
     this.signature = '';
+    const badges = new vscode.EventEmitter();
+    this._badges = badges;
+    this.decorations = {
+      onDidChangeFileDecorations: badges.event,
+      provideFileDecoration: (uri) => (uri && uri.scheme === UNSEEN_SCHEME
+        ? new vscode.FileDecoration(ENVELOPE, textFor(this.lang).unseen) : undefined),
+    };
   }
 
   /* Returns whether the tree changed; ages are part of the comparison. */
   set(data, problem = '', lang = 'en', now = Date.now()) {
     this.data = data || { running: [], stopped: [], asks: 0 };
     this.problem = problem || '';
-    this.lang = lang;
+    /* VS Code keeps a decoration until told it changed, and the badge's tooltip is in the view's language. */
+    if (lang !== this.lang) { this.lang = lang; this._badges.fire(undefined); }
     const ages = [];
     for (const c of this.data.running.concat(this.data.stopped)) {
       ages.push(ageSince(c.since, now));
@@ -125,12 +139,14 @@ class ConversationsProvider {
       const item = new vscode.TreeItem(c.title, !kids ? vscode.TreeItemCollapsibleState.None
         : expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
       item.id = 'conversations/' + where;
-      const [icon, color] = LOOK[c.state] || LOOK.idle;
-      item.iconPath = (from && c.icon) || new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
+      const activity = LOOK[c.activity] ? c.activity : 'stopped';
+      const [icon, color] = LOOK[activity];
+      item.iconPath = (from && c.icon) || new vscode.ThemeIcon(icon, color ? new vscode.ThemeColor(color) : undefined);
+      if (c.unseen === true) item.resourceUri = vscode.Uri.from({ scheme: UNSEEN_SCHEME, path: '/' + where });
       item.description = [t.state[c.state], c.questions.length ? t.questions(c.questions.length) : '',
         c.hasPlan ? t.open(c.open) : t.noPlan, c.unknown ? t.unknown(c.unknown) : ''].filter(Boolean).join(' · ');
-      item.tooltip = [c.title, from ? from.label : '', t.state[c.state], c.cwd ? t.folder(c.cwd) : '',
-        c.unknown ? t.unknownTip(c.unknown) : ''].filter(Boolean).join('\n');
+      item.tooltip = [c.title, from ? from.label : '', t.state[c.state], t.activity[activity], c.unseen === true ? t.unseen : '',
+        c.cwd ? t.folder(c.cwd) : '', c.unknown ? t.unknownTip(c.unknown) : ''].filter(Boolean).join('\n');
       item.contextValue = 'agentPlusConversation';
       item.command = c.briefs
         ? { command: 'agentPlus.showBrief', title: 'Show where it stands', arguments: [briefOf(c, sourceId)] } : open;
@@ -159,4 +175,4 @@ class ConversationsProvider {
   }
 }
 
-module.exports = { ConversationsProvider, questionOf, briefOf, briefKey, LOOK };
+module.exports = { ConversationsProvider, questionOf, briefOf, briefKey, LOOK, UNSEEN_SCHEME, ENVELOPE };

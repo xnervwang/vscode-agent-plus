@@ -6,7 +6,7 @@
 /*
  * The parts of the VS Code API this extension touches, enough to run it in Node. Adapted from codex-extras'
  * test/fake-vscode.js. The test drives tabs, installed extensions, workspace trust and the answers to notifications, and
- * reads back views, commands, status bar items, watchers, notifications and the clipboard. install() makes
+ * reads back views, commands, status bar items, watchers, notifications, file decoration providers and the clipboard. install() makes
  * require('vscode') return it.
  */
 const Module = require('module');
@@ -58,6 +58,7 @@ class MarkdownString {
   appendMarkdown(s) { this.value += s; return this; }
 }
 class RelativePattern { constructor(base, pattern) { this.base = base; this.pattern = pattern; } }
+class FileDecoration { constructor(badge, tooltip, color) { this.badge = badge; this.tooltip = tooltip; this.color = color; } }
 /* Positions here are offsets into the document's text, which is all the edits below need. */
 class Range { constructor(start, end) { this.start = start; this.end = end; } }
 class WorkspaceEdit {
@@ -81,7 +82,7 @@ function create({ version = '1.145.0', trusted = true } = {}) {
   const state = {
     commands: [], context: {}, extensions: [], clipboard: '', views: {}, webviews: {}, status: [], log: [], handlers: {},
     said: [], answers: [], watchers: [], config: {}, trusted, configWrites: [], quickPicks: [], external: [],
-    documents: {}, shown: [],
+    documents: {}, shown: [], decorations: [],
   };
   /* An open document over `state.documents[uri.path]`; edits applied to it change that text and leave it unsaved. */
   const documentOf = (uri) => ({
@@ -101,7 +102,7 @@ function create({ version = '1.145.0', trusted = true } = {}) {
     packageJSON: e.packageJSON || {} }));
   const vscode = {
     EventEmitter, Disposable, Uri, TabInputCustom, TabInputText, TabInputWebview, ThemeIcon, ThemeColor, TreeItem, MarkdownString,
-    RelativePattern, Range, WorkspaceEdit,
+    RelativePattern, Range, WorkspaceEdit, FileDecoration,
     UIKind: { Desktop: 1, Web: 2 },
     version,
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
@@ -122,6 +123,10 @@ function create({ version = '1.145.0', trusted = true } = {}) {
         return view;
       },
       registerWebviewViewProvider: (id, provider) => { state.webviews[id] = provider; return new Disposable(() => {}); },
+      registerFileDecorationProvider: (provider) => {
+        state.decorations.push(provider);
+        return new Disposable(() => { const i = state.decorations.indexOf(provider); if (i >= 0) state.decorations.splice(i, 1); });
+      },
       createStatusBarItem: (id) => {
         const item = { id: typeof id === 'string' ? id : '', text: '', shown: false, show() { item.shown = true; }, hide() { item.shown = false; },
           dispose() { item.disposed = true; item.shown = false; } };

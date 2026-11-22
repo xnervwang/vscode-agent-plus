@@ -4,9 +4,10 @@
 
 'use strict';
 /*
- * Row icons in the Conversations tab when more than one source is registered: the source's logo with a state dot at the
- * top right, where Claude Code's own pending icon has its dot. The logo is read from the agent's own extension, so none
- * is shipped here; the dotted copies are written to this extension's storage on first use.
+ * Row icons in the Conversations tab when more than one source is registered: the source's logo with an activity dot at
+ * the top right, where Claude Code's own pending icon has its dot, or the logo alone for a conversation that stopped.
+ * The logo is read from the agent's own extension, so none is shipped here; the dotted copies are written to this
+ * extension's storage on first use.
  * SVG files cannot use theme colours, so COLORS holds the default light and dark theme values. From src/sourceicons.js
  * of vscode-claude-code-extras bb28f51.
  */
@@ -16,19 +17,19 @@ const path = require('path');
 const { writeAtomic } = require('./files');
 const { readBounded } = require('./bounded');
 
-/* charts.orange, charts.blue, charts.green and descriptionForeground, as src/conversations-view.js colours the states. */
+/* charts.green and charts.red, as src/conversations-view.js colours the activities. `ring` draws the dot hollow. */
 const COLORS = {
-  prompt: { light: '#d18616', dark: '#d18616' },
-  needs: { light: '#d18616', dark: '#d18616' },
-  working: { light: '#1a85ff', dark: '#3794ff' },
-  unread: { light: '#388a34', dark: '#89d185' },
-  idle: { light: '#717171', dark: '#a0a0a0' },
+  working: { light: '#388a34', dark: '#89d185' },
+  background: { light: '#388a34', dark: '#89d185', ring: true },
+  waiting: { light: '#e51400', dark: '#f14c4c' },
+  stopped: null,
 };
 const MAX_BYTES = 256 * 1024;
 const MASK = 'awp-source-dot';
 const PLACING = new Set(['width', 'height', 'x', 'y', 'style', 'class', 'id', 'xmlns']);
 
-function withDot(svg, color) {
+/* `svg` drawn in 16 pixels with a dot of `color` at the top right, or alone when `color` is empty. */
+function withDot(svg, color, ring = false) {
   const text = String(svg || '');
   const open = /<svg\b([^>]*)>/i.exec(text);
   if (!open || /\/\s*$/.test(open[1])) return '';
@@ -47,18 +48,22 @@ function withDot(svg, color) {
     if (name !== 'viewBox' && !PLACING.has(name) && !/^on/i.test(name)) attrs.push(`${name}=${m[2]}`);
   }
   if (!viewBox) viewBox = w > 0 && h > 0 ? `0 0 ${w} ${h}` : '0 0 24 24';
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">'
+  const logo = `<svg x="0" y="0" width="24" height="24" viewBox="${viewBox}"${attrs.length ? ' ' + attrs.join(' ') : ''}>` + inner + '</svg>';
+  const head = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">';
+  if (!color) return head + logo + '</svg>';
+  /* The ring's outer edge is where the dot's is, so the two read as the same mark filled and hollow. */
+  const dot = ring ? `<circle cx="19.5" cy="4.5" r="3.5" fill="none" stroke="${color}" stroke-width="2"/>`
+    : `<circle cx="19.5" cy="4.5" r="4.5" fill="${color}"/>`;
+  return head
     + `<defs><mask id="${MASK}"><rect width="24" height="24" fill="white"/><circle cx="19.5" cy="4.5" r="6.5" fill="black"/></mask></defs>`
-    + `<g mask="url(#${MASK})"><svg x="0" y="0" width="24" height="24" viewBox="${viewBox}"${attrs.length ? ' ' + attrs.join(' ') : ''}>`
-    + inner + '</svg></g>'
-    + `<circle cx="19.5" cy="4.5" r="4.5" fill="${color}"/></svg>`;
+    + `<g mask="url(#${MASK})">${logo}</g>` + dot + '</svg>';
 }
 
-/* The state becomes part of the file name, so only states in COLORS are accepted and the path must stay inside `dir`. */
-function iconsFor(logo, state, dir, cache) {
-  if (!Object.prototype.hasOwnProperty.call(COLORS, state)) return null;
-  const colors = COLORS[state];
-  const key = JSON.stringify([logo && logo.light, logo && logo.dark, state]);
+/* The activity becomes part of the file name, so only those in COLORS are accepted and the path must stay inside `dir`. */
+function iconsFor(logo, activity, dir, cache) {
+  if (!Object.prototype.hasOwnProperty.call(COLORS, activity)) return null;
+  const colors = COLORS[activity] || {};
+  const key = JSON.stringify([logo && logo.light, logo && logo.dark, activity]);
   if (cache && cache.has(key)) return cache.get(key);
   let out = null;
   try {
@@ -68,9 +73,9 @@ function iconsFor(logo, state, dir, cache) {
       const file = logo && logo[theme];
       const body = typeof file === 'string' && file ? readBounded(file, MAX_BYTES) : null;
       if (body === null) throw new Error('no usable logo');
-      const svg = withDot(body, colors[theme]);
+      const svg = withDot(body, colors[theme], colors.ring === true);
       if (!svg) throw new Error('not an SVG');
-      const target = path.join(home, `${crypto.createHash('sha256').update(svg).digest('hex').slice(0, 12)}-${state}-${theme}.svg`);
+      const target = path.join(home, `${crypto.createHash('sha256').update(svg).digest('hex').slice(0, 12)}-${activity}-${theme}.svg`);
       if (path.dirname(target) !== home) throw new Error('outside the icons folder');
       let have = '';
       try { have = fs.readFileSync(target, 'utf8'); } catch (_) { /* not written yet */ }

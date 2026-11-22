@@ -77,7 +77,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `id` | Source id, such as `'codex'` or `'claude-code'` |
 | `label` | Shown in tooltips and in the work plan view's description |
 | `extensionId` | The extension that registered it, such as `'xnervwang.codex-plus'`; used for update notices |
-| `logo` | `{ light, dark }` SVG `vscode.Uri` values, read from the agent's own extension; drawn with a state dot when more than one source is registered |
+| `logo` | `{ light, dark }` SVG `vscode.Uri` values, read from the agent's own extension; drawn with the conversation's activity dot when more than one source is registered |
 | `planPath(sessionId)` | Absolute path of the conversation's plan file, or `null` |
 | `planDir()` | Folder of the plan files; the core watches it, with the folder itself as the watcher's base and `*.json` as the pattern, and never writes or deletes in it. A folder that does not exist yet is watched once it appears |
 | `sessionForTab(tab)` | A session id for a tab showing that conversation; `''` for this source's tab with no conversation yet; anything else for a tab not its own. Asked again for the same tab object once its label changes, and on every tab event while the last answer was `''`: a tab keeps one object for its whole life, so a new conversation answers `''` and then an id without ever becoming a different tab |
@@ -102,22 +102,26 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `title` | Title |
 | `cwd` | Working folder; compared with the workspace folders through real paths |
 | `state` | `'prompt'`, `'working'`, `'unread'` or `'idle'`; anything else reads as `'idle'` |
-| `running` | Defaults to `true` |
+| `activity` | Optional. `'working'` (a turn is running), `'background'` (the turn is over and only background work runs), `'waiting'` (waiting for the user: a permission prompt, a choice) or `'stopped'` (stopped, no background work). Without it, or with any other value, it follows `state`: `prompt` is waiting, `working` is working, `unread` and `idle` are stopped |
+| `unseen` | Optional boolean: the conversation has a reply the user has not seen. Without it, `state` is `unread`. It does not depend on `activity`: a working conversation can have one |
+| `lastUserAt` | Optional. When the user's last message was sent, in epoch milliseconds or a date string. A question in the plan (`waitingOn: user`) asked after it makes the conversation `waiting`; a question asked before it does not. Without it, the plan does not change `activity` |
+| `running` | Defaults to `true`. A conversation not running has stopped, whatever its `activity` says, unless its plan has a question asked after `lastUserAt` |
 | `lastActiveAt` | Epoch milliseconds or a date string |
 | `hasPlan` | Used only when the source gives no `planPath` |
 
 - The core derives "needs you" from the questions in the plan. Order: prompt, needs you, working, unread, idle.
+- The Conversations view draws `activity` in the row's icon: a green dot working, a green ring background, a red dot waiting, nothing stopped. An envelope at the end of the row shows `unseen`.
 - A stopped conversation (`running: false`) is listed while its plan has open rows, was written in the last 7 days, and its `cwd` is in a workspace folder.
 
 ## Notifications
 
 | Item | Rule |
 | --- | --- |
-| What counts | A running conversation whose state is `prompt` (waiting for the user) or `unread` (its turn finished) |
-| Shared | Each window writes the ones its sources report to `attention/<window>.json` under the shared folder, rewritten at least every 20 seconds; a file older than a minute is a window that has gone. While a window has the focus, its file also lists, as `front`, those of them it shows in front. Every window reads all of them |
-| When | A conversation that enters that set, or moves between the two states. What a window reads in its first 10 seconds, and a conversation whose window went away and came back in the same state within two minutes, is not new |
-| Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window counts the set in a status bar entry, less the conversations the window with the focus shows in front |
-| Closing | A conversation leaves a notification once it is in another state, once the window with the focus shows it in front, or when it is opened from the notification; the notification closes when none is left |
+| What counts | A running conversation that is `waiting`, or `stopped` and `unseen` |
+| Shared | Each window writes its sources' running conversations, except those stopped and not `unseen`, to `attention/<window>.json` under the shared folder, each with `state`, `activity` and `unseen`. A file is rewritten at least every 20 seconds; one older than a minute is a window that has gone. While a window has the focus, its file also lists, as `front`, those of them it shows in front. Every window reads all of them. An item without `activity`, from an older version, is read from `state`: `prompt` is waiting, `unread` is stopped and `unseen` |
+| When | A conversation that becomes `waiting`. A conversation that goes from `working` or `background` to `stopped` and `unseen`, once it has stayed that way for 5 seconds. Not one that only becomes `unseen`, nor one that starts working again within those 5 seconds. An older window's `unread` is announced when it appears, after the 5 seconds. What a window reads in its first 10 seconds, and a conversation whose window went away and came back the same within two minutes, is not new |
+| Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window's status bar entry counts the waiting conversations and the stopped `unseen` ones, less the conversations the window with the focus shows in front |
+| Closing | A conversation leaves a notification once it is no longer waiting or stopped and `unseen` as the notification said, once the window with the focus shows it in front, or when it is opened from the notification; the notification closes when none is left |
 | Opening | `open()` when the source has it; else `reveal` in this window, then a request in `open/` under the shared folder that the window whose tab shows the conversation takes, reveals it, and brings itself to the front with VS Code's command line. A request nobody takes in 5 seconds is withdrawn |
 | Settings | `agentPlus.notifications.enabled`, `.finished`, `.waiting` |
 

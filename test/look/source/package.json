@@ -1,0 +1,22 @@
+{
+  "name": "agent-plus-look-source",
+  "displayName": "Agent Plus look source",
+  "description": "A stand-in source that lists one conversation for each activity, for test/look/conversations-panel.js.",
+  "publisher": "xnervwang-test",
+  "version": "0.0.1",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "main": "extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionDependencies": [
+    "xnervwang.agent-plus"
+  ],
+  "agentPlus": {
+    "protocol": 1
+  }
+}

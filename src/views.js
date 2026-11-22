@@ -140,6 +140,7 @@ function create(host, opts = {}) {
   /* ── Conversations ── */
   const conversationsTree = new ConversationsProvider();
   const conversationsView = keep(vscode.window.createTreeView('agentPlus.conversations', { treeDataProvider: conversationsTree }));
+  keep(vscode.window.registerFileDecorationProvider(conversationsTree.decorations));
   const conversationsOn = () => cfg().get('conversationsView', true) !== false;
   const conversationsLang = () => conversationsText.language(vscode.env.language);
   const statusEntry = keep(vscode.window.createStatusBarItem('agentPlus.conversations', vscode.StatusBarAlignment.Right, 100));
@@ -170,7 +171,7 @@ function create(host, opts = {}) {
     if (!active || !items.length) { attentionEntry.hide(); return; }
     attentionEntry.text = `$(bell-dot) ${items.length}`;
     attentionEntry.tooltip = `${items.length === 1 ? '1 conversation needs' : `${items.length} conversations need`} you:\n`
-      + items.slice(0, 10).map((it) => `${it.state === 'prompt' ? 'Waiting' : 'Finished'}: ${it.title}`).join('\n')
+      + items.slice(0, 10).map((it) => `${it.kind === 'waiting' ? 'Waiting' : 'Finished'}: ${it.title}`).join('\n')
       + (items.length > 10 ? `\nand ${items.length - 10} more` : '');
     attentionEntry.show();
   };
@@ -231,11 +232,15 @@ function create(host, opts = {}) {
     try { return sources.conversations(await Promise.race([sources.call(entry.source, 'listAllConversations', [], []),
       new Promise((r) => after(() => r(null), listWait))])) || fallback; } catch (_) { return fallback; }
   };
+  /* A question put after the user last wrote makes a conversation wait for them in every window, so the plan of each
+     running conversation whose source gives lastUserAt is read here, whichever folder it is in. */
+  const withQuestions = (sourceId, list) => list.map((c) => (c.running && c.lastUserAt > 0
+    ? conversations.withPlan(c, planOf(sourceId, c.sessionId).plan) : c));
   /* After each list pass: what every source lists, through listAllConversations() where a source has it. */
   const publishAttention = async (pairs) => {
     if (!notifySettings().enabled) { attentionLists = []; needs.publish([]); needs.refresh(); return; }
     attentionLists = await Promise.all(pairs.map(async ({ entry, list }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
-      conversations: await listAll(entry, list) })));
+      conversations: withQuestions(entry.id, await listAll(entry, list)) })));
     if (closing) return;
     needs.publish(attentionLists);
     needs.refresh();
@@ -327,11 +332,11 @@ function create(host, opts = {}) {
   };
   const rowIcons = new Map(), rowIconUris = new Map();
   const iconsDir = () => path.join(context.globalStorageUri.fsPath, 'conversation-icons');
-  const rowIcon = (source, state) => {
+  const rowIcon = (source, activity) => {
     if (!trusted()) return undefined;
     const logo = sources.logoOf(source);
     if (!logo) return undefined;
-    const files = sourceIcons.iconsFor(logo, state, iconsDir(), rowIcons);
+    const files = sourceIcons.iconsFor(logo, activity, iconsDir(), rowIcons);
     if (!files) return undefined;
     const uri = (f) => { if (!rowIconUris.has(f)) rowIconUris.set(f, vscode.Uri.file(f)); return rowIconUris.get(f); };
     return { light: uri(files.light), dark: uri(files.dark) };
@@ -374,7 +379,7 @@ function create(host, opts = {}) {
         const source = registry.get(c.sourceId);
         c.source = { id: c.sourceId, label: sources.labelOf(source) || c.sourceId };
         c.briefs = sources.supports(source, 'brief');
-        if (several) { try { const icon = rowIcon(source, c.state); if (icon) c.icon = icon; } catch (_) { /* the row keeps the state icon */ } }
+        if (several) { try { const icon = rowIcon(source, c.activity); if (icon) c.icon = icon; } catch (_) { /* the row keeps the plain dot */ } }
       }
       const problem = problems.map(([source, what]) => (several ? sources.labelOf(source) + ': ' + what : what)).join('\n');
       conversationsTree.set(data, problem, conversationsLang());
@@ -707,7 +712,7 @@ function create(host, opts = {}) {
       if (!items.length) { vscode.window.showInformationMessage('No conversation needs you now.'); return; }
       const several = registry.size > 1;
       const pick = await vscode.window.showQuickPick(items.map((it) => ({ label: it.title,
-        description: `${it.state === 'prompt' ? 'waiting for you' : 'finished'}${several ? ' · ' + it.source : ''}`, detail: it.cwd || undefined, it })),
+        description: `${it.kind === 'waiting' ? 'waiting for you' : 'finished'}${several ? ' · ' + it.source : ''}`, detail: it.cwd || undefined, it })),
       { placeHolder: 'Conversations that need you' });
       if (pick) await commands.openAttention(pick.it.sourceId, pick.it.sessionId);
     },

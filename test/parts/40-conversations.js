@@ -73,7 +73,7 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
   const items = top.map((e) => tree.getTreeItem(e));
   const q = tree.getTreeItem(tree.getChildren(top[0])[0]);
   if (items[0].id === 'conversations/codex/same' && items[1].id === 'conversations/claude-code/same'
-    && items[0].iconPath.light === '/i/l.svg' && items[1].iconPath.id === 'sync~spin'
+    && items[0].iconPath.light === '/i/l.svg' && items[1].iconPath.id === 'circle-filled' && items[1].iconPath.color.id === 'charts.green'
     && items[0].tooltip.split('\n')[1] === 'Codex' && items[0].command.command === 'agentPlus.openConversation'
     && items[0].command.arguments[0].sourceId === 'codex' && q.command.command === 'agentPlus.answerQuestion'
     && q.command.arguments[0].sourceId === 'codex' && q.command.arguments[0].open.sourceId === 'codex' && q.id === 'conversations/codex/same/?1'

@@ -5,13 +5,13 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | Feature | Where |
 | --- | --- |
 | The work plan (the agent's task list for a conversation, one row per task) of the conversation in front, following the editor tab of either agent | Work plan view, in the Agent Plus sidebar |
-| Conversations of this workspace from every installed agent: state, questions in their plans waiting for your answer, rows in progress (`doing`), stopped conversations with unfinished rows; each with its agent's logo | Conversations view, in the panel |
+| Conversations of this workspace from every installed agent: state, questions in their plans waiting for your answer, rows in progress (`doing`), stopped conversations with unfinished rows; each with its agent's logo. A green dot means a turn is running, a green ring that only background work runs, a red dot that it waits for you; a stopped conversation has no dot. An envelope at the end of a row means a reply you have not read | Conversations view, in the panel |
 | Answer a plan question, delivered to the window that shows the conversation | Answer view, beside Conversations |
 | A conversation's brief on clicking its row, for agents whose extension keeps one: its summary and current status in its own words, when written, whether out of date, what runs now; else one put together from its plan, marked so. The row's arrow goes to the conversation | Answer view, beside Conversations |
 | `N to decide` (questions waiting for you), or `Conversations M` (running ones) when there are none. A conversation counts as running while its agent's extension says so: Codex Plus while a turn runs, while something it started is still running after its turn, while a tab in this window shows it, or for 15 minutes after it was last active; Claude Code Plus while a Claude Code process has it open | Status bar |
 | Rows in a state this version does not know, and plans in a newer format, marked as such | Work plan and Conversations views |
-| A notification when a conversation in any VS Code window on this machine finishes a turn or waits for your permission or answer. Only the window that has the focus shows it, none while no window has the focus, and not for the conversation that window shows in front, which the status bar does not count either. Changes close together share one, and it closes once you have looked at the conversation. Open brings the conversation, and the window that shows it, to the front | Notification |
-| How many conversations finished or wait for you, in every window; a click lists them to open one | Status bar |
+| A notification when a conversation in any VS Code window on this machine starts to wait for you, or stops with a reply you have not read and stays stopped for 5 seconds. Only the window that has the focus shows it, none while no window has the focus, and not for the conversation that window shows in front, which the status bar does not count either. Changes close together share one, and it closes once you have looked at the conversation. Open brings the conversation, and the window that shows it, to the front | Notification |
+| How many conversations wait for you or stopped with a reply you have not read, in every window; a click lists them to open one | Status bar |
 | VS Code's limit of 32 requests in flight for all webview tabs together, raised on request | VS Code's files |
 | The token mode: which features of Claude Code Plus and Codex Plus add to the agent's context ([What it costs in tokens](#what-it-costs-in-tokens)). Hover for what it adds, click to change it; choosing Custom opens the per-feature settings | Status bar |
 
@@ -21,8 +21,8 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | `agentPlus.workPlanView` | `true` | Show the Work plan view |
 | `agentPlus.conversationsView` | `true` | Show the Conversations and Answer views and the Conversations entry in the status bar |
 | `agentPlus.notifications.enabled` | `true` | Show those notifications and the count in the status bar |
-| `agentPlus.notifications.finished` | `true` | Include conversations whose turn finished (a red dot) |
-| `agentPlus.notifications.waiting` | `true` | Include conversations waiting for your permission or answer (a blue dot) |
+| `agentPlus.notifications.finished` | `true` | Include conversations that stopped with a reply you have not read (an envelope) |
+| `agentPlus.notifications.waiting` | `true` | Include conversations waiting for your permission or answer (a red dot) |
 | `agentPlus.webviewRequestLimit` | `ask` | Raise VS Code's request limit: `ask` once per VS Code version, `raise` without asking, or `leave` it |
 
 ## What it costs in tokens
@@ -74,6 +74,7 @@ Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) 
 
 | Limit | Detail |
 | --- | --- |
+| The envelope needs file decoration badges | It is a badge like the Explorer's, so it is hidden while `explorer.decorations.badges` is off |
 | Notifications reach the windows of one machine | The windows share them through a folder in your home folder, so a window connected to another machine, over Remote-SSH say, hears from the windows on that machine only. There is no system notification while no VS Code window has the focus |
 | The request limit is only changed in a VS Code in a standard install location | A portable or ZIP copy, or one in a directory of your own, is not found: the client's application directory is searched in the places each platform puts it, and a remote window cannot ask the client where VS Code was started from. The Agent Plus output, which `Agent Plus: Show Status` opens, then says `no installation found`; no prompt to raise the limit is shown and no file is touched. To raise it anyway, replace `maxActiveHostResourceResponseBodies=32,` with `maxActiveHostResourceResponseBodies=1000000,` in `out/vs/workbench/contrib/webview/browser/pre/service-worker.js` under that copy of VS Code, and quit and reopen it |
 

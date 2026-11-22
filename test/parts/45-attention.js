@@ -6,7 +6,8 @@
 /*
  * Conversations that need the user, across windows (src/attention.js): each window writes what its sources report, only
  * the window with the focus shows a notification, changes close together make one, a notification closes once its
- * conversations moved on, and a window that reloads does not show again what it showed before.
+ * conversations moved on, and a window that reloads does not show again what it showed before. The conversations here
+ * carry only `state`, which gives their activity; 47-attention-activity.js has the activity rules themselves.
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,7 +26,7 @@ module.exports = async ({ eq, tmp, root }) => {
     w.att = at.createAttention({ dir, windowId: `${name}-0000000${Object.keys(windows).length}`, now: () => clock, focused: () => w.focused,
       lookedAt: looking, settings: () => settings, warmupMs: 0, batchMs: 10,
       show: (text) => { const n = { text, open: true }; w.shown.push(n); return { update(t) { n.text = t; }, close() { n.open = false; } }; },
-      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.state}`); },
+      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`); },
       links: { open: (it) => `open:${it.sessionId}`, list: () => 'list' } });
     windows[name] = w;
     return w;
@@ -41,10 +42,14 @@ module.exports = async ({ eq, tmp, root }) => {
   a.att.publish(lists(conv('x', 'prompt', 'Fix the build'), conv('y', 'idle')));
   a.att.refresh(); b.att.refresh();
   await settle();
-  eq([open(a), open(b), a.painted, b.painted], [[], ['"Fix the build" is waiting for you. [Open](open:x)'], ['x:prompt'], ['x:prompt']],
+  eq([open(a), open(b), a.painted, b.painted], [[], ['"Fix the build" is waiting for you. [Open](open:x)'], ['x:waiting'], ['x:waiting']],
     'a permission prompt in one window is shown by the window with the focus alone, and counted in both');
 
+  a.att.publish(lists(conv('x', 'working', 'Fix the build'), conv('y', 'working', 'Write the docs')));
+  a.att.refresh(); b.att.refresh();
   a.att.publish(lists(conv('x', 'unread', 'Fix the build'), conv('y', 'unread', 'Write the docs')));
+  a.att.refresh(); b.att.refresh();
+  clock += at.STABLE_MS;
   a.att.refresh(); b.att.refresh();
   await settle();
   eq(open(b), ['2 conversations need you (2 finished): "Fix the build", "Write the docs". [Show them](list)'],
@@ -60,15 +65,19 @@ module.exports = async ({ eq, tmp, root }) => {
   a.att.publish(lists(conv('x', 'prompt', 'Fix the build'), conv('y', 'unread', 'Write the docs')));
   a.att.refresh(); b.att.refresh();
   await settle();
-  eq([open(a).length, open(b).length, b.painted.sort()], [0, 0, ['x:prompt', 'y:unread']],
+  eq([open(a).length, open(b).length, b.painted.sort()], [0, 0, ['x:waiting', 'y:finished']],
     'with no window focused nothing is shown, and the status bar still counts');
 
   const c = make('c', { focused: true, looking: (it) => it.sessionId === 'z' });
   c.att.refresh();
   await settle();
   c.shown.length = 0;
+  a.att.publish(lists(conv('x', 'prompt'), conv('y', 'unread'), conv('z', 'working', 'Seen here')));
+  a.att.refresh(); c.att.refresh();
   a.att.publish(lists(conv('x', 'prompt'), conv('y', 'unread'), conv('z', 'unread', 'Seen here')));
   a.att.refresh(); c.att.refresh();
+  clock += at.STABLE_MS;
+  c.att.refresh();
   await settle();
   eq(open(c), [], 'a conversation the focused window shows in front is not announced there');
 
@@ -83,8 +92,12 @@ module.exports = async ({ eq, tmp, root }) => {
     'a window that closes takes its file with it, and what its next copy reports again is not announced again');
 
   settings.finished = false;
+  a2.att.publish(lists(conv('x', 'prompt'), conv('y', 'unread'), conv('z', 'unread'), conv('w', 'working', 'Quiet')));
+  a2.att.refresh(); c.att.refresh();
   a2.att.publish(lists(conv('x', 'prompt'), conv('y', 'unread'), conv('z', 'unread'), conv('w', 'unread', 'Quiet')));
   a2.att.refresh(); c.att.refresh();
+  clock += at.STABLE_MS;
+  c.att.refresh();
   await settle();
   eq(open(c), [], 'with finished turns turned off, a finished one is not announced');
   settings.finished = true;
@@ -120,7 +133,7 @@ module.exports = async ({ eq, tmp, root }) => {
     w.att = at.createAttention({ dir: wdir, windowId: `${name}-00000000`, now: () => clock,
       focused: () => w.focused, lookedAt: (it) => w.looking.includes(it.sessionId), settings: () => settings, warmupMs: 0, batchMs: 10,
       show: (text) => { const s = { text, open: true }; w.shown.push(s); return { update(x) { s.text = x; }, close() { s.open = false; } }; },
-      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.state}`).sort(); },
+      paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`).sort(); },
       links: { open: (it) => `open:${it.sessionId}`, list: () => 'list' } });
     return w;
   };
@@ -128,6 +141,8 @@ module.exports = async ({ eq, tmp, root }) => {
   solo.att.publish(lists(conv('solo', 'working', 'Solo')));
   solo.att.refresh();
   solo.att.publish(lists(conv('solo', 'unread', 'Solo')));
+  solo.att.refresh();
+  clock += at.STABLE_MS;
   solo.att.refresh();
   await settle();
   solo.att.refresh();
@@ -139,17 +154,17 @@ module.exports = async ({ eq, tmp, root }) => {
   p.att.refresh(); q.att.refresh();
   await settle();
   p.att.refresh(); q.att.refresh();
-  eq([open(p), p.painted, q.painted], [['"Other" is waiting for you. [Open](open:other)'], ['other:prompt'], ['other:prompt']],
+  eq([open(p), p.painted, q.painted], [['"Other" is waiting for you. [Open](open:other)'], ['other:waiting'], ['other:waiting']],
     'a conversation waiting in front of the user in the focused window is neither announced nor counted, there or in another window');
   p.looking = ['other'];
   p.att.refresh(); q.att.refresh();
   await settle();
-  eq([open(p), p.painted, q.painted], [[], ['mine:prompt'], ['mine:prompt']],
+  eq([open(p), p.painted, q.painted], [[], ['mine:waiting'], ['mine:waiting']],
     'bringing the other to the front closes its notification, and the one the user left is counted again without being announced');
   p.focused = false;
   p.att.refresh(); q.att.refresh();
   await settle();
-  eq([open(p), p.painted, q.painted], [[], ['mine:prompt', 'other:prompt'], ['mine:prompt', 'other:prompt']],
+  eq([open(p), p.painted, q.painted], [[], ['mine:waiting', 'other:waiting'], ['mine:waiting', 'other:waiting']],
     'once no window has the focus, both count again, and neither is announced');
   for (const w of [solo, p, q]) w.att.dispose();
 };

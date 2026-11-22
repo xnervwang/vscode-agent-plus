@@ -65,7 +65,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const r = rows();
     const status = control.state.status.find((i) => i.id === 'agentPlus.conversations');
     if (rc.accepted && rl.accepted && r.length === 2 && r[0].id === `conversations/codex/${T}` && r[0].iconPath.light
-      && fs.existsSync(r[0].iconPath.light.fsPath) && r[1].iconPath.id === 'circle-outline' && /\nCodex\n/.test(r[0].tooltip)
+      && fs.existsSync(r[0].iconPath.light.fsPath) && r[1].iconPath.id === 'blank' && /\nCodex\n/.test(r[0].tooltip)
       && status && status.shown && status.text.endsWith('1 to decide')) {
       ok('both sources\' conversations are drawn, the one with a logo carries it, and the status bar counts the question');
     } else bad(`rows ${JSON.stringify([r, status && status.text])}`);

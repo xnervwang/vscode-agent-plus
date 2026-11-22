@@ -19,6 +19,10 @@ const ACCEPTS = [1];
 const FEATURES = [];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
+/* What a conversation is doing; whether it has an unread reply is separate. A source that gives no activity has one
+   worked out from its state. */
+const ACTIVITIES = ['working', 'background', 'waiting', 'stopped'];
+const ACTIVITY_OF_STATE = { prompt: 'waiting', working: 'working', unread: 'stopped', idle: 'stopped' };
 const MAX_ID = 200;
 const MAX_CONVERSATIONS = 2000;
 
@@ -176,21 +180,31 @@ function timeZoneOf(source) {
   return typeof z === 'string' && z.length <= 64 && /^[A-Za-z0-9_+\-/]+$/.test(z) ? z : '';
 }
 
+/* Epoch milliseconds from a number or a date string; 0 for anything else. */
+function moment(v) {
+  const at = typeof v === 'string' ? Date.parse(v) : v;
+  return typeof at === 'number' && Number.isFinite(at) && at > 0 ? at : 0;
+}
+
+const activityOfState = (state) => ACTIVITY_OF_STATE[state] || 'stopped';
+
 function conversation(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const sessionId = get(raw, 'sessionId');
   if (!usableId(sessionId)) return null;
-  const title = get(raw, 'title'), cwd = get(raw, 'cwd'), state = get(raw, 'state'), running = get(raw, 'running');
-  const hasPlan = get(raw, 'hasPlan');
-  let at = get(raw, 'lastActiveAt');
-  if (typeof at === 'string') at = Date.parse(at);
+  const title = get(raw, 'title'), cwd = get(raw, 'cwd'), given = get(raw, 'state'), running = get(raw, 'running');
+  const hasPlan = get(raw, 'hasPlan'), activity = get(raw, 'activity'), unseen = get(raw, 'unseen');
+  const state = STATES.includes(given) ? given : 'idle';
   return {
     sessionId,
     title: typeof title === 'string' ? title.slice(0, 500) : '',
     cwd: typeof cwd === 'string' ? cwd : '',
-    state: STATES.includes(state) ? state : 'idle',
+    state,
+    activity: ACTIVITIES.includes(activity) ? activity : activityOfState(state),
+    unseen: typeof unseen === 'boolean' ? unseen : state === 'unread',
     running: running !== false,
-    lastActiveAt: typeof at === 'number' && Number.isFinite(at) && at > 0 ? at : 0,
+    lastActiveAt: moment(get(raw, 'lastActiveAt')),
+    lastUserAt: moment(get(raw, 'lastUserAt')),
     hasPlan: hasPlan === true,
   };
 }
@@ -365,7 +379,7 @@ class Focus {
 }
 
 module.exports = {
-  PROTOCOL, ACCEPTS, FEATURES, STATES, MAX_ID, MAX_CONVERSATIONS, REFUSED,
-  emitter, get, idOf, usableId, keyPart, verdict, refusal, supports, optional, call, listen, labelOf, extensionOf, logoOf,
+  PROTOCOL, ACCEPTS, FEATURES, STATES, ACTIVITIES, MAX_ID, MAX_CONVERSATIONS, REFUSED,
+  emitter, get, activityOfState, idOf, usableId, keyPart, verdict, refusal, supports, optional, call, listen, labelOf, extensionOf, logoOf,
   planFileOf, planDirOf, noticeOf, timeZoneOf, conversation, conversations, Registry, Focus,
 };

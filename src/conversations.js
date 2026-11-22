@@ -10,11 +10,15 @@
  *
  * A conversation's state (turn running, permission prompt, unread reply, idle) is its source's. Its plan adds the
  * `doing` rows and the questions on rows waiting on the user; any question marks the conversation as needing the user.
+ *
+ * The source also reports its activity (working, background, waiting, stopped), and a question put after the user's
+ * last message (`lastUserAt`) makes it waiting.
  */
 const fs = require('fs');
 const { OPEN_STATES, countUnknown } = require('./workplan');
 const { folderTest, planQuestions } = require('./folders');
 const { topRows } = require('./brief');
+const { ACTIVITIES, activityOfState } = require('./sources');
 
 /* Stopped conversations are listed only while their plan was written within this many days. */
 const CLOSED_DAYS = 7;
@@ -35,6 +39,18 @@ function openCount(nodes) {
   return (nodes || []).reduce((n, x) => n + (OPEN_STATES.includes(x.state) ? 1 : 0) + openCount(x.children), 0);
 }
 
+/* `questions` are the plan's, each with `since`, when it was asked. A question with no time is not taken to be new. */
+function activityOf(c, questions) {
+  const own = c.running === false ? 'stopped' : ACTIVITIES.includes(c.activity) ? c.activity : activityOfState(c.state);
+  const after = c.lastUserAt > 0 ? c.lastUserAt : 0;
+  return after && (questions || []).some((q) => q.since > after) ? 'waiting' : own;
+}
+
+/* A conversation as a source listed it, with the questions of `plan` taken into its activity. */
+function withPlan(c, plan) {
+  return Object.assign({}, c, { activity: activityOf(c, planQuestions(plan && plan.nodes)) });
+}
+
 /* A source that gives no plan path is believed about hasPlan. */
 function entry(c, plan, located) {
   const nodes = plan && plan.nodes;
@@ -45,6 +61,7 @@ function entry(c, plan, located) {
   const top = nodes && nodes.find((n) => OPEN_STATES.includes(n.state));
   return {
     sessionId: c.sessionId, cwd: c.cwd, running: c.running, state, questions,
+    activity: activityOf(c, questions), unseen: c.unseen === true,
     doing: doingRows(nodes), open: openCount(nodes), unknown: countUnknown(nodes),
     hasPlan: located || plan ? !!(plan && !plan.error) : c.hasPlan === true,
     title: c.title || (plan && plan.title) || (top && top.title) || c.sessionId,
@@ -84,4 +101,4 @@ function assemble({ lists, folders, planOf, now = Date.now(), modified = mtimeOf
   return { running, stopped, asks: running.reduce((n, c) => n + c.questions.length, 0), at: now };
 }
 
-module.exports = { assemble, entry, doingRows, openCount, RANK, CLOSED_DAYS };
+module.exports = { assemble, entry, activityOf, withPlan, doingRows, openCount, RANK, CLOSED_DAYS };

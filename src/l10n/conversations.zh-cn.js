@@ -8,6 +8,8 @@
 module.exports = {
   view: '对话',
   state: { prompt: '停在权限提示', needs: '要你定', working: '在跑', unread: '已回复未读', idle: '空闲' },
+  activity: { working: '在跑一回合', background: '这一回合结束了，只剩后台活在跑', waiting: '在等你', stopped: '停下了' },
+  unseen: '有你没看过的回复',
   questions: (n) => `${n} 个问题`,
   open: (n) => `${n} 项未完成`,
   noPlan: '没有工作计划',

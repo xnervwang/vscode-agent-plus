@@ -4,63 +4,92 @@
 
 'use strict';
 /*
- * Telling the user when a conversation in any VS Code window on this machine finishes a turn (its source reports
- * `unread`, a red dot) or stops for them (`prompt`, a blue dot).
+ * Telling the user when a conversation in any VS Code window on this machine starts to wait for them (a permission
+ * prompt, a choice, a question added to its plan since their last message), or stops with a reply they have not read.
  *
  * A source knows a permission prompt only in the window whose agent asked it, so each window writes what its sources
- * report in those two states to a file of its own in a folder every window reads, ATTENTION_DIR under sharedHome().
- * Their union is the set of conversations that need the user. A conversation that enters the union, or
- * moves from one of the two states to the other, is announced.
+ * report to a file of its own in a folder every window reads, ATTENTION_DIR under sharedHome(): each running
+ * conversation that has not stopped, and each stopped one with an unread reply, with its activity and whether it has
+ * one.
+ *
+ * A conversation is announced when it starts to wait, and when it stops with an unread reply after working or after
+ * its background work, once it has stayed that way for STABLE_MS: a turn followed at once by another, as a queued
+ * message makes it, is not announced. An unread reply turning up on a conversation that had already stopped is not
+ * announced.
  *
  * Only the window that has the focus shows a notification, so there is one on the screen however many windows are
- * open. Changes that come within BATCH_MS of each other are
- * shown as one. A notification is closed, from whichever window showed it, once none of its conversations is in that
- * state any more: the user has looked at it in some window, or it moved on. Every window counts the union in its
- * status bar.
+ * open. Changes that come within BATCH_MS of each other are shown as one. A notification is closed, from whichever
+ * window showed it, once each of its conversations has left the state it announced: the user has looked at it in
+ * some window, or it moved on.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
  * in any window.
+ *
+ * A window of an older version writes `state` alone, and only `prompt` and `unread`, read here as waiting and as
+ * stopped with an unread reply. Such a window never reports a turn running, so its unread reply is announced on
+ * turning up, after the stable period, as that version announced it.
  */
 const fs = require('fs');
 const path = require('path');
 const { writeAtomic, sharedHome } = require('./files');
+const { ACTIVITIES, STATES, activityOfState } = require('./sources');
 
 const ATTENTION_DIR = 'attention';
+/* Items gained `activity` and `unseen` within format 1, so that a window of an older version still reads `state`. */
 const FORMAT = 1;
 /* A window writes its file at least this often, and a file older than STALE_MS is a window that has gone. */
 const BEAT_MS = 20000;
 const STALE_MS = 60000;
 const BATCH_MS = 2000;
+const STABLE_MS = 5000;
 /* What a window reads in its first seconds was there before it started. */
 const WARMUP_MS = 10000;
 const REMEMBER_MS = 120000;
 const MAX_ITEMS = 200;
 const MAX_TITLE = 120;
-/* The setting and the wording for each state. */
-const KIND = { prompt: 'waiting', unread: 'finished' };
+/* When two windows report one conversation differently, the report that needs the user most wins. */
+const RANK = { waiting: 0, working: 1, background: 2, stopped: 3 };
 const WINDOW = /^[0-9a-z]+-[0-9a-f]{8}\.json$/;
 
 const keyOf = (sourceId, sessionId) => JSON.stringify([String(sourceId), String(sessionId)]);
 const clip = (s, n) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
-/* The running conversations of `lists` in one of the two states. `lists` is [{ sourceId, label, conversations }]. */
+/* 'waiting', 'finished' (stopped with an unread reply) or '': how a conversation needs the user, which is also the name
+   of the setting for it and of its wording. */
+const kindOf = (it) => (it.activity === 'waiting' ? 'waiting' : it.activity === 'stopped' && it.unseen ? 'finished' : '');
+
+/* The activity and unseen of a conversation or an item, worked out from `state` where it has none; `legacy` when it
+   had no activity of its own, as an older window's items have not. */
+function reading(c) {
+  const state = STATES.includes(c.state) ? c.state : '';
+  const own = ACTIVITIES.includes(c.activity);
+  return { activity: own ? c.activity : state ? activityOfState(state) : '', unseen: typeof c.unseen === 'boolean' ? c.unseen : state === 'unread',
+    legacy: !own };
+}
+
+/*
+ * The running conversations of `lists` that other windows need to hear about: all but those stopped with no reply
+ * unseen. `lists` is [{ sourceId, label, conversations }]. Past MAX_ITEMS the ones that need the user are kept.
+ */
 function itemsOf(lists) {
   const out = [];
   for (const { sourceId, label, conversations } of lists || []) {
     for (const c of conversations || []) {
-      if (!c || c.running === false || !KIND[c.state] || !c.sessionId) continue;
+      if (!c || c.running === false || !c.sessionId) continue;
+      const { activity, unseen } = reading(c);
+      if (!activity || (activity === 'stopped' && !unseen)) continue;
       out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
-        state: c.state, title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
-      if (out.length >= MAX_ITEMS) return out;
+        state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen,
+        title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
     }
   }
-  return out;
+  const need = (it) => { const k = kindOf(it); return k === 'waiting' ? 0 : k ? 1 : 2; };
+  return out.sort((a, b) => need(a) - need(b)).slice(0, MAX_ITEMS);
 }
 
 /*
- * Every live window's items, by key, each with `from`, the windows that reported it. A permission prompt outranks an
- * unread reply when two windows disagree. `live` is the set of windows whose file is fresh; `front` maps each of them to
- * the keys it shows in front while it has the focus.
+ * Every live window's items, by key, each with `from`, the windows that reported it, and `kind`. `live` is the set of
+ * windows whose file is fresh; `front` maps each of them to the keys it shows in front while it has the focus.
  */
 function readAll(dir, now) {
   const merged = new Map(), live = new Set(), front = new Map();
@@ -74,14 +103,23 @@ function readAll(dir, now) {
     live.add(n);
     front.set(n, new Set((Array.isArray(d.front) ? d.front.slice(0, MAX_ITEMS) : [])
       .filter((p) => Array.isArray(p) && typeof p[0] === 'string' && typeof p[1] === 'string').map((p) => keyOf(p[0], p[1]))));
-    for (const it of d.items.slice(0, MAX_ITEMS)) {
-      if (!it || !KIND[it.state] || typeof it.sourceId !== 'string' || typeof it.sessionId !== 'string') continue;
-      const k = keyOf(it.sourceId, it.sessionId);
+    for (const raw of d.items.slice(0, MAX_ITEMS)) {
+      if (!raw || typeof raw.sourceId !== 'string' || typeof raw.sessionId !== 'string') continue;
+      const { activity, unseen, legacy } = reading(raw);
+      if (!activity || (activity === 'stopped' && !unseen)) continue;
+      const k = keyOf(raw.sourceId, raw.sessionId);
+      const it = { key: k, from: new Set([n]), sourceId: raw.sourceId, sessionId: raw.sessionId, source: clip(raw.source, 40) || raw.sourceId,
+        title: clip(raw.title, MAX_TITLE) || raw.sessionId, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity, unseen, legacy };
       const had = merged.get(k);
-      if (!had || (had.state !== 'prompt' && it.state === 'prompt')) merged.set(k, Object.assign({ key: k, from: new Set(had ? had.from : []) }, it));
-      merged.get(k).from.add(n);
+      if (!had) { merged.set(k, it); continue; }
+      const win = RANK[activity] < RANK[had.activity] ? it : had;
+      win.from = new Set([...had.from, n]);
+      win.unseen = had.unseen || unseen;
+      win.legacy = had.legacy && legacy;
+      merged.set(k, win);
     }
   }
+  for (const it of merged.values()) it.kind = kindOf(it);
   return { merged, live, front };
 }
 
@@ -90,9 +128,9 @@ function message(items, { several, open, list }) {
   const name = (it) => `${several ? it.source + ': ' : ''}"${it.title}"`;
   if (items.length === 1) {
     const it = items[0];
-    return `${name(it)} ${it.state === 'prompt' ? 'is waiting for you' : 'finished'}. [Open](${open(it)})`;
+    return `${name(it)} ${it.kind === 'waiting' ? 'is waiting for you' : 'finished'}. [Open](${open(it)})`;
   }
-  const waiting = items.filter((it) => it.state === 'prompt').length;
+  const waiting = items.filter((it) => it.kind === 'waiting').length;
   const parts = [];
   if (waiting) parts.push(`${waiting} waiting for you`);
   if (items.length - waiting) parts.push(`${items.length - waiting} finished`);
@@ -106,7 +144,7 @@ function message(items, { several, open, list }) {
  */
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
   settings, canWrite = () => true, show, paint = () => {}, links, several = () => false, log = () => {}, batchMs = BATCH_MS,
-  warmupMs = WARMUP_MS }) {
+  warmupMs = WARMUP_MS, stableMs = STABLE_MS }) {
   const ownName = `${windowId}.json`;
   const own = path.join(dir, ownName);
   const startedAt = now();
@@ -117,7 +155,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   let looking = new Set();
   const pending = new Map();
   const shown = [];
-  /* key -> { state, at, from }: each conversation as last seen in the union. */
+  /* key -> { activity, kind, at, from, stoppedAt }: each conversation as last seen in the union. `stoppedAt` is when it
+     stopped with an unread reply after working, until it is announced. */
   const last = new Map();
 
   function write() {
@@ -147,7 +186,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     const s = settings();
     const items = [...pending.values()].filter((it) => {
       const cur = union && union.get(it.key);
-      return cur && cur.state === it.state && s[KIND[it.state]] !== false;
+      return cur && cur.kind === it.kind && s[it.kind] !== false;
     });
     pending.clear();
     if (!s.enabled || !items.length || !focused()) return;
@@ -156,7 +195,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     const text = message(fresh, { several: several(), open: links.open, list: links.list });
     let handle = null;
     try { handle = show(text); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
-    if (handle) shown.push({ items: new Map(fresh.map((it) => [it.key, it.state])), handle });
+    if (handle) shown.push({ items: new Map(fresh.map((it) => [it.key, it.kind])), handle });
   }
 
   /* Reads every window's file and acts on what changed since the last read. Returns the union less the conversations
@@ -165,17 +204,24 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     if (closed) return [];
     const t = now();
     const { merged: next, live, front } = readAll(dir, t);
-    const mine = focused() ? [...next.values()].filter(inFront).map((it) => it.key).sort() : [];
+    const mine = focused() ? [...next.values()].filter((it) => it.kind && inFront(it)).map((it) => it.key).sort() : [];
     if (mine.join('\n') !== ownFront.join('\n')) { ownFront = mine; write(); }
     looking = new Set(mine);
     for (const [n, keys] of front) if (n !== ownName) for (const k of keys) looking.add(k);
     const warm = t - startedAt >= warmupMs;
+    const queue = (k, it) => { pending.set(k, it); if (!timer) timer = setTimeout(flush, batchMs); };
     for (const [k, it] of next) {
       const was = last.get(k);
-      last.set(k, { state: it.state, at: t, from: it.from });
-      if (!warm || (was && was.state === it.state && t - was.at < REMEMBER_MS)) continue;
-      pending.set(k, it);
-      if (!timer) timer = setTimeout(flush, batchMs);
+      const rec = { activity: it.activity, kind: it.kind, at: t, from: it.from, stoppedAt: 0 };
+      if (it.kind === 'waiting') {
+        if (warm && !(was && was.kind === 'waiting' && t - was.at < REMEMBER_MS)) queue(k, it);
+      } else if (it.kind === 'finished') {
+        const worked = !!was && (was.activity === 'working' || was.activity === 'background');
+        if (was && was.stoppedAt) rec.stoppedAt = was.stoppedAt;
+        else if (warm && (!was || was.kind !== 'finished') && (worked || it.legacy)) rec.stoppedAt = t;
+        if (rec.stoppedAt && t - rec.stoppedAt >= stableMs) { rec.stoppedAt = 0; queue(k, it); }
+      }
+      last.set(k, rec);
     }
     /* A conversation that left the union moved on if a window that reported it is still writing; if all its windows
        went, it is remembered for a while. */
@@ -186,12 +232,12 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     union = next;
     for (let i = shown.length - 1; i >= 0; i--) {
       const n = shown[i];
-      for (const [k, state] of [...n.items]) { const cur = next.get(k); if (!cur || cur.state !== state || looking.has(k)) n.items.delete(k); }
+      for (const [k, kind] of [...n.items]) { const cur = next.get(k); if (!cur || cur.kind !== kind || looking.has(k)) n.items.delete(k); }
       if (!n.items.size) { try { n.handle.close(); } catch (_) { /* gone */ } shown.splice(i, 1); continue; }
       const left = [...n.items.keys()].map((k) => next.get(k));
       try { n.handle.update(message(left, { several: several(), open: links.open, list: links.list })); } catch (_) { /* gone */ }
     }
-    const all = [...next.values()].filter((it) => !looking.has(it.key));
+    const all = [...next.values()].filter((it) => it.kind && !looking.has(it.key));
     try { paint(settings().enabled ? all : []); } catch (_) { /* the next refresh */ }
     return all;
   }
@@ -214,7 +260,9 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     if (written) { try { fs.unlinkSync(own); } catch (_) { /* gone */ } }
   }
 
-  return { publish, refresh, dismiss, dispose, items: () => (union ? [...union.values()].filter((it) => !looking.has(it.key)) : []), _shown: shown };
+  return { publish, refresh, dismiss, dispose, items: () => (union ? [...union.values()].filter((it) => it.kind && !looking.has(it.key)) : []),
+    _shown: shown };
 }
 
-module.exports = { createAttention, itemsOf, readAll, message, keyOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, WARMUP_MS, REMEMBER_MS };
+module.exports = { createAttention, itemsOf, readAll, message, keyOf, kindOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, STABLE_MS,
+  WARMUP_MS, REMEMBER_MS };
