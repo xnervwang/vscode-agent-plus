@@ -43,7 +43,7 @@ module.exports = async ({ ok, bad, eq, root }) => {
   const c = src.conversation({ sessionId: 't1', title: 'T', cwd: '/w', state: 'thinking', running: undefined,
     lastActiveAt: '2026-11-07T12:00:00Z', hasPlan: 'yes', colour: 'red', id: 'x', kind: 'y' });
   const needs = src.conversation({ sessionId: 't2', state: 'needs', running: false, lastActiveAt: -5 });
-  eq(c && Object.keys(c).sort(), ['activity', 'cwd', 'hasPlan', 'lastActiveAt', 'lastUserAt', 'running', 'sessionId', 'state', 'title', 'unseen'],
+  eq(c && Object.keys(c).sort(), ['activity', 'cwd', 'hasPlan', 'lastActiveAt', 'lastUserAt', 'running', 'sessionId', 'state', 'steward', 'title', 'unseen'],
     'conversation() keeps only the protocol\'s fields');
   eq([c.state, c.running, c.lastActiveAt, c.hasPlan, needs.state, needs.running, needs.lastActiveAt],
     ['idle', true, Date.UTC(2026, 10, 7, 12), false, 'idle', false, 0], 'and reads unknown states as idle, running by default');

@@ -14,6 +14,8 @@
 /* The protocol major this build implements, the source majors it accepts, and the optional host capabilities it offers.
    package.json repeats them under "agentPlus" so they can be read without running this code; the tests hold the two
    together. The extension's marketplace major is PROTOCOL. */
+const titleMarks = require('./title-marks');
+
 const PROTOCOL = 1;
 const ACCEPTS = [1];
 const FEATURES = [];
@@ -195,9 +197,11 @@ function conversation(raw) {
   const title = get(raw, 'title'), cwd = get(raw, 'cwd'), given = get(raw, 'state'), running = get(raw, 'running');
   const hasPlan = get(raw, 'hasPlan'), activity = get(raw, 'activity'), unseen = get(raw, 'unseen');
   const state = STATES.includes(given) ? given : 'idle';
+  const steward = get(raw, 'steward') === true;
   return {
     sessionId,
-    title: typeof title === 'string' ? title.slice(0, 500) : '',
+    title: titleMarks.withMarks(typeof title === 'string' ? title.slice(0, 500) : '', { steward }),
+    steward,
     cwd: typeof cwd === 'string' ? cwd : '',
     state,
     activity: ACTIVITIES.includes(activity) ? activity : activityOfState(state),

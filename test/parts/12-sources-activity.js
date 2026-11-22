@@ -31,4 +31,8 @@ module.exports = async ({ eq, root }) => {
   eq([c({ state: 'prompt', activity: 'stopped' }).state, c({ state: 'unread', unseen: false }).state], ['prompt', 'unread'],
     'state is read as before, whatever the new fields say');
   eq(src.ACTIVITIES, ['working', 'background', 'waiting', 'stopped'], 'the activities are exported for the other modules');
+  eq([c({ title: '多对话管家 \u{1F6CE}\uFE0F', steward: true }), c({ title: '\u{1F451} \u{1F451} Steward \u2709\uFE0F', steward: true }),
+    c({ title: 'Plain \u2709\uFE0E' }), c({ title: '\u{1F451} Not one' }), c({ title: 'Old \u{1F6CE}', steward: 'yes' })].map((x) => [x.title, x.steward]),
+  [['\u{1F451} 多对话管家', true], ['\u{1F451} Steward', true], ['Plain', false], ['Not one', false], ['Old', false]],
+  'a title loses every crown, envelope and old bell in it, and a steward\'s gets one crown first; steward is true only when given as true');
 };

@@ -99,7 +99,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Field | Meaning |
 | --- | --- |
 | `sessionId` | Unique within its source; a conversation is `(source id, sessionId)` |
-| `title` | Title |
+| `title` | Title. The core draws it through `withMarks()` in `src/title-marks.js`: the crown, the envelope and the old bell are taken out wherever they stand, and a steward gets one crown first |
+| `steward` | Optional boolean: the conversation is a steward, whose title is drawn with the crown |
 | `cwd` | Working folder; compared with the workspace folders through real paths |
 | `state` | `'prompt'`, `'working'`, `'unread'` or `'idle'`; anything else reads as `'idle'` |
 | `activity` | Optional. `'working'` (a turn is running), `'background'` (the turn is over and only background work runs), `'waiting'` (waiting for the user: a permission prompt, a choice) or `'stopped'` (stopped, no background work). Without it, or with any other value, it follows `state`: `prompt` is waiting, `working` is working, `unread` and `idle` are stopped |
@@ -118,10 +119,10 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Item | Rule |
 | --- | --- |
 | What counts | A running conversation that is `waiting`, or `stopped` and `unseen` |
-| Shared | Each window writes its sources' running conversations, except those stopped and not `unseen`, to `attention/<window>.json` under the shared folder, each with `state`, `activity` and `unseen`. A file is rewritten at least every 20 seconds; one older than a minute is a window that has gone. While a window has the focus, its file also lists, as `front`, those of them it shows in front. Every window reads all of them. An item without `activity`, from an older version, is read from `state`: `prompt` is waiting, `unread` is stopped and `unseen` |
+| Shared | Each window writes its sources' running conversations, except those stopped and not `unseen`, to `attention/<window>.json` under the shared folder, each with `state`, `activity`, `unseen` and `steward`. A file is rewritten at least every 20 seconds; one older than a minute is a window that has gone. While a window has the focus, its file also lists, as `front`, those of them it shows in front. Every window reads all of them. An item without `activity`, from an older version, is read from `state`: `prompt` is waiting, `unread` is stopped and `unseen` |
 | When | A conversation that becomes `waiting`. A conversation that goes from `working` or `background` to `stopped` and `unseen`, once it has stayed that way for 5 seconds. Not one that only becomes `unseen`, nor one that starts working again within those 5 seconds. An older window's `unread` is announced when it appears, after the 5 seconds. What a window reads in its first 10 seconds, and a conversation whose window went away and came back the same within two minutes, is not new |
 | Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it; none while no window has the focus. Not a conversation that window shows in front (`isFocused`). Every window's status bar entry counts the waiting conversations and the stopped `unseen` ones, less the conversations the window with the focus shows in front |
-| Closing | A conversation leaves a notification once it is no longer waiting or stopped and `unseen` as the notification said, once the window with the focus shows it in front, or when it is opened from the notification; the notification closes when none is left |
+| Buttons | A plain message with Open and Dismiss, or Show them and Dismiss when it names several. Open goes as in Opening below; Show them lists the conversations that need the user. The core cannot close the message: VS Code moves it into its notification list after a few seconds |
 | Opening | `open()` when the source has it; else `reveal` in this window, then a request in `open/` under the shared folder that the window whose tab shows the conversation takes, reveals it, and brings itself to the front with VS Code's command line. A request nobody takes in 5 seconds is withdrawn |
 | Settings | `agentPlus.notifications.enabled`, `.finished`, `.waiting` |
 

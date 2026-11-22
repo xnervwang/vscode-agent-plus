@@ -31,6 +31,7 @@ const fs = require('fs');
 const path = require('path');
 const { writeAtomic, sharedHome } = require('./files');
 const { ACTIVITIES, STATES, activityOfState } = require('./sources');
+const titleMarks = require('./title-marks');
 
 const ATTENTION_DIR = 'attention';
 /* Items gained `activity` and `unseen` within format 1, so that a window of an older version still reads `state`. */
@@ -77,7 +78,7 @@ function itemsOf(lists) {
       const { activity, unseen } = reading(c);
       if (!activity || (activity === 'stopped' && !unseen)) continue;
       out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
-        state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen,
+        state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true,
         title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
     }
   }
@@ -106,8 +107,12 @@ function readAll(dir, now) {
       const { activity, unseen, legacy } = reading(raw);
       if (!activity || (activity === 'stopped' && !unseen)) continue;
       const k = keyOf(raw.sourceId, raw.sessionId);
+      const title = clip(raw.title, MAX_TITLE);
+      /* An older window writes no `steward`, so a title it wrote with the crown first is taken as a steward's. */
+      const steward = typeof raw.steward === 'boolean' ? raw.steward : title.startsWith(titleMarks.CROWN);
       const it = { key: k, from: new Set([n]), sourceId: raw.sourceId, sessionId: raw.sessionId, source: clip(raw.source, 40) || raw.sourceId,
-        title: clip(raw.title, MAX_TITLE) || raw.sessionId, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity, unseen, legacy };
+        title: titleMarks.withMarks(title, { steward }) || raw.sessionId, steward, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity,
+        unseen, legacy };
       const had = merged.get(k);
       if (!had) { merged.set(k, it); continue; }
       const win = RANK[activity] < RANK[had.activity] ? it : had;

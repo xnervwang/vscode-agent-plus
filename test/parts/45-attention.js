@@ -196,4 +196,18 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [['2 conversations need you (2 waiting for you): "One", "Two".', ['Show them', 'Dismiss']]], 'several get Show them and Dismiss');
     two.close();
   }
+
+  /* Titles in the shared files: a steward's gets its crown again, marks left in a title are taken out. */
+  const tdir = path.join(tmp('titles'), 'attention');
+  fs.mkdirSync(tdir, { recursive: true });
+  const item = (id, title, extra) => Object.assign({ sourceId: 'claude-code', source: 'Claude Code', sessionId: id, state: 'prompt',
+    activity: 'waiting', unseen: false, title, cwd: '/w' }, extra);
+  fs.writeFileSync(path.join(tdir, 'n1-00000000.json'), JSON.stringify({ format: 1, at: clock, front: [], items: [
+    item('s', 'Steward \u{1F6CE}\uFE0F', { steward: true }), item('o', '\u{1F451} Old steward'), item('p', 'Plain \u2709\uFE0F', { steward: false })] }));
+  eq([...at.readAll(tdir, clock).merged.values()].map((it) => [it.sessionId, it.title]),
+    [['s', '\u{1F451} Steward'], ['o', '\u{1F451} Old steward'], ['p', 'Plain']],
+    'a title read from a window\'s file is drawn again: a steward\'s with one crown first, and an older window\'s title with a crown first counts as a steward\'s');
+  eq(at.itemsOf([{ sourceId: 'claude-code', label: 'Claude Code', conversations: [require(path.join(root, 'src', 'sources.js'))
+    .conversation({ sessionId: 'm', title: 'Manager \u{1F6CE}', state: 'prompt', steward: true })] }]).map((it) => [it.title, it.steward]),
+  [['\u{1F451} Manager', true]], 'and a window writes the drawn title with steward beside it');
 };
