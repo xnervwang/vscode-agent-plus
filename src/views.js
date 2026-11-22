@@ -174,8 +174,7 @@ function create(host, opts = {}) {
       + (items.length > 10 ? `\nand ${items.length - 10} more` : '');
     attentionEntry.show();
   };
-  /* A plain message, as the extension API passes a progress notification one button only. An extension cannot close a
-     plain message, so once it leaves the screen it stays in VS Code's notification list. */
+  /* A plain message, since a progress notification can have only one button. */
   const notify = (text, items) => {
     const one = items.length === 1 ? items[0] : null;
     const go = one ? 'Open' : 'Show them';
