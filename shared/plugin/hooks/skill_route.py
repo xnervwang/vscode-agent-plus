@@ -657,15 +657,17 @@ What Claude Code 2.1 offers the model, read from its bundled code and its docume
 - Folders holding <folder>/SKILL.md, one level down: the managed folder's .claude/skills
   (CLAUDE_CODE_DISABLE_POLICY_SKILLS turns it off), $CLAUDE_CONFIG_DIR/skills, and .claude/skills in the working
   directory and in each folder above it up to the repository's root, never in the home folder itself (outside a
-  repository, up to the home folder). In a linked worktree the main checkout's .claude/skills is read as well. Folders
-  added with --add-dir, and .claude/skills folders found deeper while working, cannot be seen from a hook and are left
-  out.
+  repository, up to the home folder). The home folder is compared as HOME spells it with the working directory as the
+  process sees it, links unresolved, so when HOME is a link the walk goes on to the root, as Claude Code's does. In a
+  linked worktree the main checkout's .claude/skills is read as well. Folders added with --add-dir, and .claude/skills
+  folders found deeper while working, cannot be seen from a hook and are left out.
 - The skills of each plugin enabledPlugins turns on ("<plugin>@<marketplace>": true; managed settings over local, local
   over the project's, the project's over the user's) that has an install record applying here in
   plugins/installed_plugins.json: one of user or managed scope, or one made for this project. A plugin that a
   marketplace registered from a local folder lists by a relative path is read in place from that folder; any other from
   its record's installPath. Its skills are in skills/ and in the folders plugin.json's `skills` names.
-- A skill is called by its frontmatter `name`, else by its folder's name; a plugin's skill as "<plugin>:<that name>".
+- A skill is called by its folder's name, a plugin's skill as "<plugin>:<folder>": that is how Claude Code 2.1.330 lists
+  them even when the frontmatter sets another `name`, though its documentation says the `name` is used.
 
 Left out, as Claude Code does not let the model call them: disable-model-invocation: true; `paths` set (such a skill is
 offered only once a matching file has been touched); skillOverrides at user-invocable-only or off (the managed settings'
@@ -676,7 +678,6 @@ When two have the same name, or are the same file, the first found is kept, in t
 OVERRIDE_RANK = {"on": 0, "name-only": 1, "user-invocable-only": 2, "off": 3}
 HIDDEN = ("user-invocable-only", "off")
 RESERVED_USER_FOLDERS = ("synced",)
-CLAUDE_NAME = re.compile(r"^[A-Za-z0-9][\w.-]*$")
 
 
 def managed_root():
@@ -737,9 +738,9 @@ def claude_project_dirs(cwd):
     """The project skill folders Claude Code reads for a conversation started in `cwd`, nearest first."""
     if not isinstance(cwd, str) or not cwd or not os.path.isabs(cwd):
         return []
-    home, root = os.path.realpath(os.path.expanduser("~")), git_root(cwd)
+    home, root = os.path.expanduser("~"), git_root(cwd)
     d, out = os.path.normpath(cwd), []
-    while not same_path(os.path.realpath(d), home):
+    while not same_path(d, home):
         out.append(os.path.join(d, ".claude", "skills"))
         if root and same_path(d, root):
             break
@@ -947,10 +948,10 @@ def claude_scan(home, cwd):
         if plugin and not given and not when:
             return
         desc = one_line(" ".join(x for x in (given or body_line(text), when) if x), CLAUDE_DESC_CHARS)
-        own = one_line(fm.get("name"), 256)
-        short = own if own and CLAUDE_NAME.match(own) else folder
+        short = folder
         name = "%s:%s" % (plugin, short) if plugin else short
-        if not plugin and override_of(conf, [short, folder]) in HIDDEN:
+        own = one_line(fm.get("name"), 256)
+        if not plugin and override_of(conf, [folder] + ([own] if own and own != folder else [])) in HIDDEN:
             return
         where = os.path.realpath(md)
         if name in names or where in real:

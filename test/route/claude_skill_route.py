@@ -155,9 +155,31 @@ check(by.get("plain", {}).get("desc") == "Body of plain" and "toolbox:bare" not 
       "a personal skill with no description is described by its body's first line; a plugin's is left out")
 
 skill(os.path.join(w["claude"], "skills", "folder-name"), "shown-name", "A skill whose name differs from its folder.")
+skill(os.path.join(w["claude"], "plugins", "cache", "mk", "toolbox", "1.0", "skills", "box-folder"), "box-shown",
+      "A plugin skill whose name differs from its folder.")
 again = {s["name"]: s for s in route.claude_scan(w["claude"], w["cwd"])["skills"]}
-check("shown-name" in again and again["shown-name"]["folder"] == "folder-name",
-      "a skill is called by its frontmatter name, its folder kept beside it")
+check("folder-name" in again and "shown-name" not in again and "toolbox:box-folder" in again and "toolbox:box-shown" not in again,
+      "a skill is called by its folder's name, a plugin's as <plugin>:<folder>, whatever its frontmatter name says")
+old = json.load(open(os.path.join(w["claude"], "settings.json")))
+write(os.path.join(w["claude"], "settings.json"), json.dumps(dict(old, skillOverrides=dict(old["skillOverrides"], **{"shown-name": "off"}))))
+check("folder-name" not in {s["name"] for s in route.claude_scan(w["claude"], w["cwd"])["skills"]},
+      "skillOverrides by a skill's frontmatter name leaves it out too")
+
+link = os.path.join(w["root"], "home-link")
+os.symlink(w["home"], link)
+os.environ["HOME"] = link
+walked = route.claude_project_dirs(w["cwd"])
+os.environ["HOME"] = w["home"]
+check(route.claude_project_dirs(os.path.join(w["home"], "loose")) == [os.path.join(w["home"], "loose", ".claude", "skills")]
+      and os.path.join(w["home"], ".claude", "skills") not in route.claude_project_dirs(os.path.join(w["home"], "work", "x"))
+      and walked == route.claude_project_dirs(w["cwd"]),
+      "outside a repository the walk stops below the home folder; inside one, at the repository's root")
+os.makedirs(os.path.join(w["home"], "loose2"))
+os.environ["HOME"] = link
+past = route.claude_project_dirs(os.path.join(w["home"], "loose2"))
+os.environ["HOME"] = w["home"]
+check(os.path.join(w["home"], ".claude", "skills") in past and past[-1] == os.path.join(os.path.abspath(os.sep), ".claude", "skills"),
+      "with HOME a link to the home folder the walk does not know it and goes on to the root, as Claude Code's does")
 
 """The block and the turn."""
 block = route.render([by["toolbox:hammer"], by["alpha"]])
