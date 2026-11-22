@@ -452,7 +452,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(sameList(others.sort(), ['Background work, reply not read', LONG, 'Running, with a reply not read yet'].sort()), 'and leaves the others\' envelopes', others);
     await look('envelope-read', { expect: 'The same eight rows. Stopped with a reply not read now has no envelope and no dot, and reads idle; Running, with a reply not read yet, Background work, reply not read and the long-titled row still end with an envelope.' },
       pane('agentPlus.conversations'));
-    await patch('done-new', { unseen: true });
+    await patch('done-new', { unseen: true, state: 'unread' });
     await openNotes();
   });
 
@@ -753,7 +753,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await conversations([...QCONVS(), conv('briefed', 'Keeps a brief', 'working', 'working')]);
     await openConv('asks-new');
     await showPlanView();
-    await sideBarWidth(480);
+    await sideBarWidth(640);
     const a = await until(async () => { const r = await treeRows('agentPlus.workPlan'); return r && sameList(r.map((x) => x.title), ['3. Update the changelog', '2. Rewrite the parser', '1. Pick the release branch']) && r; }, 15000, 300);
     check(!!a, 'with a conversation\'s tab in front, the Work plan view shows its plan, the newest row first, each numbered by its place in the file', await planRows());
     const head = await page.evaluate(() => { const h = document.querySelector('#workbench\\.view\\.extension\\.agentPlus .pane-header'); return h ? h.getAttribute('aria-label') : ''; });
