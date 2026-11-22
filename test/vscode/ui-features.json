@@ -33,7 +33,7 @@
   { "id": "work-plan-detail", "what": "A click on a plan row opens a dialog with its description, state, question and place in the plan",
     "steps": ["plan-row-detail"], "looks": ["plan-row-detail"], "settings": [], "commands": ["agentPlus.showWorkPlanDetail"], "views": [] },
   { "id": "work-plan-file", "what": "Open the Work Plan File in the view's title bar and on a row's right-click menu, and Refresh, which reads every plan afresh",
-    "steps": ["plan-file", "plan-refresh"], "looks": ["plan-file"], "settings": [], "commands": ["agentPlus.openWorkPlanFile", "agentPlus.refreshWorkPlan"], "views": [] },
+    "steps": ["plan-file", "plan-refresh"], "looks": ["plan-file", "plan-file-menu"], "settings": [], "commands": ["agentPlus.openWorkPlanFile", "agentPlus.refreshWorkPlan"], "views": [] },
   { "id": "plan-notice", "what": "A row above the plan put there by the conversation's agent, such as its work plan plugin not being installed, that runs the agent's command when clicked",
     "steps": ["plan-notice"], "looks": ["plan-notice"], "settings": [], "commands": [], "views": [] },
   { "id": "unknown-rows", "what": "A row in a state this version does not know, a plan in a newer format, and a plan that does not parse, each marked as such",
@@ -59,6 +59,9 @@
     "steps": ["view-settings"], "looks": ["view-settings-off"], "settings": ["agentPlus.workPlanView", "agentPlus.conversationsView"], "commands": [], "views": [] },
   { "id": "show-status", "what": "Show Status writing the version, the extensions using Agent Plus, the token mode and every registered agent to the Agent Plus output",
     "steps": ["show-status"], "looks": ["show-status"], "settings": [], "commands": ["agentPlus.showStatus"], "views": [] },
+  { "id": "open-in-other-window", "what": "Open on a notification, or a row, for a conversation another VS Code window shows: that window takes the request, shows the conversation and comes to the front",
+    "steps": [], "looks": [], "settings": [], "commands": [], "views": [],
+    "notInWindow": "Each test window has a user data folder of its own, and the window that takes the request comes to the front through VS Code's command line, which knows only the default one: it would start a second VS Code on that profile instead of bringing the test window forward. test/parts/46-window-open.js covers the request, the reveal and which command line is run." },
   { "id": "restricted-mode", "what": "In Restricted Mode the views still draw, and the Answer view says it sends no answer",
     "steps": ["restricted"], "looks": ["restricted"], "settings": [], "commands": [], "views": [] }
 ]

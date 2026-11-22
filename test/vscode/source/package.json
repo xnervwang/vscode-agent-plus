@@ -1,0 +1,50 @@
+{
+  "name": "codex-plus",
+  "displayName": "Agent Plus window test source",
+  "description": "A stand-in for Codex Plus in test/vscode/ui.js: it registers a conversation source whose conversations the test changes at will.",
+  "publisher": "xnervwang",
+  "version": "0.0.1",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "main": "extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionDependencies": [
+    "xnervwang.agent-plus"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "The window test also runs in Restricted Mode."
+    }
+  },
+  "agentPlus": {
+    "protocol": 1
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentPlusTest.installPlugin",
+        "title": "Agent Plus Test: Install the Work Plan Plugin"
+      }
+    ],
+    "configuration": {
+      "title": "Codex Plus (window test stand-in)",
+      "properties": {
+        "codexPlus.workPlan": { "type": "boolean", "default": true, "markdownDescription": "Work plan. Used only while `#agentPlus.tokenMode#` is Custom." },
+        "codexPlus.tellCodexYourTimeZone": { "type": "boolean", "default": true, "markdownDescription": "Time-zone note. Used only while `#agentPlus.tokenMode#` is Custom." },
+        "codexPlus.conversationBrief": { "type": "boolean", "default": true, "markdownDescription": "Conversation brief. Used only while `#agentPlus.tokenMode#` is Custom." },
+        "codexPlus.skillRouting": { "type": "boolean", "default": true, "markdownDescription": "Skill suggestions. Used only while `#agentPlus.tokenMode#` is Custom." },
+        "codexPlus.wakeUps": { "type": "boolean", "default": true, "markdownDescription": "Wake-ups. Used only while `#agentPlus.tokenMode#` is Custom." },
+        "codexPlus.detachedEndNotices": { "type": "boolean", "default": true, "markdownDescription": "Detached-command notices. Used only while `#agentPlus.tokenMode#` is Custom." }
+      }
+    }
+  }
+}

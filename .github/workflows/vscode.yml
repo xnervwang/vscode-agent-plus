@@ -1,0 +1,75 @@
+# BSD 3-Clause License
+# Copyright (c) 2026, Xnerv Wang
+# All rights reserved.
+
+# Agent Plus draws its views, notifications and status bar entries in a VS Code window, and how the window draws them
+# differs between Linux, macOS and Windows; check.yml runs on Linux only, with no window. This installs the newest
+# VS Code on each of the three and runs the extension in real windows (test/vscode/run.js) with a stand-in agent that
+# registers conversations through its interface: it drives the windows and checks what they show.
+#
+# The results folder of each platform is kept as an artifact whether the run passed or not: a screenshot of each step,
+# one of a step that failed, and VS Code's logs.
+name: vscode
+
+on:
+  push:
+    # Try a change to this workflow on a ci/ branch first.
+    branches: [main, 'ci/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Build the .vsix
+        shell: bash
+        run: |
+          vsix=$(bash build/pack.sh | tail -n 1)
+          mv "$vsix" core.vsix
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsix
+          path: core.vsix
+
+  run:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Some checks compare source text, so no CRLF on Windows.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
+      - name: Install the test runner
+        shell: bash
+        run: npm install --no-save --no-package-lock @vscode/test-electron@3 playwright-core@1
+      - name: Run in VS Code
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a -s '-screen 0 1600x1000x24' node test/vscode/run.js core.vsix --out vscode-results
+      - name: Run in VS Code
+        if: runner.os != 'Linux'
+        shell: bash
+        run: node test/vscode/run.js core.vsix --out vscode-results
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: vscode-${{ runner.os }}
+          path: vscode-results
+          if-no-files-found: warn

@@ -1,0 +1,10 @@
+{
+  "name": "agent-plus-ui-helper",
+  "publisher": "agent-plus-tests",
+  "version": "0.0.0",
+  "private": true,
+  "engines": { "vscode": "^1.96.0" },
+  "activationEvents": ["*"],
+  "capabilities": { "untrustedWorkspaces": { "supported": true } },
+  "main": "./extension.js"
+}
