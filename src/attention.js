@@ -81,7 +81,7 @@ function itemsOf(lists) {
       if (!activity || (activity === 'stopped' && !unseen)) continue;
       out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
         state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true,
-        lastActiveAt: Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0,
+        lastActiveAt: Number.isFinite(c.lastReplyAt) && c.lastReplyAt > 0 ? c.lastReplyAt : Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0,
         title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
     }
   }
@@ -164,7 +164,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
      stopped with an unread reply after working, until it is announced. */
   const last = new Map();
   /* key -> the newest lastActiveAt this window has read for that conversation. A turn that starts and ends between two
-     reads is never seen working, and a newer lastActiveAt is what shows it ran. */
+     reads is never seen working, and a newer lastActiveAt is what shows it ran. A source's lastReplyAt, when it gives one,
+     is used instead, since a rename or a hook's note also makes a conversation active. */
   const activeSeen = new Map();
 
   function write() {

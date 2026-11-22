@@ -208,6 +208,7 @@ function conversation(raw) {
     unseen: typeof unseen === 'boolean' ? unseen : state === 'unread',
     running: running !== false,
     lastActiveAt: moment(get(raw, 'lastActiveAt')),
+    lastReplyAt: moment(get(raw, 'lastReplyAt')),
     lastUserAt: moment(get(raw, 'lastUserAt')),
     hasPlan: hasPlan === true,
   };

@@ -105,6 +105,14 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock += 6000;
   await short.step(conv('p', 'working'), before, quick(second));
   eq(short.texts().slice(1), ['"Quick one" finished.'], 'a second short turn, with a newer lastActiveAt, is announced');
+  /* A rename makes the conversation active without a reply; with lastReplyAt the source says which. */
+  await short.step(conv('p', 'working'), before);
+  clock += 1000;
+  const renamed = Object.assign(quick(clock), { lastReplyAt: second });
+  await short.step(conv('p', 'working'), before, renamed);
+  clock += 6000;
+  await short.step(conv('p', 'working'), before, Object.assign(quick(clock - 6000), { lastReplyAt: second }));
+  eq(short.shown.length, 2, 'renamed and marked unread, a conversation whose lastReplyAt has not moved is not announced');
   short.att.dispose();
 
   settings.finished = false;
