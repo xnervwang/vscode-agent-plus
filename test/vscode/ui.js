@@ -167,7 +167,11 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const maximized = await page.evaluate(() => { const e = document.getElementById('workbench.parts.editor'); return !e || e.offsetHeight < 40; });
     if (small && !maximized) { await exec('workbench.action.toggleMaximizedPanel'); await sleep(500); }
   };
-  const clickRow = async (view, title, opts) => { await clearToasts(); return rowLoc(view, title).click(opts); };
+  const clickRow = async (view, title, opts) => {
+    if (view === 'agentPlus.conversations') await showConversations();
+    await clearToasts();
+    return rowLoc(view, title).click(opts);
+  };
   const showPlanView = async () => { await exec('workbench.view.extension.agentPlus'); await sleep(500); };
   /* Drags the side bar's edge until the side bar is about `want` CSS pixels wide, as far as the window allows. */
   const sideBarWidth = async (want) => {
@@ -440,6 +444,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     needs('conversation-dots');
     await openConv('done-new');
     await frontIs('Stopped with a reply not read');
+    /* Opening an editor gives a maximized panel its height back. */
+    await showConversations();
     const gone = await until(async () => { const r = await convRow('Stopped with a reply not read'); return r && !r.badge && r; }, 15000, 300);
     check(!!gone, 'opening a conversation with a reply not read takes the envelope off its row', await convRow('Stopped with a reply not read'));
     const others = (await convRows() || []).filter((r) => r.badge).map((r) => r.title);
@@ -690,6 +696,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     needs('brief-page');
     await openNotes();
     const row = rowLoc('agentPlus.conversations', 'Keeps a brief');
+    await showConversations();
     await clearToasts();
     await row.hover();
     await viaUi('agentPlus.goToConversation', () => row.locator('.action-label[aria-label="Agent Plus: Go to the Conversation"]').click({ timeout: 10000 }));
@@ -1235,6 +1242,13 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await open('restricted', [SOURCE], { trust: true });
   await step('restricted', async () => {
     check(await call('return vscode.workspace.isTrusted;') === false, 'the window opens the folder in Restricted Mode');
+    /* VS Code asks for trust when something of its own needs it, such as a terminal it puts back in the panel; that is
+       not this extension's, and the folder stays untrusted. */
+    const trust = page.locator('.monaco-dialog-box').filter({ hasText: 'Do you trust the authors' }).first();
+    if (await trust.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false)) {
+      note(`VS Code asked to trust the folder on its own (${((await dialog()) || {}).text || ''}); cancelled`.replace(/\s+/g, ' '));
+      await trust.locator('.dialog-buttons .monaco-button').filter({ hasText: /^Cancel$/ }).first().click();
+    }
     const r = await src('return src.result;');
     check(!!r && r.accepted, 'the stand-in source registers there too', r);
     await conversations(QCONVS());

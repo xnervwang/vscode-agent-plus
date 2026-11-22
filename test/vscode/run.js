@@ -126,6 +126,8 @@ async function testStage() {
     'window.confirmBeforeClose': 'never',
     /* No editor shows the folders above a file, which are this machine's temporary folders. */
     'breadcrumbs.enabled': false,
+    /* A terminal put back in the panel of an untrusted window makes VS Code ask for trust. */
+    'terminal.integrated.hideOnStartup': 'always',
     'workbench.secondarySideBar.defaultVisibility': 'hidden',
   }, LOOK ? ui.LOOK_SETTINGS : {}), null, 2));
 
