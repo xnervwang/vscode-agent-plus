@@ -104,11 +104,18 @@ function create(host, opts = {}) {
      * does not drop out of the list and come back. A file that still does not parse after that says so.
      */
     if (plan && plan.error && had && had.plan && !had.plan.error && st && Date.now() - st.mtimeMs < WRITING_MS) {
+      rereadAfter(WRITING_MS - (Date.now() - st.mtimeMs) + 50);
       return { file, plan: had.plan };
     }
     if (st) plans.set(file, { session, mtimeMs: st.mtimeMs, size: st.size, also, plan, pass });
     else plans.delete(file);
     return { file, plan };
+  };
+  /* A file kept at its last parse while fresh is read again once it is not, as nothing else may change it again. */
+  let rereadTimer = 0;
+  const rereadAfter = (ms) => {
+    if (rereadTimer || closing) return;
+    rereadTimer = setTimeout(() => { rereadTimer = 0; refreshPlans(); }, Math.max(0, ms));
   };
   const letGo = () => { for (const [file, had] of plans) if (had.pass < pass - 1) plans.delete(file); };
   const planMtime = (file) => { const had = plans.get(file); if (had) return had.mtimeMs; const st = statOf(file); return st ? st.mtimeMs : 0; };
@@ -763,6 +770,7 @@ function create(host, opts = {}) {
       if (plansTimer) clearTimeout(plansTimer);
       if (convTimer) clearTimeout(convTimer);
       if (drawTimer) clearTimeout(drawTimer);
+      if (rereadTimer) clearTimeout(rereadTimer);
       if (answersSoon) clearTimeout(answersSoon);
       dropWatch();
       if (courier) courier.dispose();

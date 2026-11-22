@@ -258,12 +258,15 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       fs.writeFileSync(file, '{"nodes": [');
       fire('change'); await wait(40);
       const halfWritten = titleNow();
+      await wait(2300);
+      const leftThere = titleNow();
       const longAgo = Date.now() / 1000 - 5;
       fs.utimesSync(file, longAgo, longAgo);
       fire('change'); await wait(40);
       eq([backOnThree, unchanged, afterRefresh, afterWrite, halfWritten, titleNow()],
         ['first', [0, 'first'], [1, 'first'], [2, 'third'], 'third', 'error'],
         'a plan file that has not changed is not read again, the refresh command reads it anyway, and one being written keeps the last plan that parsed until it is no longer fresh');
+      eq(leftThere, 'error', 'a plan file left half-written is shown as one that could not be read once it is no longer fresh, with no further change to it');
     } finally { fs.readFileSync = reallyRead; }
     b.close();
   }
