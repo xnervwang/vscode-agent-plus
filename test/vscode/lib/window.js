@@ -6,8 +6,7 @@
 /*
  * One VS Code window of the downloaded build, started with the profile that run.js created. It is driven two ways:
  * Playwright over the DevTools protocol for the page itself, and helper/ for the vscode API (see helper/extension.js).
- * `dev` lists the development extensions to load besides the helper. From test/vscode/lib/window.js of Codex Plus,
- * which loads its helper only and names its control folder CODEX_PLUS_UI_CONTROL.
+ * `dev` lists the development extensions to load besides the helper.
  *
  * The DevTools port is 0, so two runs on one machine do not collide; Chromium writes the port it took to
  * DevToolsActivePort in the user data folder.
@@ -20,8 +19,8 @@ const HELPER = path.join(__dirname, '..', 'helper');
 const SECRETS = ['--use-inmemory-secretstorage', ...(process.platform === 'linux' ? ['--password-store=basic'] : [])];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* The flags @vscode/test-electron's runTests passes, for the same reasons, and secrets kept in memory, since HOME is a
-   temporary folder with no keychain or keyring. Workspace trust is left on only for a window that asks for it. */
+/* The flags @vscode/test-electron passes, plus secrets kept in memory: HOME is a temporary folder with no keychain or
+   keyring. Workspace trust is left on only for a window that asks for it. */
 const FLAGS = ['--no-sandbox', '--disable-gpu-sandbox', '--disable-updates', '--skip-welcome', '--skip-release-notes', '--no-cached-data', ...SECRETS];
 
 async function until(test, ms, every = 250) {
@@ -34,8 +33,7 @@ async function until(test, ms, every = 250) {
   }
 }
 
-/* `exe` is VS Code's executable, `profile` { exts, user, folder, control } from run.js, and `env` the environment the
-   window gets. `trust` leaves workspace trust to the window's settings; `args` go on the command line as well. */
+/* `profile` is { exts, user, folder, control } from run.js. `trust` leaves workspace trust to the window's settings. */
 async function open({ exe, profile, env, playwright, log, dev = [], trust = false, args: more = [] }) {
   fs.mkdirSync(profile.control, { recursive: true });
   for (const n of fs.readdirSync(profile.control)) if (/^host-\d+\.json$/.test(n)) fs.rmSync(path.join(profile.control, n), { force: true });
@@ -65,13 +63,12 @@ async function open({ exe, profile, env, playwright, log, dev = [], trust = fals
   let next = 0;
   const hosts = () => fs.readdirSync(profile.control).filter((n) => /^host-\d+\.json$/.test(n))
     .map((n) => JSON.parse(fs.readFileSync(path.join(profile.control, n), 'utf8')));
-  /* The newest extension host's pid, once there is one newer than `after` (ms since the epoch). */
   const hostUp = async (after = 0) => {
     const h = await until(() => hosts().filter((x) => x.at > after).sort((a, b) => b.at - a.at)[0], 120000);
     if (!h) throw new Error('the helper extension did not start in the extension host in 120 s');
     return h;
   };
-  /* Runs `body` in the extension host, as an async function of (vscode, require, arg), and returns what it returns. */
+  /* Runs `body` in the extension host as an async function of (vscode, require, arg). */
   const call = async (body, arg, ms = 60000) => {
     const id = `r${process.pid}-${++next}`;
     const tmp = path.join(profile.control, `.${id}.tmp`);
@@ -85,8 +82,8 @@ async function open({ exe, profile, env, playwright, log, dev = [], trust = fals
     if (!r.ok) throw new Error(`in the extension host: ${r.error}`);
     return r.value;
   };
-  /* Quits through VS Code first, which writes the profile's state as a person closing it would; a signal only if that
-     does not end it. */
+  /* Quits through VS Code first, so the profile's state is saved as on a normal exit; a signal only if that does not
+     end it. */
   const close = async () => {
     try { await call('setTimeout(() => vscode.commands.executeCommand("workbench.action.quit"), 100); return true;', undefined, 10000); } catch (_) { /* gone */ }
     await until(() => exited !== null, 20000);

@@ -269,17 +269,17 @@
         "agentPlus.notifications.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show a notification in the focused VS Code window when a conversation in any window on this machine waits for you or stops with a reply you have not read, and count those conversations in the status bar. No notification is shown while no VS Code window has the focus."
+          "markdownDescription": "Show a notification in the focused VS Code window when a conversation in any window on this machine waits for you or stops with a reply you have not read, and count those conversations in the status bar. No notification is shown while no VS Code window has the focus. The two settings below turn off only notifications, not the count."
         },
         "agentPlus.notifications.finished": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Notify about conversations that stopped with a reply you have not read (an envelope). The status bar counts them either way. Needs `#agentPlus.notifications.enabled#`."
+          "markdownDescription": "Notify about conversations that stopped with a reply you have not read (an envelope). Needs `#agentPlus.notifications.enabled#`."
         },
         "agentPlus.notifications.waiting": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Notify about conversations waiting for your permission or answer (a red dot). The status bar counts them either way. Needs `#agentPlus.notifications.enabled#`."
+          "markdownDescription": "Notify about conversations waiting for your permission or answer (a red dot). Needs `#agentPlus.notifications.enabled#`."
         },
         "agentPlus.webviewRequestLimit": {
           "type": "string",

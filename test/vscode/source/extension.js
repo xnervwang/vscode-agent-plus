@@ -5,10 +5,10 @@
 'use strict';
 /*
  * The conversation source of the window test (test/vscode/ui.js), loaded as a development extension. It goes by Codex
- * Plus's extension id, so that Agent Plus's token mode, which reads the feature settings of the extensions it knows,
- * has a dependent to read them for; it declares those six settings itself.
+ * Plus's extension id and declares Codex Plus's six feature settings, because Agent Plus's token mode reads those
+ * settings only from extensions it knows.
  *
- * Each conversation is a webview tab of its own, titled with the conversation's title. Opening a conversation's tab
+ * Each conversation is a webview tab of its own. Opening a conversation's tab
  * marks its reply as seen, as Claude Code and Codex do. ui.js changes the conversations through the object activate()
  * returns, from the extension host, by way of the helper extension's control folder.
  *
@@ -117,7 +117,7 @@ function activate(context) {
     result: { accepted: result.accepted, code: result.code, reason: result.reason },
     plans,
     state,
-    /* Replaces every conversation; each is { sessionId, title, state, activity, unseen, running, lastUserAt, lastActiveAt }. */
+    /* Replaces the whole list, with rows shaped as in the protocol's Conversations table. */
     set(conversations) {
       list.clear();
       for (const c of conversations) list.set(c.sessionId, Object.assign({}, c));

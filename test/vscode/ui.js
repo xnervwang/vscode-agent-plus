@@ -15,9 +15,9 @@
  *                the view settings and Show Status
  *   restricted   the same two in Restricted Mode
  *
- * A step changes a setting through setting(), runs a command through exec(), and names the command a click in the
- * window runs with viaUi(); that is what the feature list check reads. Every look() saves a screenshot to <out>/shots;
- * with --look each also writes a close view and an entry of <out>/look.json for a reader (shared/test/vscode/LOOK.md).
+ * The feature list check reads three helpers in each step: setting() and exec(), and viaUi(), which names the command
+ * a click in the window runs. Every look() saves a screenshot to <out>/shots;
+ * with --look each also writes a close view and an entry of <out>/look.json.
  *
  * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match; a step that relies on an earlier
  * one says so when that one was left out.
@@ -70,7 +70,6 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     }
   };
   const needs = (name) => { if (!done.has(name)) throw new Error(`this step needs the step ${name}, which did not run to its end`); };
-  /* A click in the window, named after the command it runs, for the feature list check. */
   const viaUi = async (command, act) => { console.log(`  ui    ${command}`); return act(); };
 
   /* ── opening and closing windows ── */
@@ -91,7 +90,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
 
   /* ── the vscode API, through the helper ── */
   const exec = (command, ...a) => call(`await vscode.commands.executeCommand(${JSON.stringify(command)}, ...arg); return true;`, a);
-  /* Started and not waited for: the command opens a list or a dialog that is answered through the window. */
+  /* Not awaited: the command opens a list or dialog that the step then answers in the window. */
   const start = (command, ...a) => call(`vscode.commands.executeCommand(${JSON.stringify(command)}, ...arg); return true;`, a);
   /* Sets `key` (section.name) in the user settings; undefined removes it. */
   const setting = (key, value) => call(`const i = arg[0].indexOf('.');
@@ -119,8 +118,6 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     try { const m = /maxActiveHostResourceResponseBodies=(\d+),/.exec(fs.readFileSync(path.join(appRoot, SW), 'utf8')); return m ? Number(m[1]) : null; } catch (_) { return null; }
   };
 
-  /* ── the page ── */
-  /* A theme colour as the page resolves it, such as charts.green. */
   const themeColor = (name) => page.evaluate((v) => {
     const e = document.createElement('div');
     e.style.color = `var(--vscode-${v.replace(/\./g, '-')})`;
@@ -129,9 +126,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     e.remove();
     return c;
   }, name);
-  /* Each view's pane is told by its header's aria-label, which begins with the view's name. */
+  /* A view's pane is found by its header's aria-label, which begins with the view's name. */
   const HEADERS = { 'agentPlus.conversations': 'Conversations Section', 'agentPlus.answer': 'Answer Section', 'agentPlus.workPlan': 'Work plan' };
-  /* The rows of the tree view `view`, as drawn. */
   const treeRows = (view) => page.evaluate((h) => {
     const pane = [...document.querySelectorAll('.pane')].find((p) => { const x = p.querySelector(':scope > .pane-header'); return x && (x.getAttribute('aria-label') || '').startsWith(h); });
     if (!pane || !pane.offsetParent) return null;
@@ -196,14 +192,12 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     return m && m.offsetParent ? m.innerText.trim() : '';
   }, HEADERS[view]);
 
-  /* The status bar entries this extension shows, by the name it creates them with: attention, conversations, tokenMode. */
   const entry = (name) => page.evaluate((id) => {
     const e = document.getElementById(`xnervwang.agent-plus.agentPlus.${id}`);
     return e && e.offsetParent ? { text: e.innerText.trim(), label: e.getAttribute('aria-label') || '', warning: e.classList.contains('warning-kind') } : null;
   }, name);
   const entryLoc = (name) => page.locator(`[id="xnervwang.agent-plus.agentPlus.${name}"]`);
   const bell = async () => { const e = await entry('attention'); return e ? Number(e.text) || 0 : 0; };
-  /* The text of the hover shown over `loc`, VS Code's own hover box. */
   const anyHover = () => page.evaluate(() => !![...document.querySelectorAll('.monaco-hover, .workbench-hover')].find((e) => e.offsetParent && e.innerText.trim()));
   const hoverText = async (loc) => {
     await page.mouse.move(5, 5);
@@ -223,7 +217,6 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     text: ((e.querySelector('.notification-list-item-message') || e).innerText || '').trim(),
     buttons: [...e.querySelectorAll('.notification-list-item-buttons-container .monaco-button')].map((b) => b.innerText.trim()) })));
   const toastWith = (text, ms = 15000) => until(async () => (await toasts()).find((t) => t.text.includes(text)) || null, ms, 250);
-  /* Whether no notification containing `text` shows for `ms`. */
   const noToast = async (text, ms) => {
     const end = Date.now() + ms;
     while (Date.now() < end) { if ((await toasts()).some((t) => t.text.includes(text))) return false; await sleep(250); }
@@ -232,11 +225,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   const toastLoc = (text) => page.locator('.notification-toast').filter({ hasText: text }).first();
   const press = (text, button) => toastLoc(text).locator('.notification-list-item-buttons-container .monaco-button')
     .filter({ hasText: new RegExp(`^${escapeRe(button)}$`) }).first().click({ timeout: 10000 });
-  /* A notification stays on screen while the pointer is over it and covers the bottom right of the window, the status
-     bar's right end and the Answer view's buttons among it, so they are cleared before a click there. */
+  /* A notification stays on screen while the pointer is over it, over the status bar's right end and the Answer view's
+     buttons, so notifications are cleared before a click there. */
   const clearToasts = async () => { await exec('notifications.clearAll'); await sleep(300); };
 
-  /* The quick pick on screen: the text of each row. */
   const pickRows = () => until(async () => {
     const rows = await page.evaluate(() => {
       const w = document.querySelector('.quick-input-widget');
@@ -281,7 +273,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   /*
    * A picture of the step's state. `target` is a locator or a box in CSS pixels for the close view, or null for the whole
    * window. Outside --look it saves the whole window only. The pointer is moved off and the notifications cleared first,
-   * unless spec.pointer (a hover is the subject) or spec.toasts (a notification is) says otherwise.
+   * unless spec.pointer or spec.toasts says the picture is of a hover or a notification.
    */
   const look = async (name, spec, target = null) => {
     if (!spec.pointer) await page.mouse.move(5, 5);
@@ -313,7 +305,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     fs.writeFileSync(path.join(out, 'look.json'), JSON.stringify(entries, null, 2));
   };
 
-  /* ═══ the window with nothing that uses Agent Plus ═══ */
+  /* ═══ alone: nothing uses Agent Plus ═══ */
   await open('alone', []);
   await step('alone', async () => {
     const notice = await toastWith(ALONE, 30000);
@@ -331,7 +323,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   });
   await shut();
 
-  /* ═══ the window with the stand-in source ═══ */
+  /* ═══ main: the stand-in source ═══ */
   await open('main', [SOURCE]);
   appRoot = await call('return vscode.env.appRoot;');
 
@@ -407,7 +399,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   const LOOK_OF = { working: ['codicon-circle-filled', 'charts.green'], background: ['codicon-circle', 'charts.green'], waiting: ['codicon-circle-filled', 'charts.red'],
     stopped: ['codicon-blank', ''] };
   const WORDS = { working: 'Running a turn', background: 'Turn over, only background work running', waiting: 'Waiting for you', stopped: 'Stopped' };
-  /* Each row of DOTS against its icon, its colour and its envelope; `glyph` is the envelope the theme should draw. */
+  /* Checks each row of DOTS: icon, colour and envelope. `glyph` is the envelope the theme should draw. */
   const dotsWrong = async (glyph) => {
     const rows = await convRows() || [];
     const colors = { 'charts.green': await themeColor('charts.green'), 'charts.red': await themeColor('charts.red') };
@@ -530,7 +522,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       'and the row goes once the list comes back without one');
   });
 
-  /* When the question plans were last written, which the ages a step reads are counted from. */
+  /* When the question plans were written; a step's "asked 1m ago" is counted from it. */
   let qAt = Date.now();
   const QPLANS = () => {
     qAt = Date.now();
@@ -576,7 +568,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       pane('agentPlus.conversations'));
   });
 
-  /* The Answer view's page, once it shows a question of the conversation titled `want.title`, or with `want.brief` its brief. */
+  /* The Answer view's page once it shows the conversation titled `want.title`: a question, or its brief when `want.brief`. */
   const answerFrame = (want) => until(async () => {
     for (const f of page.frames()) {
       try {
@@ -838,7 +830,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await step('plan-refresh', async () => {
     needs('plan-follows-tab');
     const file = path.join(profile.plans, 'asks-new.json');
-    /* A whole second, so the modification time read back is exactly the one written. */
+    /* Whole seconds, since the file system may keep no finer modification time. */
     const stamp = Math.floor(Date.now() / 1000) - 5;
     fs.utimesSync(file, stamp, stamp);
     await openConv('asks-new');
@@ -1176,7 +1168,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       check(!!settings && settings.query === `@id:${CODEX_SWITCHES.join(',')}`,
         'and opens the Settings editor on the six feature settings of the extension that uses Agent Plus', settings || await page.evaluate(() => !!document.querySelector('.settings-editor')));
       await look('token-mode-custom', { expect: 'The Settings editor in front, its search box holding @id: followed by six codexPlus setting ids, 6 Settings Found, and below it six settings of Codex Plus, each a ticked checkbox: Conversation Brief, Detached End Notices, Skill Routing, Tell Codex Your Time Zone, Wake Ups and Work Plan.' });
-      /* VS Code draws the Settings editor over the whole window, so the status bar takes no hover until it is closed. */
+      /* The Settings editor covers the whole window, and hovering the status bar does nothing until it closes. */
       await page.keyboard.press('Escape');
       await exec('workbench.action.closeActiveEditor');
       await openNotes();
@@ -1237,7 +1229,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   });
   await shut();
 
-  /* ═══ the same window in Restricted Mode ═══ */
+  /* ═══ restricted: the same in Restricted Mode ═══ */
   writeSettings({ 'security.workspace.trust.enabled': true, 'security.workspace.trust.startupPrompt': 'never' });
   QPLANS();
   await open('restricted', [SOURCE], { trust: true });

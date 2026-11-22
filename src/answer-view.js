@@ -74,8 +74,8 @@ class AnswerView {
 
   resolveWebviewView(view) {
     this.view = view;
-    /* The page first, then the options: setting the options loads the page there is, and before the html that is an
-       empty one, which VS Code reports as a webview without a content security policy. */
+    /* html before options: setting options reloads the current page, which before any html is an empty one without a
+       content security policy, and VS Code reports that. */
     view.webview.html = this.html();
     view.webview.options = { enableScripts: true };
     this.shownBrief = '';

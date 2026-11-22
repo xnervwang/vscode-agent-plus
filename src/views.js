@@ -111,7 +111,7 @@ function create(host, opts = {}) {
     else plans.delete(file);
     return { file, plan };
   };
-  /* A file kept at its last parse while fresh is read again once it is not, as nothing else may change it again. */
+  /* A half-written file shows its last good parse for a moment; no file event may follow, so it is read again then. */
   let rereadTimer = 0;
   const rereadAfter = (ms) => {
     if (rereadTimer || closing) return;

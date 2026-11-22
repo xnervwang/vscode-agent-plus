@@ -13,15 +13,14 @@
  *
  * HOME (USERPROFILE on Windows), VS Code's user data and extensions folders, the shared folder of every window
  * (~/.agent-work-plan) and the stand-in source's plans all point into a new folder under RUNNER_TEMP or the system's
- * temporary folder. It still refuses to run outside CI unless --local is given, as Codex Plus's runner does. A run
+ * temporary folder. It still refuses to run outside CI unless --local is given. A run
  * changes the request limit in its VS Code's own service-worker.js and puts it back, so two runs at once must not share
  * the one --vscode names.
  *
  * After the download the window stage runs as a child of this script, with a proxy that does not exist for every
  * program it starts: nothing here needs the network.
  *
- * With --look every step also writes a close view and the whole window at twice the pixel density, and look.json, for
- * a reader to judge by eye (shared/test/vscode/LOOK.md, copied beside them).
+ * With --look every step also saves a close view and the whole window at twice the pixel density, listed in look.json.
  *
  * Needs @vscode/test-electron and playwright-core, which the workflow installs; on Linux a display (xvfb-run).
  */
@@ -36,9 +35,9 @@ const flag = (name) => { const i = args.indexOf(name); if (i < 0) return ''; con
 const has = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
 const NO_PROXY_TO = 'http://127.0.0.1:9';
 
-/* The environment for VS Code and everything it starts. It drops the variables a VS Code that runs this script sets
-   (ELECTRON_RUN_AS_NODE would start VS Code as plain Node, and VSCODE_IPC_HOOK_CLI would send an install to that other
-   VS Code) and LD_LIBRARY_PATH (VS Code brings its own libraries), and puts HOME in the temporary root. */
+/* The environment for VS Code and everything it starts, with HOME in the temporary root. When this script runs inside
+   VS Code, ELECTRON_RUN_AS_NODE would start the test VS Code as plain Node and VSCODE_IPC_HOOK_CLI would send its
+   installs to the outer one, so both go, and so does LD_LIBRARY_PATH: VS Code brings its own libraries. */
 function cleanEnv(root, extra = {}) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (/^(VSCODE_|ELECTRON_|AGENT_WORK_PLAN_)/.test(k) || k === 'LD_LIBRARY_PATH') delete env[k];
@@ -89,7 +88,7 @@ async function fetchStage() {
   const child = cp.spawnSync(process.execPath, [__filename, '--stage', 'test', '--root', root, '--exe', exe, '--out', out, ...(LOOK ? ['--look'] : [])],
     { stdio: 'inherit', env: process.env });
   process.exitCode = child.status === 0 ? 0 : 1;
-  /* On a machine of someone's own the root is removed once the results are somewhere else; a CI runner is thrown away. */
+  /* On a developer's machine the root is removed once the results are copied out; a CI runner is thrown away. */
   if (!out.startsWith(root + path.sep) && process.env.CI !== 'true' && !process.env.AGENT_PLUS_UI_KEEP) fs.rmSync(root, { recursive: true, force: true });
 }
 
@@ -123,10 +122,9 @@ async function testStage() {
        click their buttons. VS Code's default is the system dialog on every platform. */
     'window.dialogStyle': 'custom',
     'window.newWindowDimensions': 'maximized',
-    /* Context menus drawn in the page, where Playwright can read them; macOS draws the system's by default. */
     'window.menuStyle': 'custom',
     'window.confirmBeforeClose': 'never',
-    /* No editor shows the folders above a file, which are this machine's temporary folders. */
+    /* Breadcrumbs would put this machine's temporary folders in the screenshots. */
     'breadcrumbs.enabled': false,
     /* A terminal put back in the panel of an untrusted window makes VS Code ask for trust. */
     'terminal.integrated.hideOnStartup': 'always',
@@ -145,7 +143,7 @@ async function testStage() {
   process.exitCode = failed ? 1 : 0;
 }
 
-/* VS Code's logs of every window this run opened, for the artifact; this extension's own log printed too. */
+/* Copies the logs of every window this run opened into the results, and prints Agent Plus's own log. */
 function keepLogs(user, to) {
   const from = path.join(user, 'logs');
   if (!fs.existsSync(from)) return;
@@ -164,7 +162,7 @@ const LOCAL = has('--local');
 const LOOK = has('--look');
 (async () => {
   if (STAGE === 'test') return testStage();
-  /* Every home is a temporary one, but on someone's own machine the runner still asks to be told it is meant to run. */
+  /* Every home is a temporary one, but on a developer's own machine it takes --local to start. */
   if (process.env.CI !== 'true' && !LOCAL) throw new Error('runs only where CI=true, or with --local: it starts VS Code and installs extensions');
   return fetchStage();
 })().catch((e) => { console.error(e && e.stack || e); process.exitCode = 1; });

@@ -2,13 +2,12 @@
 # Copyright (c) 2026, Xnerv Wang
 # All rights reserved.
 
-# Agent Plus draws its views, notifications and status bar entries in a VS Code window, and how the window draws them
-# differs between Linux, macOS and Windows; check.yml runs on Linux only, with no window. This installs the newest
-# VS Code on each of the three and runs the extension in real windows (test/vscode/run.js) with a stand-in agent that
-# registers conversations through its interface: it drives the windows and checks what they show.
+# VS Code draws Agent Plus's views, notifications and status bar entries differently on Linux, macOS and Windows,
+# and check.yml runs on Linux only, with no window. This installs the newest VS Code on each of the three and runs
+# test/vscode/run.js there, with a stand-in agent in place of Codex Plus or Claude Code Plus.
 #
-# The results folder of each platform is kept as an artifact whether the run passed or not: a screenshot of each step,
-# one of a step that failed, and VS Code's logs.
+# Each platform's results folder is kept as an artifact, passed or not: a screenshot of each step, of any step that
+# failed, and VS Code's logs.
 name: vscode
 
 on:
