@@ -200,4 +200,29 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       [true, false, path.join(fs.realpathSync(real), 'ws', 'deleted', 'deeper')],
       'a folder is placed by its real path, a deleted one through the nearest folder that still exists');
   }
+
+  {
+    const { publisher, withdraw, others, shownElsewhere, STALE_MS } = mod('window-entries.js');
+    const plan = tmp('windows');
+    const A = '019a6a10-0000-7000-8000-0000000000a1', B = '019a6a10-0000-7000-8000-0000000000b2';
+    let shows = [A];
+    const t0 = Date.now();
+    const write = publisher(plan, () => ({ name: 'ws one', folders: ['/w'], sessions: shows }), { pid: 4242 });
+    eq([write(t0), write(t0 + 1000)], [true, false], 'a window writes its entry once, and not again while nothing changed');
+    shows = [A, B];
+    eq(write(t0 + 2000), true, 'what it shows changing writes the entry again');
+    eq(write(t0 + 2000 + STALE_MS / 2), true, 'and so does half the stale time passing with nothing changed');
+    const alive = (pid) => pid === 4242;
+    const seen = shownElsewhere(plan, { self: 1, now: t0 + 2000 + STALE_MS / 2, alive });
+    eq([...seen.entries()], [[A, ['ws one']], [B, ['ws one']]], 'another window reads the conversations it shows, by its name');
+    eq(shownElsewhere(plan, { self: 4242, now: t0 + 2000, alive }).size, 0, 'a window does not count its own entry');
+    eq(shownElsewhere(plan, { self: 1, now: t0 + 2000 + STALE_MS / 2 + STALE_MS, alive }).size, 0, 'an entry older than the stale time counts for nothing');
+    eq(shownElsewhere(plan, { self: 1, now: t0 + 2000, alive: () => false }).size, 0, 'nor does one whose process is gone');
+    fs.writeFileSync(path.join(plan, 'windows', '77.json'), '{ half');
+    fs.writeFileSync(path.join(plan, 'windows', 'notes.json'), '{}');
+    eq(others(plan, { self: 1, now: t0 + 2000, alive: () => true }).map((w) => w.pid), [4242],
+      'a half-written entry and a file not named by a pid are skipped');
+    withdraw(plan, 4242);
+    eq(others(plan, { self: 1, now: t0 + 2000, alive: () => true }).length, 0, 'a window withdrawing its entry takes it away');
+  }
 };
