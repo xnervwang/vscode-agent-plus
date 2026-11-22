@@ -25,7 +25,7 @@ const MODES = Object.freeze([
   { id: 'interface', label: 'Interface features', short: 'Interface', note: 'no tokens',
     detail: 'Adds nothing to the agent\'s context, and unloads the work plan plugin.' },
   { id: 'essential', label: 'Essential features', short: 'Essential', note: '',
-    detail: 'Adds the work plan and the time-zone note, nothing else.' },
+    detail: 'Adds the work plan and time-zone note, plus notes for reply images or a steward.' },
   { id: 'all', label: 'All features', short: 'All', note: 'default',
     detail: 'Adds every feature, including the brief, wake-ups and detached-command notices.' },
   { id: CUSTOM, label: 'Custom', short: 'Custom', note: '',
@@ -91,7 +91,7 @@ function effective(vscode, key) {
   const by = onIn(modeNow(vscode), s.feature);
   if (by !== null) return by;
   const v = read(vscode, key, s.default);
-  return v === undefined ? s.default : !!v;
+  return v == null ? s.default : !!v;
 }
 
 /* In Interface features the work plan plugin is taken out of the agent, not only silenced. */

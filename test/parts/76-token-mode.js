@@ -72,6 +72,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const { vscode, control } = settings({ 'agentPlus.tokenMode': 'custom', ...custom });
     eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), [false, true, true, false, true, true], 'custom: each feature follows its own setting, one not set being on');
     eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false, true], 'custom: Claude Code Plus\'s too');
+    const nulls = settings({ 'agentPlus.tokenMode': 'custom', 'codexPlus.workPlan': null, 'claudeCodePlus.conversationBrief': null }).vscode;
+    eq([tm.effective(nulls, 'codexPlus.workPlan'), tm.effective(nulls, 'claudeCodePlus.conversationBrief')], [true, true],
+      'custom: a setting stored as null, which only a hand edit or another extension writes, is read as its default');
     for (const mode of ['interface', 'essential', 'all', 'custom']) control.state.config['agentPlus.tokenMode'] = mode;
     eq([CODEX_KEYS.map((k) => tm.effective(vscode, k)), Object.fromEntries(Object.keys(custom).map((k) => [k, control.state.config[k]]))],
       [[false, true, true, false, true, true], custom], 'switching to the other modes and back to Custom finds every setting as it was');
@@ -281,7 +284,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const picked = await a.control.state.handlers['agentPlus.chooseTokenMode']();
     eq(shown && shown.items, [
       { label: 'Interface features', description: 'no tokens', detail: 'Adds nothing to the agent\'s context, and unloads the work plan plugin.' },
-      { label: 'Essential features', description: '$(check) current', detail: 'Adds the work plan and the time-zone note, nothing else.' },
+      { label: 'Essential features', description: '$(check) current', detail: 'Adds the work plan and time-zone note, plus notes for reply images or a steward.' },
       { label: 'All features', description: 'default', detail: 'Adds every feature, including the brief, wake-ups and detached-command notices.' },
       { label: 'Custom', description: '', detail: 'Each feature follows its own setting; all are on until you turn one off.' },
     ], 'the list has the four modes, the one in effect ticked in its description, each with a short mark and a line saying what it adds');
