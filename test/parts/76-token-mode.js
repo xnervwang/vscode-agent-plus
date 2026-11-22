@@ -128,12 +128,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
 
   {
     const home = tmp('shared-first');
-    const a = host({ home, answers: [[choice.ASK_TEXT, 'Essential features']] });
+    const a = host({ home, answers: [[choice.ASK_TEXT, choice.CHOOSE]] });
+    a.control.state.onQuickPick = (qp) => qp.accept(qp.items.find((i) => i.mode === 'essential'));
     eq(a.memento.get(choice.START_KEY), 'new', 'a first install is recorded as one at once, before anything else writes to globalState');
     await wait(20);
     const asked = a.control.state.said.filter((s) => s.message === choice.ASK_TEXT);
-    eq(asked.map((s) => s.buttons), [['Interface features', 'Essential features', 'All features', 'Custom', 'Learn More']],
-      'a first install asks for a mode once, with a button for each and one for the README');
+    eq(asked.map((s) => s.buttons), [[choice.CHOOSE, 'Learn More']],
+      'a first install asks for a mode once, with one button for the list of modes, since five would be cut short, and one for the README');
     eq([a.control.state.configWrites, a.memento.get(choice.START_KEY)], [[['agentPlus.tokenMode', 'essential']], 'asked'],
       'the mode picked is written to the user settings, and the notice is not owed any more');
     a.close();
@@ -147,7 +148,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await wait(20);
     eq([a.control.state.external, a.control.state.configWrites], [[choice.README_TOKENS], []], 'Learn More opens the README\'s token section and changes nothing');
     a.close();
-    const custom = host({ answers: [[choice.ASK_TEXT, 'Custom']] });
+    const custom = host({ answers: [[choice.ASK_TEXT, choice.CHOOSE]] });
+    custom.control.state.onQuickPick = (qp) => qp.accept(qp.items.find((i) => i.mode === 'custom'));
     await wait(20);
     eq([custom.control.state.configWrites, custom.control.state.commands.filter((c) => c[0] === 'workbench.action.openSettings')],
       [[['agentPlus.tokenMode', 'custom']], [['workbench.action.openSettings', '@id:codexPlus.workPlan,codexPlus.tellCodexYourTimeZone,'
@@ -159,6 +161,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([b.control.state.said.some((s) => s.message === choice.ASK_TEXT), b.control.state.configWrites, b.memento.get(choice.START_KEY)],
       [true, [], 'asked'], 'closing the notice leaves the mode at its default, and it is not asked again');
     b.close();
+    const listed = host({ answers: [[choice.ASK_TEXT, choice.CHOOSE]] });
+    listed.control.state.onQuickPick = (qp) => qp.hide();
+    await wait(20);
+    eq([listed.control.state.quickPicks.length, listed.control.state.configWrites], [1, []], 'closing the list it opens changes nothing either');
+    listed.close();
   }
   {
     const home = tmp('shared-two');

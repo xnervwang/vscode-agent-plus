@@ -23,6 +23,8 @@ const EARLIER_KEYS = ['agentPlus.hadDependents', 'agentPlus.oldSettingsAdopted',
 const COMMAND = 'agentPlus.chooseTokenMode';
 const README_TOKENS = 'https://github.com/xnervwang/vscode-agent-plus#what-it-costs-in-tokens';
 const MORE = 'Learn More';
+/* One button for the list rather than one per mode: a notification shortens five buttons until none can be read. */
+const CHOOSE = 'Choose a Mode...';
 const ASK_TEXT = 'Some features add text to the agent\'s context and use tokens. Choose which Claude Code Plus and Codex Plus features run. '
   + 'You can change this later from the token mode entry in the status bar.';
 /* Beside the Conversations entry, which has 100. */
@@ -134,13 +136,14 @@ function create(host, opts = {}) {
     start = 'asked';
     await memento.update(START_KEY, 'asked');
     if (!mine) { say('token mode: another window of this client is asking for the mode'); return ''; }
-    const pick = await vscode.window.showInformationMessage(ASK_TEXT, ...tokenMode.MODES.map((m) => m.label), MORE);
-    const chosen = tokenMode.MODES.find((m) => m.label === pick);
-    if (chosen) await cfg().update(tokenMode.NAME, chosen.id, vscode.ConfigurationTarget.Global);
-    if (chosen && chosen.id === tokenMode.CUSTOM) await openSwitches();
+    const pick = await vscode.window.showInformationMessage(ASK_TEXT, CHOOSE, MORE);
+    const mode = pick === CHOOSE ? await pickMode() : '';
+    if (mode) await cfg().update(tokenMode.NAME, mode, vscode.ConfigurationTarget.Global);
+    if (mode === tokenMode.CUSTOM) await openSwitches();
     else if (pick === MORE) await vscode.env.openExternal(vscode.Uri.parse(README_TOKENS));
-    say(`token mode: the first-install notice was ${chosen ? `answered with ${chosen.label}` : pick === MORE ? 'answered with Learn More' : 'closed'}`);
-    return chosen ? chosen.id : pick || '';
+    say(`token mode: the first-install notice was ${mode ? `answered with ${tokenMode.labelOf(mode)}`
+      : pick === MORE ? 'answered with Learn More' : pick === CHOOSE ? 'answered with the list, which was closed' : 'closed'}`);
+    return mode || pick || '';
   };
 
   /* ── The status bar entry ── */
@@ -165,9 +168,8 @@ function create(host, opts = {}) {
   const watched = [tokenMode.SETTING, ...tokenMode.SWITCHES.map((s) => s.key)];
   subs.push(vscode.workspace.onDidChangeConfiguration((e) => { if (watched.some((k) => e.affectsConfiguration(k))) paint(); }));
 
-  /* The list behind the entry. Resolves to the mode chosen, or '' when the list was closed or the same one picked.
-     Picking Custom, even when it is the mode already, opens the feature settings. */
-  const choose = async () => {
+  /* The list of modes, the current one selected. Resolves to the mode picked, or '' when the list was closed. */
+  const pickMode = async () => {
     const now = tokenMode.modeNow(vscode);
     const items = pickItems(now);
     const qp = vscode.window.createQuickPick();
@@ -182,13 +184,21 @@ function create(host, opts = {}) {
       qp.show();
     });
     qp.dispose();
-    if (!picked) return '';
-    if (picked.mode !== now) {
-      await cfg().update(tokenMode.NAME, picked.mode, vscode.ConfigurationTarget.Global);
-      say(`token mode: ${tokenMode.labelOf(picked.mode)}, chosen from the status bar`);
+    return picked ? picked.mode : '';
+  };
+
+  /* The list behind the entry. Resolves to the mode chosen, or '' when the list was closed or the same one picked.
+     Picking Custom, even when it is the mode already, opens the feature settings. */
+  const choose = async () => {
+    const now = tokenMode.modeNow(vscode);
+    const mode = await pickMode();
+    if (!mode) return '';
+    if (mode !== now) {
+      await cfg().update(tokenMode.NAME, mode, vscode.ConfigurationTarget.Global);
+      say(`token mode: ${tokenMode.labelOf(mode)}, chosen from the status bar`);
     }
-    if (picked.mode === tokenMode.CUSTOM) await openSwitches();
-    return picked.mode === now && picked.mode !== tokenMode.CUSTOM ? '' : picked.mode;
+    if (mode === tokenMode.CUSTOM) await openSwitches();
+    return mode === now && mode !== tokenMode.CUSTOM ? '' : mode;
   };
 
   const statusLines = () => {
@@ -206,4 +216,4 @@ function create(host, opts = {}) {
   };
 }
 
-module.exports = { create, pickItems, settingsQuery, features, tipLines, START_KEY, EARLIER_KEYS, COMMAND, README_TOKENS, MORE, ASK_TEXT, PRIORITY };
+module.exports = { create, pickItems, settingsQuery, features, tipLines, START_KEY, EARLIER_KEYS, COMMAND, README_TOKENS, MORE, CHOOSE, ASK_TEXT, PRIORITY };
