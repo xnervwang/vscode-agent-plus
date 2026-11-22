@@ -108,7 +108,6 @@ function readAll(dir, now) {
       if (!activity || (activity === 'stopped' && !unseen)) continue;
       const k = keyOf(raw.sourceId, raw.sessionId);
       const title = clip(raw.title, MAX_TITLE);
-      /* An older window writes no `steward`, so a title it wrote with the crown first is taken as a steward's. */
       const steward = typeof raw.steward === 'boolean' ? raw.steward : title.startsWith(titleMarks.CROWN);
       const it = { key: k, from: new Set([n]), sourceId: raw.sourceId, sessionId: raw.sessionId, source: clip(raw.source, 40) || raw.sourceId,
         title: titleMarks.withMarks(title, { steward }) || raw.sessionId, steward, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity,
