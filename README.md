@@ -32,7 +32,7 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | `claudeCodePlus.workPlan`, `codexPlus.workPlan` |
 | Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | `claudeCodePlus.tellClaudeYourTimeZone`, `codexPlus.tellCodexYourTimeZone` |
 | Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | `claudeCodePlus.conversationBrief`, `codexPlus.conversationBrief` |
-| Skill suggestions (Codex Plus) | The installed skills that best fit your message, before each turn | Off | Off | On | `codexPlus.skillRouting` |
+| Skill suggestions | The installed skills that best fit your message, with their full descriptions, before each turn | Off | Off | On | `claudeCodePlus.skillRouting`, `codexPlus.skillRouting` |
 | Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | `codexPlus.wakeUps` |
 | Detached-command notices | A notice to the conversation that left a command running detached, once that command is no longer running | Off | Off | On | `claudeCodePlus.detachedEndNotices`, `codexPlus.detachedEndNotices` |
 

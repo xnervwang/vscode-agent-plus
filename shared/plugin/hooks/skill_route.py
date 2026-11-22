@@ -4,13 +4,17 @@
 # All rights reserved.
 # Source: vscode-agent-plus shared/plugin/hooks/skill_route.py; sync-shared.js copies it, so edit it there.
 
-"""The skill search behind the work plan plugin's route-skills.py hook and its skill_search MCP tool.
+"""The skill search behind the work plan plugin's route-skills.py hook and, for Codex, its skill_search MCP tool.
 
 Codex lists every skill in each turn's context, but under a budget: with a hundred or more installed, each description
 is cut to about fifty characters, and skills the budget cannot hold are dropped from the list without the model being
 told. Codex also never sees skills kept outside its own folders. So before each turn the hook that calls this module
 searches every installed skill for the user's words and puts the best few, with their full descriptions and paths, in
 front of the model. The MCP server's skill_search tool runs the same search with words the model chooses.
+
+Claude Code lists its skills under a budget too, and with several hundred of them most descriptions are left out. Beside
+a Claude Code plan_agent.py this module searches the skills Claude Code itself lets the model call in the conversation,
+and gives each by the name the Skill tool takes (see "Claude Code's skills" below).
 
 The search is by keywords: BM25 over words, four-letter pieces of words and pairs of CJK characters, with a skill's name
 counted four times over its description. It needs no network or credentials and is the default. With the
@@ -24,7 +28,7 @@ when one has changed it starts a background process to rebuild the index and sea
 waits for a rebuild.
 
 Standard library only, Python 3.7 or later. It is kept in Agent Plus's shared code so that the Claude
-Code plugin can use it as well.
+Code plugin can use it as well; which agent it serves is the AGENT of the plan_agent.py beside it.
 """
 import array
 import configparser
@@ -47,7 +51,15 @@ import time
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from plan_path import codex_home, settings, write_atomic  # noqa: E402
+from plan_path import (AGENT, COMPACTED_SUFFIX, TURN_FIELD, data_dir, open_tail, plan_file, read_payload,  # noqa: E402
+                       settings, side_file, spoke, tool_calls, write_atomic, write_quietly)
+
+CLAUDE = AGENT == "Claude Code"
+
+
+def codex_home():
+    return os.environ.get("CODEX_HOME") or os.path.join(os.path.expanduser("~"), ".codex")
+
 
 INDEX_DIR = "skill-route"
 INDEX_FILE = "index.pickle"
@@ -71,6 +83,10 @@ DESC_CHARS = 1024        # Codex's own cut for a description
 # Codex cuts a hook's injected text past its additionalContextLimit, counted as bytes / 4. hooks.json gives this hook
 # 4,000; the block is kept under this many bytes, with room to spare, by shortening descriptions.
 CONTEXT_BYTES = 15000
+# Claude Code keeps a hook's injected text whole up to 100,000 characters; these keep a whole description, and a block
+# of ten of them.
+CLAUDE_DESC_CHARS = 4096
+CLAUDE_CONTEXT_BYTES = 40000
 MAX_COUNT = 10           # the most skills a turn is given, whatever skillRouteCount says
 BUDGET = 1.5             # seconds for the whole hook, network included
 CREDENTIAL_TIMEOUT = 1.0
@@ -106,6 +122,8 @@ CJK = re.compile(u"[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff]+")
 WORD = re.compile(r"[a-z0-9][a-z0-9_.+/-]*[a-z0-9]|[a-z0-9]")
 CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 MENTION = re.compile(r"(?<![\w$])\$([A-Za-z0-9][\w.:-]*)")
+# A message that starts with /name runs that skill, and Claude Code puts its whole SKILL.md in front of the model.
+SLASH = re.compile(r"^\s*/([A-Za-z0-9][\w.:-]*)")
 TRIGGER = re.compile(r"(?:Use when|Use it when|Use for|Use on|Use immediately after|Use after|Use whenever|Triggers on)\b(.*)$",
                      re.S)
 
@@ -346,16 +364,28 @@ def unquote_yaml(v):
         return v.replace('\\"', '"')
 
 
-def frontmatter(path):
-    """`name` and `description` and the rest of a SKILL.md's frontmatter as strings; {} when it has none and None when
-    the file cannot be read. Only the first FRONTMATTER_BYTES are read."""
+FRONTMATTER = re.compile(r"^---[ \t]*\n(.*?)\n---[ \t]*(?:\n|$)", re.S)
+
+
+def skill_text(path):
+    """The first FRONTMATTER_BYTES of a SKILL.md as text with plain newlines, or None when it cannot be read."""
     try:
         with open(path, "rb") as fh:
             raw = fh.read(FRONTMATTER_BYTES)
     except OSError:
         return None
-    text = raw.decode("utf-8", "replace").lstrip(u"\ufeff").replace("\r\n", "\n").replace("\r", "\n")
-    m = re.match(r"^---[ \t]*\n(.*?)\n---[ \t]*(?:\n|$)", text, re.S)
+    return raw.decode("utf-8", "replace").lstrip(u"\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def frontmatter(path):
+    """`name` and `description` and the rest of a SKILL.md's frontmatter as strings; {} when it has none and None when
+    the file cannot be read. Only the first FRONTMATTER_BYTES are read."""
+    text = skill_text(path)
+    return None if text is None else parse_frontmatter(text)
+
+
+def parse_frontmatter(text):
+    m = FRONTMATTER.match(text)
     if not m:
         return {}
     lines, out, i = m.group(1).split("\n"), {}, 0
@@ -614,6 +644,353 @@ def scan(home, cwd, given, repos=()):
     return {"skills": skills, "files": files, "dirs": dirs, "conf": conf}
 
 
+"""Claude Code's skills.
+
+What Claude Code 2.1 offers the model, read from its bundled code and its documentation (code.claude.com/docs/en/skills):
+
+- Folders holding <folder>/SKILL.md, one level down: the managed folder's .claude/skills (CLAUDE_CODE_DISABLE_POLICY_SKILLS
+  turns it off), $CLAUDE_CONFIG_DIR/skills, and .claude/skills in the working directory and in each folder above it up
+  to the repository's root, never in the home folder itself (outside a repository, up to the home folder). In a linked
+  worktree the main checkout's .claude/skills is read as well. Folders added with --add-dir, and .claude/skills folders
+  found deeper while working, cannot be seen from a hook and are left out.
+- The skills of each plugin enabledPlugins turns on ("<plugin>@<marketplace>": true; managed settings over local, local
+  over the project's, the project's over the user's) that has an install record applying here in
+  plugins/installed_plugins.json: one of user or managed scope, or one made for this project. A plugin that a
+  marketplace registered from a local folder lists by a relative path is read in place from that folder; any other from
+  its record's installPath. Its skills are in skills/ and in the folders plugin.json's `skills` names.
+- A skill is called by its frontmatter `name`, else by its folder's name; a plugin's skill as "<plugin>:<that name>".
+
+Left out, as Claude Code does not let the model call them: disable-model-invocation: true; `paths` set (such a skill is
+offered only once a matching file has been touched); skillOverrides at user-invocable-only or off (the managed settings'
+value when they give one, else the first of local, project and user; plugin skills are not affected); and a plugin's
+skill with neither a description nor when_to_use. A skill with no description is described by its body's first line.
+When two have the same name, or are the same file, the first found is kept, in the order managed, user, project, plugin.
+"""
+OVERRIDE_RANK = {"on": 0, "name-only": 1, "user-invocable-only": 2, "off": 3}
+HIDDEN = ("user-invocable-only", "off")
+RESERVED_USER_FOLDERS = ("synced",)
+CLAUDE_NAME = re.compile(r"^[A-Za-z0-9][\w.-]*$")
+
+
+def managed_root():
+    if sys.platform == "darwin":
+        return "/Library/Application Support/ClaudeCode"
+    if os.name == "nt":
+        return "C:\\Program Files\\ClaudeCode"
+    return "/etc/claude-code"
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def same_path(a, b):
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
+def git_root(d):
+    """The folder holding .git at or above `d`, or None."""
+    if not isinstance(d, str) or not d:
+        return None
+    d = os.path.normpath(d)
+    while True:
+        if os.path.exists(os.path.join(d, ".git")):
+            return d
+        up = os.path.dirname(d)
+        if up == d:
+            return None
+        d = up
+
+
+def main_checkout(root):
+    """The main checkout of the linked worktree at `root`, or None when `root` is not one."""
+    try:
+        with open(os.path.join(root, ".git"), encoding="utf-8") as fh:
+            line = fh.read(4096).strip()
+    except (OSError, TypeError):
+        return None
+    if not line.startswith("gitdir:"):
+        return None
+    gitdir = os.path.normpath(os.path.join(root, line[7:].strip()))
+    try:
+        with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as fh:
+            common = os.path.normpath(os.path.join(gitdir, fh.read(4096).strip()))
+    except OSError:
+        return None
+    main = os.path.dirname(common) if os.path.basename(common) == ".git" else None
+    return main if main and not same_path(main, root) else None
+
+
+def claude_project_dirs(cwd):
+    """The project skill folders Claude Code reads for a conversation started in `cwd`, nearest first."""
+    if not isinstance(cwd, str) or not cwd or not os.path.isabs(cwd):
+        return []
+    home, root = os.path.realpath(os.path.expanduser("~")), git_root(cwd)
+    d, out = os.path.normpath(cwd), []
+    while not same_path(os.path.realpath(d), home):
+        out.append(os.path.join(d, ".claude", "skills"))
+        if root and same_path(d, root):
+            break
+        up = os.path.dirname(d)
+        if up == d:
+            break
+        d = up
+    main = main_checkout(root) if root else None
+    if main and os.path.join(main, ".claude", "skills") not in out:
+        out.append(os.path.join(main, ".claude", "skills"))
+    return out
+
+
+def claude_settings_files(home, cwd):
+    """(scope, path) of every settings file, the one that gives way first."""
+    out = [("user", os.path.join(home, "settings.json"))]
+    if isinstance(cwd, str) and cwd:
+        out += [("project", os.path.join(cwd, ".claude", "settings.json")),
+                ("local", os.path.join(cwd, ".claude", "settings.local.json"))]
+    managed = managed_root()
+    out.append(("managed", os.path.join(managed, "managed-settings.json")))
+    drop_in = os.path.join(managed, "managed-settings.d")
+    try:
+        out += [("managed", os.path.join(drop_in, f)) for f in sorted(os.listdir(drop_in))
+                if f.endswith(".json") and not f.startswith(".")]
+    except OSError:
+        pass
+    return out
+
+
+def claude_conf(home, cwd):
+    """What Claude Code's settings say about skills, plugins and Bedrock for a conversation started in `cwd`."""
+    files = claude_settings_files(home, cwd)
+    by = {"user": {}, "project": {}, "local": {}, "managed": {}}
+    for scope, path in files:
+        got = read_json(path)
+        if scope != "managed":
+            by[scope] = got
+            continue
+        for key, value in got.items():
+            if isinstance(value, dict) and isinstance(by["managed"].get(key), dict):
+                by["managed"][key] = dict(by["managed"][key], **value)
+            else:
+                by["managed"][key] = value
+    enabled, env, export = {}, {}, ""
+    for scope in ("user", "project", "local", "managed"):
+        s = by[scope]
+        if isinstance(s.get("enabledPlugins"), dict):
+            enabled.update(s["enabledPlugins"])
+        if isinstance(s.get("env"), dict):
+            env.update({k: str(v) for k, v in s["env"].items() if isinstance(v, (str, int, float)) and v is not True
+                        and v is not False})
+        if isinstance(s.get("awsCredentialExport"), str) and s["awsCredentialExport"].strip():
+            export = s["awsCredentialExport"].strip()
+    return {"settings": by, "enabled": sorted(k for k, v in enabled.items() if v is True), "env": env,
+            "credentialExport": export, "files": [p for _, p in files], "cwd": cwd if isinstance(cwd, str) else ""}
+
+
+def override_of(conf, names):
+    """The skillOverrides value in force for a skill called by any of `names`: "on" unless one is set."""
+    def most(table):
+        best = None
+        for n in names if isinstance(table, dict) else ():
+            v = table.get(n)
+            if v in OVERRIDE_RANK and (best is None or OVERRIDE_RANK[v] > OVERRIDE_RANK[best]):
+                best = v
+        return best
+
+    by = conf["settings"]
+    for scope in ("managed", "local", "project", "user"):
+        v = most(by[scope].get("skillOverrides"))
+        if v is not None:
+            return v
+    return "on"
+
+
+def record_applies(record, cwd, here):
+    """Whether an install record of installed_plugins.json applies to a conversation started in `cwd`, whose repository
+    root is `here`."""
+    scope = record.get("scope")
+    if scope in ("user", "managed"):
+        return True
+    where = record.get("projectPath")
+    if not isinstance(where, str) or not where or not cwd:
+        return False
+    if same_path(where, cwd):
+        return True
+    there = git_root(where)
+    return bool(here and there and same_path(here, there))
+
+
+def in_place(markets, market, name, files):
+    """(root, marketplace entry, marketplace folder) of a plugin read in place from the local folder its marketplace
+    was registered from, else (None, {}, None)."""
+    m = markets.get(market) if isinstance(markets.get(market), dict) else {}
+    src = m.get("source") if isinstance(m.get("source"), dict) else {}
+    if src.get("source") != "directory":
+        return None, {}, None
+    base = src.get("path") if isinstance(src.get("path"), str) else m.get("installLocation")
+    if not isinstance(base, str) or not os.path.isabs(base):
+        return None, {}, None
+    listing = os.path.join(base, ".claude-plugin", "marketplace.json")
+    files[listing] = stamp(listing)
+    plugins = read_json(listing).get("plugins")
+    for entry in plugins if isinstance(plugins, list) else []:
+        if isinstance(entry, dict) and entry.get("name") == name:
+            where = entry.get("source")
+            if isinstance(where, str) and where.strip() and not os.path.isabs(where):
+                return os.path.normpath(os.path.join(base, where)), entry, base
+            return None, {}, None
+    return None, {}, None
+
+
+def claude_plugins(home, conf, files):
+    """(plugin name, its skill folders) for each enabled plugin with an install record that applies here."""
+    installed_path = os.path.join(home, "plugins", "installed_plugins.json")
+    markets_path = os.path.join(home, "plugins", "known_marketplaces.json")
+    for p in (installed_path, markets_path):
+        files[p] = stamp(p)
+    installed = read_json(installed_path)
+    records = installed.get("plugins") if isinstance(installed.get("plugins"), dict) else {}
+    markets = read_json(markets_path)
+    cwd = conf["cwd"]
+    here = git_root(cwd) if cwd else None
+    out = []
+    for ident in conf["enabled"]:
+        if "@" not in ident:
+            continue
+        name, market = ident.rsplit("@", 1)
+        recs = records.get(ident)
+        recs = [recs] if isinstance(recs, dict) else recs if isinstance(recs, list) else []
+        record = next((r for r in recs if isinstance(r, dict) and record_applies(r, cwd, here)), None)
+        if record is None:
+            continue
+        root, entry, base = in_place(markets, market, name, files)
+        if not root or not os.path.isdir(root):
+            root, entry, base = record.get("installPath"), {}, None
+        if not isinstance(root, str) or not os.path.isdir(root):
+            continue
+        manifest = os.path.join(root, ".claude-plugin", "plugin.json")
+        files[manifest] = stamp(manifest)
+        given = []
+        for v in (read_json(manifest).get("skills"), entry.get("skills")):
+            given += [v] if isinstance(v, str) else [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+        given = [os.path.normpath(os.path.join(root, g)) for g in given if g.strip()]
+        # A marketplace entry whose source is the marketplace's own folder and that names its skill folders has only
+        # those, so a marketplace that is one plugin does not also load every other plugin's skills/.
+        at_base = bool(base) and isinstance(entry.get("skills"), (str, list)) and same_path(root, base)
+        folders = ([] if at_base else [os.path.join(root, "skills")]) + given
+        seen = []
+        for f in folders:
+            if f not in seen:
+                seen.append(f)
+        out.append((name, seen))
+    return out
+
+
+def body_line(text):
+    """The first line of a SKILL.md's body, as Claude Code describes a skill that has no description."""
+    m = FRONTMATTER.match(text)
+    for line in (text[m.end():] if m else text).split("\n"):
+        line = line.strip().lstrip("#").strip()
+        if line:
+            return line
+    return ""
+
+
+def paths_set(text):
+    """Whether the frontmatter gives `paths`, in either the inline or the list form."""
+    m = FRONTMATTER.match(text)
+    if not m:
+        return False
+    lines = m.group(1).split("\n")
+    for i, line in enumerate(lines):
+        km = re.match(r"^paths:[ \t]*(.*)$", line)
+        if not km:
+            continue
+        v = km.group(1).split(" #")[0].strip()
+        if v and v not in ("[]", "''", '""', "null", "~"):
+            return True
+        return i + 1 < len(lines) and bool(re.match(r"^[ \t]*- *\S", lines[i + 1]))
+    return False
+
+
+def yes(value):
+    return isinstance(value, str) and value.strip().lower() == "true"
+
+
+def claude_scan(home, cwd):
+    """claude_scan is scan() for Claude Code: {"skills": [...], "files": {path: stamp}, "dirs": {path: stamp}, "conf"}."""
+    conf = claude_conf(home, cwd)
+    files = {p: stamp(p) for p in conf["files"]}
+    dirs, skills, names, real = {}, [], set(), set()
+    project = claude_project_dirs(cwd)
+
+    def take(kind, root, plugin, folder, md):
+        text = skill_text(md)
+        if text is None:
+            return
+        fm = parse_frontmatter(text)
+        if yes(fm.get("disable-model-invocation")) or paths_set(text):
+            return
+        given = one_line(fm.get("description"), CLAUDE_DESC_CHARS)
+        when = one_line(fm.get("when_to_use"), CLAUDE_DESC_CHARS)
+        if plugin and not given and not when:
+            return
+        desc = one_line(" ".join(x for x in (given or body_line(text), when) if x), CLAUDE_DESC_CHARS)
+        own = one_line(fm.get("name"), 256)
+        short = own if own and CLAUDE_NAME.match(own) else folder
+        name = "%s:%s" % (plugin, short) if plugin else short
+        if not plugin and override_of(conf, [short, folder]) in HIDDEN:
+            return
+        where = os.path.realpath(md)
+        if name in names or where in real:
+            return
+        names.add(name)
+        real.add(where)
+        m = TRIGGER.search(desc)
+        skills.append({"name": name, "short": short, "desc": desc, "path": where, "kind": kind, "root": root,
+                       "triggers": m.group(1).strip() if m else "", "folder": folder})
+
+    def visit(kind, d, plugin=""):
+        dirs[d] = folder_stamp(d)
+        md = os.path.join(d, "SKILL.md")
+        if plugin and os.path.isfile(md):
+            files[md] = stamp(md)
+            take(kind, d, plugin, os.path.basename(d), md)
+            return
+        try:
+            kids = sorted(os.listdir(d))
+        except OSError:
+            return
+        for k in kids:
+            sub = os.path.join(d, k)
+            if k.startswith(".") or (kind == "user" and k in RESERVED_USER_FOLDERS) or not os.path.isdir(sub):
+                continue
+            md = os.path.join(sub, "SKILL.md")
+            if os.path.isfile(md):
+                files[md] = stamp(md)
+                dirs[sub] = stamp(sub)
+                take(kind, d, plugin, k, md)
+
+    if not os.environ.get("CLAUDE_CODE_DISABLE_POLICY_SKILLS"):
+        visit("managed", os.path.join(managed_root(), ".claude", "skills"))
+    visit("user", os.path.join(home, "skills"))
+    for d in project:
+        visit("project", d)
+    for plugin, folders in claude_plugins(home, conf, files):
+        for d in folders:
+            visit("plugin", d, plugin)
+    return {"skills": skills, "files": files, "dirs": dirs, "conf": conf, "project": project}
+
+
+def config_for(home, cwd):
+    """What the search reads of the agent's own configuration: Claude Code's settings, or Codex's config.toml."""
+    return claude_conf(home, cwd) if CLAUDE else codex_config(home)
+
+
 """The keyword index.
 
 The postings hold each skill's precomputed BM25 term weight, so a query only sums them:
@@ -831,6 +1208,9 @@ def run_credentials(argv, timeout):
             m = re.match(r"^\s*(?:export\s+)?(AWS_[A-Z_]+)=(.*)$", line)
             if m:
                 found[m.group(1)] = m.group(2).strip().strip("'\"")
+    if CLAUDE and isinstance(found.get("Credentials"), dict):
+        # awsCredentialExport prints what `aws sts` prints: the keys inside a Credentials object.
+        found = found["Credentials"]
     key = found.get("AccessKeyId") or found.get("AWS_ACCESS_KEY_ID")
     secret = found.get("SecretAccessKey") or found.get("AWS_SECRET_ACCESS_KEY")
     if not isinstance(key, str) or not key or not isinstance(secret, str) or not secret:
@@ -1061,7 +1441,35 @@ def vector_wanted(given, conf):
     """The `aws` table to search by meaning with, or None: only when the setting is on and the provider is Bedrock."""
     if given.get("skillRouteVector") is not True:
         return None
-    return bedrock_provider(conf)
+    return claude_bedrock(conf) if CLAUDE else bedrock_provider(conf)
+
+
+def claude_bedrock(conf):
+    """An `aws` table for the account and region Claude Code sends the conversation to, or None when Claude Code does not
+    use Bedrock (CLAUDE_CODE_USE_BEDROCK, in the environment or in the settings' env).
+
+    Claude Code takes credentials from awsCredentialExport first and then from the AWS SDK's own order: the environment's
+    keys, then AWS_PROFILE's profile, then the default profile. awsAuthRefresh is a sign-in a person may have to answer,
+    so it is never run here; when the credentials have run out the search stays on keywords.
+    """
+    if not isinstance(conf, dict) or "env" not in conf:
+        return None
+    env = conf["env"]
+    use = os.environ.get("CLAUDE_CODE_USE_BEDROCK") or env.get("CLAUDE_CODE_USE_BEDROCK") or ""
+    if use.strip().lower() not in ("1", "true", "yes", "on"):
+        return None
+    aws = {}
+    region = os.environ.get("AWS_REGION") or env.get("AWS_REGION") or ""
+    if region.strip():
+        aws["region"] = region.strip()
+    if conf.get("credentialExport"):
+        shell = ["cmd.exe", "/d", "/s", "/c"] if os.name == "nt" else ["/bin/sh", "-c"]
+        aws["credential_export"] = {"command": shell[0], "args": shell[1:] + [conf["credentialExport"]]}
+    elif not (os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY")):
+        profile = os.environ.get("AWS_PROFILE") or env.get("AWS_PROFILE") or ""
+        if profile.strip():
+            aws["profile"] = profile.strip()
+    return aws
 
 
 """Rebuilding the index in a background process.
@@ -1109,9 +1517,9 @@ def watched_settings(given):
                        given.get("skillRouteVector")], sort_keys=True)
 
 
-def vectors_for(directory, skills, aws, given, region, old_model, deadline, sent=None):
+def vectors_for(directory, skills, aws, given, region, old_model, deadline, sent=None, also_keep=()):
     """(model, {i: vector}) for the skills, from the cache and then from Bedrock; partial when a request failed.
-    `sent` collects how many texts each request carried."""
+    `sent` collects how many texts each request carried, and `also_keep` holds the cache keys other indexes still use."""
     cache_path = os.path.join(data_root(directory), EMBED_CACHE)
     cache = load_pickle(cache_path)
     cache = cache if isinstance(cache, dict) else {}
@@ -1165,7 +1573,7 @@ def vectors_for(directory, skills, aws, given, region, old_model, deadline, sent
                     got[i] = v
                     cache[text_key(model, doc_text(skills[i]))] = v.tobytes()
                     dim = dim or len(v)
-            keep = {text_key(model, doc_text(s)) for s in skills}
+            keep = {text_key(model, doc_text(s)) for s in skills} | set(also_keep)
             try:
                 os.makedirs(data_root(directory), exist_ok=True)
                 save_pickle(cache_path, {k: v for k, v in cache.items() if k in keep})
@@ -1187,15 +1595,20 @@ def build(directory, home, cwd, given=None, embed_now=True, deadline=None, write
     """Scan, index and (when `write`) save. Returns the index."""
     t0 = time.time()
     given = given or settings(directory)
-    old = load_index(directory)
-    repos = list(old.get("repos") or []) if old else []
-    here = repo_dirs(cwd)
-    repos = (here + [r for r in repos if r not in here])[:REPOS_KEPT]
-    found = scan(home, cwd, given, repos)
+    old = load_index(directory, cwd)
+    if CLAUDE:
+        found, repos = claude_scan(home, cwd), []
+    else:
+        repos = list(old.get("repos") or []) if old else []
+        here = repo_dirs(cwd)
+        repos = (here + [r for r in repos if r not in here])[:REPOS_KEPT]
+        found = scan(home, cwd, given, repos)
     skills = found["skills"]
     index = {"version": INDEX_VERSION, "built": time.time(), "home": home, "repos": repos, "skills": skills,
              "files": found["files"], "dirs": found["dirs"], "settings": watched_settings(given),
              "keyword": keyword_index(skills), "model": "", "dim": 0, "vectors": b"", "has": [], "vectorTried": 0}
+    if CLAUDE:
+        index.update(cwd=cwd or "", project=found["project"])
     aws = vector_wanted(given, found["conf"])
     if aws is not None and embed_now and not vector_off(directory, fingerprint(aws, given)):
         region = region_of(aws)
@@ -1204,7 +1617,7 @@ def build(directory, home, cwd, given=None, embed_now=True, deadline=None, write
             mark_unavailable(directory, "no AWS region is set for the Bedrock provider", fingerprint(aws, given))
         else:
             model, got = vectors_for(directory, skills, aws, given, region, old.get("model") if old else "",
-                                     deadline or time.time() + 90, sent)
+                                     deadline or time.time() + 90, sent, other_keys(directory, cwd) if CLAUDE else ())
             if got:
                 dim = len(next(iter(got.values())))
                 blob, has = array.array("f"), []
@@ -1215,15 +1628,89 @@ def build(directory, home, cwd, given=None, embed_now=True, deadline=None, write
                 index.update(model=model, dim=dim, vectors=blob.tobytes(), has=has, region=region)
     if write:
         os.makedirs(data_root(directory), exist_ok=True)
-        save_pickle(os.path.join(data_root(directory), INDEX_FILE), index)
+        save_pickle(os.path.join(data_root(directory), index_name(cwd)), index)
+        if CLAUDE:
+            prune_indexes(directory)
         log(directory, {"ev": "build", "skills": len(skills), "vectors": sum(index["has"]), "ms":
                         round((time.time() - t0) * 1000, 1)})
     return index
 
 
-def load_index(directory):
-    got = load_pickle(os.path.join(data_root(directory), INDEX_FILE))
+def load_index(directory, cwd=None):
+    got = load_pickle(os.path.join(data_root(directory), index_name(cwd)))
     return got if isinstance(got, dict) and got.get("version") == INDEX_VERSION else None
+
+
+"""Claude Code's indexes, one for each folder a conversation starts in.
+
+What Claude Code offers depends on that folder: its project skills, its project and local settings, and the install
+records made for it. So each folder has its own index, named by a hash of the folder, and the REPOS_KEPT used most
+recently are kept. A folder with no index yet is searched with the newest other one, without that one's project skills,
+while its own is built.
+"""
+
+
+def folder_key(cwd):
+    return hashlib.sha1(os.path.normcase(os.path.normpath(cwd or "/")).encode("utf-8")).hexdigest()[:16]
+
+
+def index_name(cwd):
+    return "index-%s.pickle" % folder_key(cwd) if CLAUDE else INDEX_FILE
+
+
+def lock_names(cwd):
+    """The rebuild's lock folder and start mark: one of each per folder for Claude Code."""
+    if not CLAUDE:
+        return BUILD_LOCK, BUILT_AT
+    key = folder_key(cwd)
+    return "%s-%s" % (BUILD_LOCK, key), "%s-%s" % (BUILT_AT, key)
+
+
+def claude_indexes(directory):
+    """Claude Code's index files, newest first."""
+    root = data_root(directory)
+    try:
+        names = [n for n in os.listdir(root) if n.startswith("index-") and n.endswith(".pickle")]
+    except OSError:
+        return []
+    paths = []
+    for n in names:
+        try:
+            paths.append((os.stat(os.path.join(root, n)).st_mtime, os.path.join(root, n)))
+        except OSError:
+            pass
+    return [p for _, p in sorted(paths, reverse=True)]
+
+
+def prune_indexes(directory):
+    for path in claude_indexes(directory)[REPOS_KEPT:]:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def other_keys(directory, cwd):
+    """The embedding cache keys the other kept indexes use, so a rebuild for one folder leaves theirs in the cache."""
+    mine, out = os.path.join(data_root(directory), index_name(cwd)), set()
+    for path in claude_indexes(directory)[:REPOS_KEPT]:
+        if same_path(path, mine):
+            continue
+        got = load_pickle(path)
+        if isinstance(got, dict) and got.get("model") and isinstance(got.get("skills"), list):
+            out |= {text_key(got["model"], doc_text(s)) for s in got["skills"]}
+    return out
+
+
+def stand_in(directory, cwd):
+    """The newest index of another folder, for a folder whose own is still being built; None when there is none."""
+    mine = os.path.join(data_root(directory), index_name(cwd))
+    for path in claude_indexes(directory):
+        if not same_path(path, mine):
+            got = load_pickle(path)
+            if isinstance(got, dict) and got.get("version") == INDEX_VERSION:
+                return got
+    return None
 
 
 def stale(index, home, cwd, given, directory=None, conf=None):
@@ -1232,7 +1719,9 @@ def stale(index, home, cwd, given, directory=None, conf=None):
     if index is None:
         return "no index"
     if index.get("home") != home:
-        return "another Codex home"
+        return "another Claude Code home" if CLAUDE else "another Codex home"
+    if CLAUDE and index.get("cwd") != (cwd or ""):
+        return "another folder"
     if index.get("settings") != watched_settings(given):
         return "settings changed"
     for p, st in index["files"].items():
@@ -1241,7 +1730,10 @@ def stale(index, home, cwd, given, directory=None, conf=None):
     for p, st in index["dirs"].items():
         if (folder_stamp(p) if st is not None and len(st) == 4 else stamp(p)) != st:
             return "a folder changed"
-    if any(d not in index.get("repos", []) for d in repo_dirs(cwd)):
+    if CLAUDE:
+        if index.get("project") != claude_project_dirs(cwd):
+            return "a new repository"
+    elif any(d not in index.get("repos", []) for d in repo_dirs(cwd)):
         return "a new repository"
     aws = vector_wanted(given, conf) if conf is not None else None
     if directory and aws is not None and not vector_off(directory, fingerprint(aws, given)):
@@ -1263,12 +1755,13 @@ def writable(directory):
 def spawn_build(directory, cwd):
     """Start a rebuild that outlives this hook, unless one is already running or has just been started."""
     root = data_root(directory)
+    lock_name, started_name = lock_names(cwd)
     try:
         os.makedirs(root, exist_ok=True)
-        lock = os.path.join(root, BUILD_LOCK)
+        lock = os.path.join(root, lock_name)
         if os.path.isdir(lock) and time.time() - os.stat(lock).st_mtime < BUILD_STALE:
             return False
-        started = os.path.join(root, BUILT_AT)
+        started = os.path.join(root, started_name)
         if os.path.exists(started) and time.time() - os.stat(started).st_mtime < BUILD_GAP:
             return False
         with open(started, "w") as fh:
@@ -1289,7 +1782,7 @@ def spawn_build(directory, cwd):
 def build_locked(directory, home, cwd):
     root = data_root(directory)
     os.makedirs(root, exist_ok=True)
-    lock = os.path.join(root, BUILD_LOCK)
+    lock = os.path.join(root, lock_names(cwd)[0])
     try:
         os.mkdir(lock)
     except FileExistsError:
@@ -1314,8 +1807,8 @@ def build_locked(directory, home, cwd):
 
 def applies(skill, cwd_repos, mentioned):
     """False for a repository's skill outside that repository, for a skill named with $name (Codex already puts its
-    whole SKILL.md in front of the model), and for a skill whose file was deleted."""
-    if skill["kind"] == "repo" and skill["root"] not in cwd_repos:
+    whole SKILL.md in front of the model) or, in Claude Code, run with /name, and for a skill whose file was deleted."""
+    if skill["kind"] in ("repo", "project") and skill["root"] not in cwd_repos:
         return False
     if skill["name"].casefold() in mentioned or skill["short"].casefold() in mentioned:
         return False
@@ -1330,8 +1823,8 @@ def ranked(scores, skills):
 def search(index, text, count, cwd, deadline, directory, given, conf, allow_vector=True):
     """(skills, how, timings, why it fell back): the top `count` skills for `text`, found by "vector" or "keyword"."""
     t0 = time.time()
-    here = set(repo_dirs(cwd))
-    mentioned = {m.casefold() for m in MENTION.findall(text)}
+    here = set(claude_project_dirs(cwd) if CLAUDE else repo_dirs(cwd))
+    mentioned = {m.casefold() for m in (SLASH.findall(text) if CLAUDE else MENTION.findall(text))}
     skills = index["skills"]
     order = ranked(keyword_scores(index, text), skills)
     kept = []
@@ -1380,17 +1873,27 @@ def search(index, text, count, cwd, deadline, directory, given, conf, allow_vect
     return [skills[i] for i in kept], how, timings, why
 
 
-def render(skills, intro=True, limit=CONTEXT_BYTES):
+def render(skills, intro=True, limit=None):
     """The block put in front of the model: one line per skill. When it would pass `limit` bytes, the longest
     descriptions are shortened until it fits."""
-    head = ("%s, found by searching every installed skill for it (the skills list you were given is shortened and "
-            "leaves some out). Judge whether one really fits before reading its SKILL.md; if none does, ignore this "
-            "list." % MARK) if intro else ""
-    descs = [one_line(s["desc"]) or "(no description)" for s in skills]
+    if limit is None:
+        limit = CLAUDE_CONTEXT_BYTES if CLAUDE else CONTEXT_BYTES
+    if CLAUDE:
+        head = ("%s, found by searching every skill you can call in this conversation for it (the skill list you were "
+                "given leaves most descriptions out). Each line is the name to call with the Skill tool, then the "
+                "skill's full description. Judge whether one really fits before calling it; if none does, ignore this "
+                "list." % MARK) if intro else ""
+    else:
+        head = ("%s, found by searching every installed skill for it (the skills list you were given is shortened and "
+                "leaves some out). Judge whether one really fits before reading its SKILL.md; if none does, ignore "
+                "this list." % MARK) if intro else ""
+    descs = [one_line(s["desc"], CLAUDE_DESC_CHARS if CLAUDE else DESC_CHARS) or "(no description)" for s in skills]
+
+    def line(s, d):
+        return "- %s: %s" % (s["name"], d) if CLAUDE else "- %s: %s (file: %s)" % (s["name"], d, s["path"])
 
     def text():
-        return "\n".join(([head] if head else []) + ["- %s: %s (file: %s)" % (s["name"], d, s["path"])
-                                                     for s, d in zip(skills, descs)])
+        return "\n".join(([head] if head else []) + [line(s, d) for s, d in zip(skills, descs)])
 
     out = text()
     while len(out.encode("utf-8")) > limit and descs:
@@ -1405,11 +1908,12 @@ def render(skills, intro=True, limit=CONTEXT_BYTES):
 
 
 def home_of(directory, pathmod=os.path):
-    """The Codex home a data directory belongs to (<home>/plugins/data/<plugin>), else CODEX_HOME or ~/.codex."""
+    """The agent's home a data directory belongs to (<home>/plugins/data/<plugin>), else CODEX_HOME or ~/.codex, or for
+    Claude Code CLAUDE_CONFIG_DIR or ~/.claude."""
     parent = pathmod.dirname(pathmod.normpath(directory))
     if pathmod.basename(parent) == "data" and pathmod.basename(pathmod.dirname(parent)) == "plugins":
         return pathmod.dirname(pathmod.dirname(parent))
-    return codex_home()
+    return claude_home() if CLAUDE else codex_home()
 
 
 def search_text(directory, query, count, cwd, budget=BUDGET * 2):
@@ -1417,8 +1921,8 @@ def search_text(directory, query, count, cwd, budget=BUDGET * 2):
     t0 = time.time()
     given = settings(directory)
     home = home_of(directory)
-    conf = codex_config(home)
-    index = load_index(directory)
+    conf = config_for(home, cwd)
+    index = load_index(directory, cwd)
     if stale(index, home, cwd, given, directory, conf):
         if index is None or not writable(directory):
             index = build(directory, home, cwd, given, embed_now=False, write=False)
@@ -1498,6 +2002,218 @@ def skills_read(tail, turn_id, index, cwd):
     return named, unknown
 
 
+"""Claude Code's hook: route-skills.py, which Claude Code runs on UserPromptSubmit and Stop, calls run_hook().
+
+On UserPromptSubmit the message is searched and the best few skills are put in front of the model. A skill given earlier
+in the conversation, with the same description, is not given again: the earlier blocks are read from the transcript,
+where Claude Code records each hook's added text as an attachment row (type hook_additional_context) when the prompt is
+submitted. ROUTED_SUFFIX beside the plan keeps what was read, name -> description, and how far, so each turn reads only
+what was added since. A compaction empties it (Claude Code's compact_boundary row, its summary row, or the compaction
+hook's COMPACTED_SUFFIX mark), since it takes the earlier blocks out of the context. When some of a turn's skills were
+given earlier, ORDER_LINE lists every one in order of fit and marks those with GIVEN_EARLIER.
+
+On Stop the turn is read back and the log records which skills its Skill tool calls named.
+"""
+ROUTED_SUFFIX = ".routed"
+ROUTED_FORMAT = 1
+ORDER_LINE = "In order of fit: "
+GIVEN_EARLIER = " (given earlier)"
+ORDER_END = (". Those given earlier had their description given in full earlier in this conversation and are not "
+             "repeated here.")
+READ_MAX = 64 << 20      # transcript read in one turn at most; past it the record starts over
+CLAUDE_LINE = re.compile(r"^- ([^\s:]+(?::[^\s:]+)?): (.*)$")
+CLAUDE_RESETS = ('"compact_boundary"', '"isCompactSummary"')
+
+
+def claude_blocks(row):
+    """The lines of the routing blocks in one transcript row: [(name, description)]."""
+    att = row.get("attachment") if row.get("type") == "attachment" else None
+    if not isinstance(att, dict) or att.get("type") != "hook_additional_context":
+        return []
+    out = []
+    for text in att.get("content") if isinstance(att.get("content"), list) else []:
+        at = text.find(MARK) if isinstance(text, str) else -1
+        if at < 0:
+            continue
+        for line in text[at:].split("\n")[1:]:
+            if line.startswith(ORDER_LINE):
+                continue
+            m = CLAUDE_LINE.match(line)
+            if not m:
+                break
+            out.append((m.group(1), m.group(2)))
+    return out
+
+
+def claude_given_earlier(plan, transcript):
+    """name -> description of the skills given in full earlier in the conversation and still in its context."""
+    if not plan or not isinstance(transcript, str) or not transcript:
+        return {}
+    compacted = ""
+    try:
+        with open(side_file(plan, COMPACTED_SUFFIX), encoding="utf-8") as fh:
+            compacted = fh.read().strip()
+    except Exception:
+        pass
+    try:
+        with open(side_file(plan, ROUTED_SUFFIX), encoding="utf-8") as fh:
+            kept = json.load(fh)
+    except Exception:
+        kept = {}
+    if not isinstance(kept, dict) or kept.get("format") != ROUTED_FORMAT or kept.get("transcript") != transcript:
+        kept = {}
+    given = kept.get("given") if isinstance(kept.get("given"), dict) else {}
+    offset = kept.get("offset") if isinstance(kept.get("offset"), int) else 0
+    if kept.get("compacted", "") != compacted:
+        given = {}
+    try:
+        size = os.path.getsize(transcript)
+    except OSError:
+        return {}
+    if size < offset:
+        given, offset = {}, 0
+    if size - offset > READ_MAX:
+        given, offset = {}, size
+    data = b""
+    if size > offset:
+        try:
+            with open(transcript, "rb") as fh:
+                fh.seek(offset)
+                data = fh.read(size - offset)
+        except OSError:
+            return {}
+    end = data.rfind(b"\n") + 1
+    for raw in data[:end].split(b"\n"):
+        if MARK.encode() not in raw and not any(k.encode() in raw for k in CLAUDE_RESETS):
+            continue
+        try:
+            row = json.loads(raw.decode("utf-8"))
+        except Exception:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if row.get("isCompactSummary") is True or (row.get("type") == "system" and row.get("subtype") ==
+                                                  "compact_boundary"):
+            given = {}
+            continue
+        for name, desc in claude_blocks(row):
+            given[name] = desc
+    write_quietly(side_file(plan, ROUTED_SUFFIX), json.dumps(
+        {"format": ROUTED_FORMAT, "transcript": transcript, "offset": offset + end, "compacted": compacted, "given": given},
+        ensure_ascii=False))
+    return given
+
+
+def claude_block(top, given):
+    """The text for this turn's skills, and the names given in full and only named."""
+    full = [s for s in top if given.get(s["name"]) != (one_line(s["desc"], CLAUDE_DESC_CHARS) or "(no description)")]
+    named = [s["name"] for s in top if s not in full]
+    if not named:
+        return render(top), [s["name"] for s in top], []
+    order = ORDER_LINE + ", ".join(s["name"] + ("" if s in full else GIVEN_EARLIER) for s in top) + ORDER_END
+    text = render(full, limit=CLAUDE_CONTEXT_BYTES - len(order.encode("utf-8")) - 1)
+    head, _, rest = text.partition("\n")
+    return "\n".join([head, order] + ([rest] if rest else [])), [s["name"] for s in full], named
+
+
+def claude_submit(payload, directory, given, t0):
+    """The block for a UserPromptSubmit event, or None."""
+    text = str(payload.get("prompt") or "").strip()
+    ids = {"session": str(payload.get("session_id") or ""), "turn": str(payload.get(TURN_FIELD) or "")}
+    if len(text) < MIN_CHARS:
+        log(directory, dict(ids, ev="skip", why="short"))
+        return None
+    home = home_of(directory)
+    cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) else ""
+    conf = claude_conf(home, cwd)
+    index = load_index(directory, cwd)
+    t_load = time.time()
+    why = stale(index, home, cwd, given, directory, conf)
+    standing_in = False
+    if why and not writable(directory):
+        index = build(directory, home, cwd, given, embed_now=False, write=False)
+        t_load = time.time()
+    elif why:
+        spawn_build(directory, cwd)
+        if index is None:
+            index = stand_in(directory, cwd)
+            standing_in = index is not None
+            t_load = time.time()
+    if index is None:
+        log(directory, dict(ids, ev="skip", why="the index is being built"))
+        return None
+    count = max(1, min(MAX_COUNT, int(given.get("skillRouteCount") or 5)))
+    top, how, timings, failed = search(index, text, count, cwd, t0 + BUDGET, directory, given, conf,
+                                       allow_vector=not standing_in)
+    out, full, named = None, [], []
+    if top:
+        out, full, named = claude_block(top, claude_given_earlier(plan_file(payload, directory),
+                                                                  payload.get("transcript_path")))
+    record = dict(ids, ev="inject", via=how, skills=[s["name"] for s in top], full=full, named=named,
+                  ms=round((time.time() - t0) * 1000, 1), msLoad=round((t_load - t0) * 1000, 1),
+                  msLocal=round(timings["local"], 1), msNet=round(timings["net"], 1))
+    if failed:
+        record["fellBack"] = failed[:160]
+    if why:
+        record["rebuild"] = why
+    if standing_in:
+        record["standIn"] = True
+    log(directory, record)
+    return out
+
+
+def claude_called(tail):
+    """The skills this turn's Skill tool calls named, read back from the transcript to the turn's prompt."""
+    named = []
+    for line in tail.lines() if tail is not None else []:
+        if '"user"' in line:
+            try:
+                if spoke(json.loads(line)):
+                    break
+            except (ValueError, AttributeError):
+                pass
+        if '"Skill"' not in line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        for tool, args in reversed(tool_calls(row)) if isinstance(row, dict) else []:
+            skill = args.get("skill") if tool == "Skill" and isinstance(args, dict) else None
+            if isinstance(skill, str) and skill and skill not in named:
+                named.append(skill)
+    named.reverse()
+    return named
+
+
+def run_hook(t0):
+    """route-skills.py's main: print the hook's output, if any. Anything that goes wrong leaves the turn alone."""
+    try:
+        payload = read_payload()
+    except Exception:
+        return 0
+    if not isinstance(payload, dict):
+        return 0
+    directory = data_dir()
+    given = settings()
+    if not given.get("skillRoute"):
+        return 0
+    event = payload.get("hook_event_name")
+    try:
+        if event == "Stop":
+            log(directory, {"session": str(payload.get("session_id") or ""), "ev": "read",
+                            "skills": claude_called(open_tail(payload.get("transcript_path")))})
+            return 0
+        text = claude_submit(payload, directory, given, t0)
+    except Exception as e:
+        log(directory, {"ev": "error", "why": "%s: %s" % (type(e).__name__, str(e)[:160])})
+        return 0
+    if text:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event or "UserPromptSubmit",
+                                                 "additionalContext": text}}, ensure_ascii=False))
+    return 0
+
+
 def selftest():
     """Self-test that needs no other file. The full suite is test/route/test_skill_route.py in the extension's
     repository."""
@@ -1519,6 +2235,17 @@ def selftest():
     idx = {"keyword": keyword_index([{"name": "a:cr-create", "short": "cr-create", "desc": "Publish a code review.",
                                       "triggers": ""}])}
     check(list(keyword_scores(idx, "publish my code reviews")) == [0], "the keyword search finds a skill")
+    one = {"name": "a:cr-create", "desc": "Publish a code review.", "path": "/x/SKILL.md"}
+    if CLAUDE:
+        block = render([one])
+        check(block.startswith(MARK) and "Skill tool" in block and block.endswith("\n- a:cr-create: Publish a code review."),
+              "the block gives each skill by the name the Skill tool takes, with no file")
+        row = {"type": "attachment", "attachment": {"type": "hook_additional_context", "content": [block]}}
+        check(claude_blocks(row) == [("a:cr-create", "Publish a code review.")], "a block is read back from a transcript row")
+        check(paths_set("---\npaths:\n  - '*.py'\n---\n") and not paths_set("---\npaths: []\n---\n"),
+              "a skill that waits for a matching file is told apart")
+    else:
+        check(render([one]).endswith("(file: /x/SKILL.md)"), "the block gives each skill's file")
     print("all checks pass" if not failures else "%d failed" % len(failures))
     return 0 if not failures else 1
 

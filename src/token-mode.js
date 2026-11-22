@@ -48,6 +48,7 @@ const SWITCHES = Object.freeze([
   { key: 'claudeCodePlus.workPlan', feature: 'workPlan', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.tellClaudeYourTimeZone', feature: 'timeZone', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.claude-code-plus', default: true },
+  { key: 'claudeCodePlus.skillRouting', feature: 'skillRouting', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'codexPlus.workPlan', feature: 'workPlan', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.tellCodexYourTimeZone', feature: 'timeZone', extension: 'xnervwang.codex-plus', default: true },

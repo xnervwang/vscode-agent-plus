@@ -15,7 +15,7 @@ const MODES = ['interface', 'essential', 'all', 'custom'];
 const CODEX_KEYS = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'codexPlus.conversationBrief', 'codexPlus.skillRouting', 'codexPlus.wakeUps',
   'codexPlus.detachedEndNotices'];
 const CLAUDE_KEYS = ['claudeCodePlus.workPlan', 'claudeCodePlus.tellClaudeYourTimeZone', 'claudeCodePlus.conversationBrief',
-  'claudeCodePlus.detachedEndNotices'];
+  'claudeCodePlus.skillRouting', 'claudeCodePlus.detachedEndNotices'];
 
 /* A stand-in VS Code holding only settings, for the pure functions. */
 function settings(config = {}) {
@@ -61,17 +61,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       essential: [true, true, false, false, false, false],
       all: [true, true, true, true, true, true],
     };
-    /* Claude Code Plus's features are the first three of Codex Plus's and the last one. */
-    const claudeWant = (w) => [...w.slice(0, 3), w[w.length - 1]];
+    /* Claude Code Plus's features are the first four of Codex Plus's and the last one. */
+    const claudeWant = (w) => [...w.slice(0, 4), w[w.length - 1]];
     for (const mode of ['interface', 'essential', 'all']) {
       const { vscode } = settings({ 'agentPlus.tokenMode': mode, ...Object.fromEntries(CODEX_KEYS.map((k) => [k, mode === 'all' ? false : true])) });
       eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), want[mode], `${mode}: the six Codex Plus features run as the table says, whatever their own settings are`);
-      eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), claudeWant(want[mode]), `${mode}: and Claude Code Plus's four`);
+      eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), claudeWant(want[mode]), `${mode}: and Claude Code Plus's five`);
     }
     const custom = { 'codexPlus.workPlan': false, 'codexPlus.tellCodexYourTimeZone': true, 'codexPlus.skillRouting': false, 'claudeCodePlus.conversationBrief': false };
     const { vscode, control } = settings({ 'agentPlus.tokenMode': 'custom', ...custom });
     eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), [false, true, true, false, true, true], 'custom: each feature follows its own setting, one not set being on');
-    eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false, true], 'custom: Claude Code Plus\'s too');
+    eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false, true, true], 'custom: Claude Code Plus\'s too');
     const nulls = settings({ 'agentPlus.tokenMode': 'custom', 'codexPlus.workPlan': null, 'claudeCodePlus.conversationBrief': null }).vscode;
     eq([tm.effective(nulls, 'codexPlus.workPlan'), tm.effective(nulls, 'claudeCodePlus.conversationBrief')], [true, true],
       'custom: a setting stored as null, which only a hand edit or another extension writes, is read as its default');
@@ -298,7 +298,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(a.control.state.commands.filter((c) => c[0] === 'workbench.action.openSettings'), [], 'and opens no settings');
     a.control.state.onQuickPick = (qp) => qp.hide();
     eq([await a.control.state.handlers['agentPlus.chooseTokenMode'](), a.control.state.configWrites.length], ['', 1], 'closing the list changes nothing');
-    const query = '@id:claudeCodePlus.workPlan,claudeCodePlus.tellClaudeYourTimeZone,claudeCodePlus.conversationBrief,claudeCodePlus.detachedEndNotices,'
+    const query = '@id:claudeCodePlus.workPlan,claudeCodePlus.tellClaudeYourTimeZone,claudeCodePlus.conversationBrief,claudeCodePlus.skillRouting,'
+      + 'claudeCodePlus.detachedEndNotices,'
       + 'codexPlus.workPlan,codexPlus.tellCodexYourTimeZone,codexPlus.conversationBrief,codexPlus.skillRouting,codexPlus.wakeUps,codexPlus.detachedEndNotices';
     for (const pass of [1, 2]) {
       a.control.state.onQuickPick = (qp) => qp.accept(qp.items.find((i) => i.mode === 'custom'));
@@ -319,7 +320,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const a = host({ memento: earlier(), extensions: [CLAUDE()] });
     await wait(20);
     const item = a.control.state.status.find((s) => s.id === 'agentPlus.tokenMode');
-    eq(item.tooltip.split('\n')[1], 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, notices when a detached command stops', 'with only Claude Code Plus installed, only its features are listed');
+    eq(item.tooltip.split('\n')[1], 'Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, notices when a detached command stops', 'with only Claude Code Plus installed, only its features are listed');
     a.close();
     const alone = host({ memento: earlier(), extensions: [] });
     await wait(20);

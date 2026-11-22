@@ -14,9 +14,8 @@ const fs = require('fs');
 const path = require('path');
 
 const AGENTS = ['claude', 'codex'];
-/* skill_route.py reads Codex's own folders (plan_agent.codex_home), so it runs under Codex's part only, until Claude
-   Code's part gives it a home of its own. */
-const ONLY = { 'skill_route.py': ['codex'] };
+/* Hooks that only one agent's part ships, by file name. */
+const ONLY = {};
 
 module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
   const shared = path.join(root, 'shared', 'plugin');
