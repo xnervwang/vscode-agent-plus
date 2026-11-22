@@ -36,7 +36,8 @@ function activate(context) {
   const panels = new Map();
   const state = { problem: '', notice: null, canDeliver: true, outcome: { outcome: 'submitted' }, answers: [], revealed: [], ran: [], seenOnOpen: true };
 
-  const html = (title) => `<!DOCTYPE html><html><body style="font-family: var(--vscode-font-family); color: var(--vscode-foreground)">`
+  const html = (title) => `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"></head>`
+    + `<body style="font-family: var(--vscode-font-family); color: var(--vscode-foreground)">`
     + `<h2>${String(title).replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</h2><p>A stand-in conversation of the Agent Plus window test.</p></body></html>`;
   const sessionOfPanel = (panel) => { for (const [id, p] of panels) if (p === panel) return id; return null; };
   const frontTab = () => { const g = vscode.window.tabGroups.activeTabGroup; return g && g.activeTab; };
@@ -50,6 +51,7 @@ function activate(context) {
     const c = list.get(id);
     if (!state.seenOnOpen || !c || !c.unseen) return;
     c.unseen = false;
+    if (c.state === 'unread') c.state = 'idle';
     changed.fire();
   };
   const openTab = (id, { preserveFocus = false } = {}) => {

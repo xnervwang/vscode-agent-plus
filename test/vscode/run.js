@@ -121,6 +121,11 @@ async function testStage() {
        click their buttons. VS Code's default is the system dialog on every platform. */
     'window.dialogStyle': 'custom',
     'window.newWindowDimensions': 'maximized',
+    /* Context menus drawn in the page, where Playwright can read them; macOS draws the system's by default. */
+    'window.menuStyle': 'custom',
+    'window.confirmBeforeClose': 'never',
+    /* No editor shows the folders above a file, which are this machine's temporary folders. */
+    'breadcrumbs.enabled': false,
     'workbench.secondarySideBar.defaultVisibility': 'hidden',
   }, LOOK ? ui.LOOK_SETTINGS : {}), null, 2));
 

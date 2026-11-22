@@ -85,9 +85,13 @@ async function open({ exe, profile, env, playwright, log, dev = [], trust = fals
     if (!r.ok) throw new Error(`in the extension host: ${r.error}`);
     return r.value;
   };
+  /* Quits through VS Code first, which writes the profile's state as a person closing it would; a signal only if that
+     does not end it. */
   const close = async () => {
+    try { await call('setTimeout(() => vscode.commands.executeCommand("workbench.action.quit"), 100); return true;', undefined, 10000); } catch (_) { /* gone */ }
+    await until(() => exited !== null, 20000);
     try { await browser.close(); } catch (_) { /* gone */ }
-    try { proc.kill('SIGTERM'); } catch (_) { /* gone */ }
+    if (exited === null) { try { proc.kill('SIGTERM'); } catch (_) { /* gone */ } }
     await until(() => exited !== null, 15000);
     if (exited === null) { try { proc.kill('SIGKILL'); } catch (_) { /* gone */ } }
     await until(() => exited !== null, 5000);
