@@ -21,8 +21,8 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | `agentPlus.workPlanView` | `true` | Show the Work plan view |
 | `agentPlus.conversationsView` | `true` | Show the Conversations and Answer views and the Conversations entry in the status bar |
 | `agentPlus.notifications.enabled` | `true` | Show those notifications and the count in the status bar |
-| `agentPlus.notifications.finished` | `true` | Include conversations that stopped with a reply you have not read (an envelope) |
-| `agentPlus.notifications.waiting` | `true` | Include conversations waiting for your permission or answer (a red dot) |
+| `agentPlus.notifications.finished` | `true` | Notify about conversations that stopped with a reply you have not read (an envelope). The status bar counts them either way |
+| `agentPlus.notifications.waiting` | `true` | Notify about conversations waiting for your permission or answer (a red dot). The status bar counts them either way |
 | `agentPlus.webviewRequestLimit` | `ask` | Raise VS Code's request limit: `ask` once per VS Code version, `raise` without asking, or `leave` it |
 
 ## What it costs in tokens
@@ -75,10 +75,11 @@ Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) 
 | Limit | Detail |
 | --- | --- |
 | The envelope needs file decoration badges | It is a badge like the Explorer's, so it is hidden while `explorer.decorations.badges` is off |
-| Notifications reach the windows of one machine | The windows share them through a folder in your home folder, so a window connected to another machine, over Remote-SSH say, hears from the windows on that machine only. There is no system notification while no VS Code window has the focus |
+| Notifications reach the windows of one machine | The windows share them through a folder in your home folder, so a window connected to another machine, over Remote-SSH say, hears from the windows on that machine only. There is no system notification while no VS Code window has the focus. Open brings the window that shows the conversation to the front through VS Code's command line, which does not reach a VS Code started with its own `--user-data-dir` |
 | The request limit is only changed in a VS Code in a standard install location | A portable or ZIP copy, or one in a directory of your own, is not found: the client's application directory is searched in the places each platform puts it, and a remote window cannot ask the client where VS Code was started from. The Agent Plus output, which `Agent Plus: Show Status` opens, then says `no installation found`; no prompt to raise the limit is shown and no file is touched. To raise it anyway, replace `maxActiveHostResourceResponseBodies=32,` with `maxActiveHostResourceResponseBodies=1000000,` in `out/vs/workbench/contrib/webview/browser/pre/service-worker.js` under that copy of VS Code, and quit and reopen it |
 
 ## For extension authors
 
 - `docs/protocol.md`: how an extension shows its agent's conversations in Agent Plus.
 - `node test/check.js` runs all the tests, with nothing to install first.
+- `node test/vscode/run.js <the .vsix> --local` runs the extension in real VS Code windows with a stand-in agent; `--look` also saves a picture of each step to review. The vscode workflow runs it on Linux, macOS and Windows.

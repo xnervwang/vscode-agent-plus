@@ -274,12 +274,12 @@
         "agentPlus.notifications.finished": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Include conversations that stopped with a reply you have not read (an envelope). Needs `#agentPlus.notifications.enabled#`."
+          "markdownDescription": "Notify about conversations that stopped with a reply you have not read (an envelope). The status bar counts them either way. Needs `#agentPlus.notifications.enabled#`."
         },
         "agentPlus.notifications.waiting": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Include conversations waiting for your permission or answer (a red dot). Needs `#agentPlus.notifications.enabled#`."
+          "markdownDescription": "Notify about conversations waiting for your permission or answer (a red dot). The status bar counts them either way. Needs `#agentPlus.notifications.enabled#`."
         },
         "agentPlus.webviewRequestLimit": {
           "type": "string",
