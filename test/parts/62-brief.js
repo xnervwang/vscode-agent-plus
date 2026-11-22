@@ -136,6 +136,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     a.v.showBrief(conv.briefOf(C({ brief: written, state: 'working', questions: [q],
       doing: [{ row: '2', title: 'Brief view', since: now - 12 * MIN, note: '' }] })));
     const pg = runPage(a.v.html());
+    eq(/button\.secondary \{[^}]*border-color: var\(--vscode-button-secondaryBorder, var\(--vscode-button-border/.test(a.v.html()), true,
+      'a secondary button such as "Go to the conversation" has the theme\'s button border, since Dark Modern gives it no background');
     pg.post(a.last());
     const { els } = pg;
     const sections = els.bsections.children.map((c) => c.textContent);

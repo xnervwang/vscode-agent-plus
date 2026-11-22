@@ -291,10 +291,13 @@ class AnswerView {
   #bar { display: flex; align-items: center; gap: 8px; }
   #status { flex: 1; color: var(--vscode-descriptionForeground); }
   #status.failed { color: var(--vscode-errorForeground); }
-  button { font-family: inherit; font-size: inherit; padding: 3px 10px; border: none; cursor: pointer;
-    color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
+  /* Dark Modern gives a secondary button no background, only the border VS Code draws round its own buttons. */
+  button { font-family: inherit; font-size: inherit; padding: 2px 9px; border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 2px; cursor: pointer; color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
   button:hover { background: var(--vscode-button-hoverBackground); }
-  button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
+  button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground);
+    border-color: var(--vscode-button-secondaryBorder, var(--vscode-button-border, transparent)); }
+  button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
   button:disabled { opacity: 0.5; cursor: default; }
   #brief { display: none; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: auto; }
   #bhead { display: flex; align-items: center; gap: 8px; }
