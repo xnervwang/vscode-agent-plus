@@ -301,7 +301,8 @@ def vec(text):
 class Bedrock(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
-        seen.append((self.path, self.headers.get("authorization", ""), body["input_type"], len(body["texts"])))
+        seen.append((self.path, self.headers.get("authorization", ""), body["input_type"], len(body["texts"]),
+                     self.headers.get("x-amz-security-token", "")))
         out = json.dumps({"embeddings": {"float": [vec(x) for x in body["texts"]]}}).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
@@ -335,7 +336,11 @@ check(vindex is not None and vindex.get("dim") == DIM and all(vindex.get("has") 
       "the index holds a vector for every skill, from credentials printed as STS prints them")
 top, how, _, why = route.search(vindex, "is my shelf level", 2, w["cwd"], time.time() + 5, w["data"], vgiven, conf)
 check(how == "vector" and top and top[0]["name"] == "toolbox:level", "the search goes by meaning (%s)" % (why or how))
-check(seen and all(("Credential=%s/" % KEY) in a for _, a, _, _ in seen), "each request is signed with those credentials")
+check(seen and all(("Credential=%s/" % KEY) in a for _, a, _, _, _ in seen), "each request is signed with those credentials")
+check(seen and all(tok == TOKEN and "/us-west-2/bedrock/aws4_request" in a and "x-amz-security-token" in
+                   a.split("SignedHeaders=")[1].split(",")[0].split(";") and p.startswith("/model/us.cohere.embed-v4") for
+                   p, a, _, _, tok in seen),
+      "and carries the session token, signed with it, for Claude Code's region and the region's cross-region model id")
 leaked = []
 for base, _, fs in os.walk(w["data"]):
     for f in fs:
