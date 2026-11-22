@@ -10,13 +10,12 @@
  *     node test/look/conversations-panel.js --vscode <VS Code executable> --out <folder> [--emoji-font <.ttf>]
  *
  * Opens VS Code on an empty folder with this extension and the stand-in source in test/look/source, both from their
- * folders rather than installed, and writes three pictures for each of the Default Dark Modern and Default Light Modern
- * themes, at twice the pixels: panel-<theme>.png, the Conversations view; rows-<theme>.png, its first rows; and
- * window-<theme>.png. It prints the icon and the badge of each row. HOME, VS Code's profile and the shared folder all
- * point under --out.
+ * folders rather than installed, and saves panel-, rows-, window- and narrow-<theme>.png for each theme in THEMES.
+ * It prints each row's icon and badge, and fails if an envelope has no room left beside its title. HOME, VS Code's
+ * profile and the shared folder all point under --out.
  *
- * A machine with no colour emoji font draws the envelope as a plain glyph. --emoji-font adds one, such as the Twemoji
- * font Firefox ships, for the envelope as Windows and macOS draw it.
+ * A machine with no colour emoji font draws the envelope as a plain glyph; --emoji-font adds one, such as the Twemoji
+ * font Firefox ships.
  */
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +39,29 @@ async function until(test, ms, every = 250) {
     if (v || Date.now() > end) return v;
     await sleep(every);
   }
+}
+
+const NARROW_CSS_PX = 230;
+
+/*
+ * VS Code cuts the label inside .monaco-icon-label-container and draws a decoration's badge as
+ * .monaco-icon-label::after, outside that container, so an envelope stays visible as long as some width is left
+ * after the container and the row ends inside the view.
+ */
+async function checkEnvelopes(page, view, theme, when) {
+  const rows = await view.evaluate((pane) => [...pane.querySelectorAll('.monaco-list-row')].map((el) => {
+    const label = el.querySelector('.monaco-icon-label');
+    const box = el.querySelector('.monaco-icon-label-container');
+    const name = el.querySelector('.label-name');
+    const badge = label ? getComputedStyle(label, '::after').content : '';
+    return { title: name ? name.textContent : '', envelope: /\u2709/.test(badge), cut: !!box && box.scrollWidth > box.clientWidth,
+      room: label && box ? Math.round(label.getBoundingClientRect().right - box.getBoundingClientRect().right) : 0,
+      fits: el.getBoundingClientRect().right <= pane.getBoundingClientRect().right + 0.5 };
+  }).filter((r) => r.title));
+  console.log(`${theme}, ${when}:\n` + rows.map((r) => `  ${r.envelope ? 'envelope' : '        '} ${r.cut ? 'cut' : '   '} room ${String(r.room).padStart(3)} ${r.title}`).join('\n'));
+  const lost = rows.filter((r) => r.envelope && (r.room < 8 || !r.fits));
+  if (lost.length) throw new Error(`${theme}, ${when}: no room left for the envelope on ${lost.map((r) => JSON.stringify(r.title)).join(', ')}`);
+  if (/narrowed/.test(when) && !rows.some((r) => r.envelope && r.cut)) throw new Error(`${theme}, ${when}: no row with an envelope was cut short`);
 }
 
 async function shoot(exe, out, theme) {
@@ -100,6 +122,21 @@ async function shoot(exe, out, theme) {
     await page.screenshot({ path: path.join(out, `rows-${theme}.png`), clip: { x: box.x, y: box.y, width: Math.min(box.width, 520), height: Math.min(box.height, 330) },
       scale: 'device' });
     await page.screenshot({ path: path.join(out, `window-${theme}.png`) });
+    await checkEnvelopes(page, view, theme, 'as opened');
+    const sash = await view.evaluate((pane) => {
+      const right = pane.getBoundingClientRect().right;
+      const s = [...document.querySelectorAll('.part.panel .monaco-sash.vertical')]
+        .map((el) => el.getBoundingClientRect()).find((r) => r.height > 0 && Math.abs(r.left + r.width / 2 - right) < 8);
+      return s ? { x: s.left + s.width / 2, y: s.top + s.height / 2 } : null;
+    });
+    if (!sash) throw new Error('no sash beside the Conversations view to narrow it with');
+    await page.mouse.move(sash.x, sash.y);
+    await page.mouse.down();
+    await page.mouse.move(sash.x - (box.width - NARROW_CSS_PX), sash.y, { steps: 10 });
+    await page.mouse.up();
+    await sleep(800);
+    await view.screenshot({ path: path.join(out, `narrow-${theme}.png`) });
+    await checkEnvelopes(page, view, theme, `narrowed to ${Math.round((await view.boundingBox()).width)} px`);
   } finally {
     try { if (browser) await browser.close(); } catch (_) { /* gone */ }
     proc.kill('SIGTERM');
