@@ -110,7 +110,9 @@ function bringToFront(vscode, log = () => {}) {
   if (!target || target.scheme !== 'file') return false;
   const name = process.platform === 'win32' ? 'code.cmd' : 'code';
   const root = vscode.env.appRoot || '';
-  const cli = [path.join(root, 'bin', 'remote-cli', name), path.join(root, 'bin', name)]
+  /* A remote server keeps it in its root, the macOS app under appRoot, and the Linux and Windows desktop builds two
+     levels up, beside resources/app. */
+  const cli = [path.join(root, 'bin', 'remote-cli', name), path.join(root, 'bin', name), path.join(root, '..', '..', 'bin', name)]
     .find((p) => { try { return fs.statSync(p).isFile(); } catch (_) { return false; } });
   if (!cli) { log('open: no command line found to bring this window to the front'); return false; }
   cp.execFile(cli, [target.fsPath], { timeout: 15000, shell: process.platform === 'win32', windowsHide: true },
