@@ -9,7 +9,7 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | Answer a plan question, delivered to the window that shows the conversation | Answer view, beside Conversations |
 | A conversation's brief on clicking its row, for agents whose extension keeps one: its summary and current status in its own words, when written, whether out of date, what runs now; else one put together from its plan, marked so. The row's arrow goes to the conversation | Answer view, beside Conversations |
 | `N to decide` (questions waiting for you), or `Conversations M` (running ones) when there are none. A conversation counts as running while its agent's extension says so: Codex Plus while a turn runs, while something it started is still running after its turn, while a tab in this window shows it, or for 15 minutes after it was last active; Claude Code Plus while a Claude Code process has it open | Status bar |
-| Rows in a state this version does not know, and plans in a newer format, marked as such | Work plan and Conversations views |
+| Rows in a state this version of Agent Plus does not know, and plans in a newer format, marked as such | Work plan and Conversations views |
 | A notification when a conversation in any VS Code window on this machine starts to wait for you, or stops with a reply you have not read and stays stopped for 5 seconds. Only the window that has the focus shows it, none while no window has the focus, and not for the conversation that window shows in front, which the status bar does not count either. Changes close together share one, and it closes once you have looked at the conversation. Open brings the conversation, and the window that shows it, to the front | Notification |
 | How many conversations wait for you or stopped with a reply you have not read, in every window; a click lists them to open one | Status bar |
 | VS Code's limit of 32 requests in flight for all webview tabs together, raised on request | VS Code's files |
@@ -29,12 +29,12 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 
 | Feature | What it adds to the agent's context | Interface features | Essential features | All features | Custom |
 | --- | --- | --- | --- | --- | --- |
-| Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | Per-feature setting |
-| Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | Per-feature setting |
-| Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | Per-feature setting |
-| Skill suggestions (Codex Plus) | The installed skills that best fit your message, before each turn | Off | Off | On | Per-feature setting |
-| Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | Per-feature setting |
-| Detached-command notices | A notice to the conversation that left a command running detached, once that command is no longer running | Off | Off | On | Per-feature setting |
+| Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | `claudeCodePlus.workPlan`, `codexPlus.workPlan` |
+| Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | `claudeCodePlus.tellClaudeYourTimeZone`, `codexPlus.tellCodexYourTimeZone` |
+| Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | `claudeCodePlus.conversationBrief`, `codexPlus.conversationBrief` |
+| Skill suggestions (Codex Plus) | The installed skills that best fit your message, before each turn | Off | Off | On | `codexPlus.skillRouting` |
+| Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | `codexPlus.wakeUps` |
+| Detached-command notices | A notice to the conversation that left a command running detached, once that command is no longer running | Off | Off | On | `claudeCodePlus.detachedEndNotices`, `codexPlus.detachedEndNotices` |
 
 `agentPlus.tokenMode` controls which features of Claude Code Plus and Codex Plus add text to the agent's context. It defaults to All features. The Interface features mode adds nothing to the agent's context and unloads the work plan plugin from the agent. Choosing another mode puts the plugin back.
 
@@ -42,7 +42,7 @@ Outside Custom, the per-feature settings in Claude Code Plus and Codex Plus have
 
 After a first install, a notice asks once for a mode; closing it keeps All features. If a per-feature setting was changed from its default in an earlier version, upgrading selects Custom so that setting keeps working. The token mode entry in the status bar shows the mode. Hover over it to see what the mode adds to the agent's context, or click it to choose from the four modes.
 
-In a running conversation, a mode change applies from the next message to work plan injection and reminders, the time-zone note, the conversation brief, skill suggestions, wake-ups, and detached-command notices. Skill descriptions already in context stay there. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
+In a running conversation, a mode change applies from the next message to the plan rows added to each turn and the plan reminders, the time-zone note, the conversation brief, skill suggestions, wake-ups, and detached-command notices. Skill descriptions already in context stay there. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
 
 ## Install
 
