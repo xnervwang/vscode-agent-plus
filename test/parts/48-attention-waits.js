@@ -73,6 +73,33 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (const w of [a, b, f]) w.att.dispose();
   }
 
+  /* The window that reads a machine-wide list hears of a permission prompt first, without the tool; the window whose panel
+     shows it names the tool a moment later, and the notice waits for that. One nobody names is shown once the wait is over. */
+  {
+    const dir = path.join(tmp('precise'), 'attention');
+    const mk = (name, focused) => {
+      const w = { focused, shown: [] };
+      w.att = at.createAttention({ dir, windowId: `${name}-00000000`, now: () => clock, focused: () => w.focused, settings: () => settings,
+        warmupMs: 0, batchMs: 10, preciseMs: 1000, show: (text) => { w.shown.push(text); } });
+      return w;
+    };
+    const list = mk('pl', true), panel = mk('pp', false);
+    list.att.publish(lists(workingConv('x', 'Named later'), workingConv('y', 'Never named')));
+    await round(list, panel);
+    list.att.publish(lists(waiting('x', 'Named later', { kind: 'permission' }), waiting('y', 'Never named', { kind: 'permission' })));
+    await round(list, panel);
+    const early = list.shown.splice(0);
+    clock += 500;
+    panel.att.publish(lists(waiting('x', 'Named later', { kind: 'permission', tool: 'Bash' })));
+    await round(list, panel);
+    const named = list.shown.splice(0);
+    clock += 1000;
+    await round(list, panel);
+    eq([early, named, list.shown.splice(0)], [[], ['"Named later" is waiting for you to approve Bash.'], ['"Never named" is waiting for your approval.']],
+      'a permission prompt the first report does not name the tool of is shown once a window names it, with the tool; one nobody names is shown once that wait is over');
+    for (const w of [list, panel]) w.att.dispose();
+  }
+
   /* The focused window shows a conversation anywhere: no notice there, for a wait or a finished reply; the count stays. */
   {
     const dir = path.join(tmp('same'), 'attention');

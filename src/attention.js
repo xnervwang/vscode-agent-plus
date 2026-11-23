@@ -51,6 +51,9 @@ const FORMAT = 1;
 const BEAT_MS = 20000;
 const STALE_MS = 60000;
 const BATCH_MS = 2000;
+/* How long a notice of a permission prompt whose tool no window has named yet waits for the window whose panel shows the
+   prompt to name it: a window that reads a machine-wide list can hear of the wait first. */
+const PRECISE_MS = 3000;
 const STABLE_MS = 5000;
 /* What a window reads in its first seconds was there before it started. */
 const WARMUP_MS = 10000;
@@ -179,7 +182,7 @@ function message(items, { several }) {
  */
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
   shownHere = () => false, settings, canWrite = () => true, show, paint = () => {}, several = () => false, log = () => {},
-  batchMs = BATCH_MS, warmupMs = WARMUP_MS, stableMs = STABLE_MS }) {
+  batchMs = BATCH_MS, warmupMs = WARMUP_MS, stableMs = STABLE_MS, preciseMs = PRECISE_MS }) {
   const ownName = `${windowId}.json`;
   const own = path.join(dir, ownName);
   const startedAt = now();
@@ -261,15 +264,22 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     try { show(message(fresh, { several: several() }), fresh); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
   }
 
+  /* What is shown is each conversation as the windows report it now, not as it was when it was first seen. */
   function flush() {
     timer = null;
     if (closed) return;
-    const s = settings();
-    const items = [...pending.values()].filter((it) => {
+    const s = settings(), t = now();
+    const items = [], later = [];
+    for (const it of pending.values()) {
       const cur = union && union.get(it.key);
-      return cur && cur.kind === it.kind && s[it.kind] !== false;
-    });
+      if (!cur || cur.kind !== it.kind || s[it.kind] === false) continue;
+      cur.queuedAt = it.queuedAt;
+      if (cur.kind === 'waiting' && waitReason.detail(cur.waitingFor) === 1 && t - it.queuedAt < preciseMs) later.push(cur);
+      else items.push(cur);
+    }
     pending.clear();
+    for (const it of later) pending.set(it.key, it);
+    if (later.length) timer = setTimeout(flush, batchMs);
     if (!s.enabled || !items.length) return;
     if (isFocused()) { tell(items); return; }
     for (const it of items) {
@@ -359,4 +369,4 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
 }
 
 module.exports = { createAttention, itemsOf, readAll, message, keyOf, kindOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, STABLE_MS,
-  WARMUP_MS, REMEMBER_MS, SETTLED_MS };
+  WARMUP_MS, REMEMBER_MS, SETTLED_MS, PRECISE_MS };
