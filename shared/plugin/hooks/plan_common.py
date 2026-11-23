@@ -137,7 +137,7 @@ def settings(directory=None):
     except Exception:
         return out
     if extension_gone(given):
-        for key in ("enabled", "tellTimeZone", "replyImages") + A.OFF_WHEN_GONE:
+        for key in ("enabled", "tellTimeZone", "replyImages"):
             out[key] = False
         return out
     for key, fallback in DEFAULTS.items():

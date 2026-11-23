@@ -43,10 +43,10 @@ const ALONE = 'Agent Plus is used by Claude Code Plus and Codex Plus, which inst
 const LONG = 'A long title that is cut short in a narrow panel, while the envelope at the end of the row stays in view';
 const Q1 = 'Release from main or from the hotfix branch?';
 const Q2 = 'Should the log keep JSON lines or plain text?';
-/* What Agent Plus's tooltip lists for the six features, in the order of FEATURES in src/token-mode.js. */
-const ALL_FEATURES = ['work plan', 'time-zone note', 'conversation brief', 'skill suggestions', 'wake-ups', 'notices when a detached command stops'];
-const CODEX_SWITCHES = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'codexPlus.conversationBrief', 'codexPlus.skillRouting',
-  'codexPlus.wakeUps', 'codexPlus.detachedEndNotices'];
+/* What Agent Plus's tooltip lists for the five features, in the order of FEATURES in src/token-mode.js. */
+const ALL_FEATURES = ['work plan', 'time-zone note', 'conversation brief', 'wake-ups', 'notices when a detached command stops'];
+const CODEX_SWITCHES = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'codexPlus.conversationBrief', 'codexPlus.wakeUps',
+  'codexPlus.detachedEndNotices'];
 
 const iso = (ms = Date.now()) => new Date(ms).toISOString();
 const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -1119,7 +1119,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const want = tipFor('All features', ALL_FEATURES, []);
     const t = await tip();
     check(t.replace(/\r/g, '') === want, 'its hover says what the mode adds to the agent\'s context', { got: t, want });
-    await look('token-mode-hover', { pointer: true, toasts: true, expect: 'A hover box over the token mode entry All at the bottom right: Token mode: All features, then Adds to the agent\'s context: work plan, time-zone note, conversation brief, skill suggestions, wake-ups, notices when a detached command stops, then What the extensions show in VS Code costs no tokens. and Click to choose another mode.' },
+    await look('token-mode-hover', { pointer: true, toasts: true, expect: 'A hover box over the token mode entry All at the bottom right: Token mode: All features, then Adds to the agent\'s context: work plan, time-zone note, conversation brief, wake-ups, notices when a detached command stops, then What the extensions show in VS Code costs no tokens. and Click to choose another mode.' },
       page.locator('.monaco-hover, .workbench-hover').first());
     await unhover();
   });
@@ -1163,11 +1163,11 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
           const count = ed.querySelector('.settings-count-widget');
           return { query: q ? q.innerText.replace(/\u00a0/g, ' ').trim() : '', found: count ? count.innerText.trim() : '' };
         });
-        return x && /^6 Settings Found$/.test(x.found) && x;
+        return x && /^5 Settings Found$/.test(x.found) && x;
       }, 20000, 500);
       check(!!settings && settings.query === `@id:${CODEX_SWITCHES.join(',')}`,
-        'and opens the Settings editor on the six feature settings of the extension that uses Agent Plus', settings || await page.evaluate(() => !!document.querySelector('.settings-editor')));
-      await look('token-mode-custom', { expect: 'The Settings editor in front, its search box holding @id: followed by six codexPlus setting ids, 6 Settings Found, and below it six settings of Codex Plus, each a ticked checkbox: Conversation Brief, Detached End Notices, Skill Routing, Tell Codex Your Time Zone, Wake Ups and Work Plan.' });
+        'and opens the Settings editor on the five feature settings of the extension that uses Agent Plus', settings || await page.evaluate(() => !!document.querySelector('.settings-editor')));
+      await look('token-mode-custom', { expect: 'The Settings editor in front, its search box holding @id: followed by five codexPlus setting ids, 5 Settings Found, and below it five settings of Codex Plus, each a ticked checkbox: Conversation Brief, Detached End Notices, Tell Codex Your Time Zone, Wake Ups and Work Plan.' });
       /* The Settings editor covers the whole window, and hovering the status bar does nothing until it closes. */
       await page.keyboard.press('Escape');
       await exec('workbench.action.closeActiveEditor');

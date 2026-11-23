@@ -32,7 +32,6 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 | Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | `claudeCodePlus.workPlan`, `codexPlus.workPlan` |
 | Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | `claudeCodePlus.tellClaudeYourTimeZone`, `codexPlus.tellCodexYourTimeZone` |
 | Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | `claudeCodePlus.conversationBrief`, `codexPlus.conversationBrief` |
-| Skill suggestions | The installed skills that best fit your message, with their full descriptions, before each turn | Off | Off | On | `claudeCodePlus.skillRouting`, `codexPlus.skillRouting` |
 | Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | `codexPlus.wakeUps` |
 | Detached-command notices | A notice to the conversation that left a command running detached, once that command is no longer running | Off | Off | On | `claudeCodePlus.detachedEndNotices`, `codexPlus.detachedEndNotices` |
 
@@ -42,7 +41,7 @@ Outside Custom, the per-feature settings in Claude Code Plus and Codex Plus have
 
 After a first install, a notice asks once for a mode; closing it keeps All features. If a per-feature setting was changed from its default in an earlier version, upgrading selects Custom so that setting keeps working. The token mode entry in the status bar shows the mode. Hover over it to see what the mode adds to the agent's context, or click it to choose from the four modes.
 
-In a running conversation, a mode change applies from the next message to the plan rows added to each turn and the plan reminders, the time-zone note, the conversation brief, skill suggestions, wake-ups, and detached-command notices. Skill descriptions already in context stay there. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
+In a running conversation, a mode change applies from the next message to the plan rows added to each turn and the plan reminders, the time-zone note, the conversation brief, wake-ups, and detached-command notices. Changes to the work plan's tool definitions and to whether the plugin is loaded apply to conversations started after the change. Agent Plus itself adds nothing to a conversation. The Claude Code Plus and Codex Plus READMEs list what each feature adds, the most it can add, and its setting.
 
 ## Install
 

@@ -41,7 +41,6 @@
         "codexPlus.workPlan": { "type": "boolean", "default": true, "markdownDescription": "Work plan. Used only while `#agentPlus.tokenMode#` is Custom." },
         "codexPlus.tellCodexYourTimeZone": { "type": "boolean", "default": true, "markdownDescription": "Time-zone note. Used only while `#agentPlus.tokenMode#` is Custom." },
         "codexPlus.conversationBrief": { "type": "boolean", "default": true, "markdownDescription": "Conversation brief. Used only while `#agentPlus.tokenMode#` is Custom." },
-        "codexPlus.skillRouting": { "type": "boolean", "default": true, "markdownDescription": "Skill suggestions. Used only while `#agentPlus.tokenMode#` is Custom." },
         "codexPlus.wakeUps": { "type": "boolean", "default": true, "markdownDescription": "Wake-ups. Used only while `#agentPlus.tokenMode#` is Custom." },
         "codexPlus.detachedEndNotices": { "type": "boolean", "default": true, "markdownDescription": "Detached-command notices. Used only while `#agentPlus.tokenMode#` is Custom." }
       }

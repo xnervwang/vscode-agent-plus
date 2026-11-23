@@ -5,7 +5,7 @@
 'use strict';
 /*
  * The conversation source of the window test (test/vscode/ui.js), loaded as a development extension. It goes by Codex
- * Plus's extension id and declares Codex Plus's six feature settings, because Agent Plus's token mode reads those
+ * Plus's extension id and declares Codex Plus's five feature settings, because Agent Plus's token mode reads those
  * settings only from extensions it knows.
  *
  * Each conversation is a webview tab of its own. Opening a conversation's tab

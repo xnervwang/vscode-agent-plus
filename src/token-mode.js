@@ -37,7 +37,6 @@ const FEATURES = Object.freeze([
   { id: 'workPlan', name: 'work plan', modes: ['essential', 'all'] },
   { id: 'timeZone', name: 'time-zone note', modes: ['essential', 'all'] },
   { id: 'conversationBrief', name: 'conversation brief', modes: ['all'] },
-  { id: 'skillRouting', name: 'skill suggestions', modes: ['all'] },
   { id: 'wakeUps', name: 'wake-ups', modes: ['all'] },
   { id: 'detachedEndNotices', name: 'notices when a detached command stops', modes: ['all'] },
 ].map((f) => Object.freeze(f)));
@@ -48,12 +47,10 @@ const SWITCHES = Object.freeze([
   { key: 'claudeCodePlus.workPlan', feature: 'workPlan', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.tellClaudeYourTimeZone', feature: 'timeZone', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.claude-code-plus', default: true },
-  { key: 'claudeCodePlus.skillRouting', feature: 'skillRouting', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'claudeCodePlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.claude-code-plus', default: true },
   { key: 'codexPlus.workPlan', feature: 'workPlan', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.tellCodexYourTimeZone', feature: 'timeZone', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.codex-plus', default: true },
-  { key: 'codexPlus.skillRouting', feature: 'skillRouting', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.wakeUps', feature: 'wakeUps', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.codex-plus', default: true },
 ].map((s) => Object.freeze(s)));

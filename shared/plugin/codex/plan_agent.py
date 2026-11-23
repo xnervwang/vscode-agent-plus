@@ -32,24 +32,7 @@ EXTRA_DEFAULTS = {
     # Codex compacts at the lower of it and 90% of the full window, so the marks before a compaction are measured
     # against the lower one too (refresh-work-plan.py).
     "compactTokenLimit": 0,
-    # Whether each turn is given the installed skills that best fit the user's message (route-skills.py), found by
-    # keywords in the local index. Independent of `enabled`.
-    "skillRoute": True,
-    # Search by meaning through Amazon Bedrock instead of by keywords. Off unless the user turns it on, and even then
-    # used only when Codex's model provider is Bedrock; it sends the user's message to the same account and region Codex
-    # already sends the conversation to.
-    "skillRouteVector": False,
-    # How many skills a turn is given.
-    "skillRouteCount": 5,
-    # Folders of skills Codex does not read itself, searched as well (missing ones are skipped). ~/.claude/skills is
-    # Claude Code's folder of personal skills.
-    "skillRouteExtraDirs": ["~/.claude/skills"],
-    # Plugins installed for Claude Code but not for Codex whose skills are searched too ("*" for all of them). None by
-    # default, since Codex cannot run them.
-    "skillRouteClaudePlugins": [],
 }
-# Settings besides `enabled`, `tellTimeZone` and `replyImages` that are off once the extension is gone from every editor.
-OFF_WHEN_GONE = ("skillRoute",)
 
 # The field of a hook's input that names the turn: one id from a prompt until the turn ends.
 TURN_FIELD = "turn_id"

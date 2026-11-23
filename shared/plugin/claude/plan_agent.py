@@ -20,18 +20,7 @@ DATA_ENV = ("CLAUDE_PLUGIN_DATA",)
 FALLBACK = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude"),
                         "plugins", "data", "agent-work-plan-claude-code-extras")
 
-EXTRA_DEFAULTS = {
-    # Whether each turn is given the skills Claude Code can call that best fit the user's message (route-skills.py),
-    # found by keywords in the local index. Independent of `enabled`.
-    "skillRoute": True,
-    # Search by meaning through Amazon Bedrock instead of by keywords. Off unless the user turns it on, and even then
-    # used only when Claude Code itself runs on Bedrock; it sends the user's message to the same account and region.
-    "skillRouteVector": False,
-    # How many skills a turn is given.
-    "skillRouteCount": 5,
-}
-# Settings besides `enabled`, `tellTimeZone` and `replyImages` that are off once the extension is gone from every editor.
-OFF_WHEN_GONE = ("skillRoute",)
+EXTRA_DEFAULTS = {}
 
 # The field of a hook's input that names the turn: one id from a prompt until the next.
 TURN_FIELD = "prompt_id"
