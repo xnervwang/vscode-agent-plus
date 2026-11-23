@@ -98,6 +98,39 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     } finally { fs.renameSync = real; }
   }
 
+  /* Windows refuses a rename over a file another process has open; there the rename is tried again, elsewhere not. */
+  {
+    const { writeAtomic } = mod('files.js');
+    const dir = tmp('atomic-busy');
+    const file = path.join(dir, 'f.txt');
+    fs.writeFileSync(file, 'old');
+    const real = fs.renameSync;
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const as = (p) => Object.defineProperty(process, 'platform', { value: p, configurable: true });
+    let refuse = 0, calls = 0;
+    const refused = (code) => Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
+    fs.renameSync = (a, b) => { calls++; if (refuse > 0) { refuse--; throw refused('EPERM'); } return real(a, b); };
+    try {
+      as('win32');
+      refuse = 3; calls = 0;
+      writeAtomic(file, 'new');
+      eq([fs.readFileSync(file, 'utf8'), calls, fs.readdirSync(dir)], ['new', 4, ['f.txt']],
+        'on Windows a rename refused three times while another process has the file open is tried again until it goes through');
+      refuse = 99; calls = 0;
+      let threw = null;
+      try { writeAtomic(file, 'never'); } catch (e) { threw = e.code; }
+      eq([threw, calls, fs.readFileSync(file, 'utf8'), fs.readdirSync(dir)], ['EPERM', 6, 'new', ['f.txt']],
+        'and one refused every time fails after five more tries, the file left whole and no temporary file behind');
+      as('linux');
+      refuse = 1; calls = 0; threw = null;
+      try { writeAtomic(file, 'linux'); } catch (e) { threw = e.code; }
+      eq([threw, calls, fs.readFileSync(file, 'utf8')], ['EPERM', 1, 'new'], 'elsewhere a refused rename is not tried again');
+    } finally {
+      fs.renameSync = real;
+      Object.defineProperty(process, 'platform', platform);
+    }
+  }
+
   {
     const copies = mod('installed-copies.js');
     const home = tmp('home');

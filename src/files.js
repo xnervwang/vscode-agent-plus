@@ -15,6 +15,25 @@ const os = require('os');
 const path = require('path');
 
 /*
+ * Windows refuses to rename over a file while another process has it open, and these files are read all the time: a
+ * panel fetches its revision image every few seconds, and every window and hook reads the steward table. There a refused
+ * rename is tried again a few times over about a fifth of a second, waiting in between, before the write fails.
+ */
+const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_WAITS_MS = [10, 20, 40, 60, 80];
+function renameOver(tmp, file) {
+  for (let i = 0; ; i++) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (e) {
+      if (process.platform !== 'win32' || !e || !BUSY.has(e.code) || i >= RENAME_WAITS_MS.length) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RENAME_WAITS_MS[i]);
+    }
+  }
+}
+
+/*
  * The temporary name carries this process and a random part: several windows write the same files, and with one shared
  * name a second writer would replace the first one's temporary file, whose rename would then fail. `tag` goes into that
  * name; `tries` above 1 starts a failed write over from scratch.
@@ -24,7 +43,7 @@ function writeAtomic(file, text, mode, { tag = '', tries = 1 } = {}) {
     const tmp = `${file}${tag}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
     try {
       fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
-      fs.renameSync(tmp, file);
+      renameOver(tmp, file);
       return;
     } catch (e) {
       try { fs.unlinkSync(tmp); } catch (_) { /* never written, or already moved */ }
