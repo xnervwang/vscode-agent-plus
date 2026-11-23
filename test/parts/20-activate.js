@@ -45,7 +45,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const b = boot(root, tmp, { views: false });
     const api = b.api;
     eq([api.family, api.protocol, api.accepts, api.features, api.version, Object.isFrozen(api)],
-      ['agent-plus', 1, [1], [], require(path.join(root, 'package.json')).version, true], 'the interface: family, protocol 1, accepted majors, features, version');
+      ['agent-plus', 1, [1], ['allConversations'], require(path.join(root, 'package.json')).version, true], 'the interface: family, protocol 1, accepted majors, features, version');
     eq(b.control.state.context['agentPlus.alone'], false, 'a dependent in the installed manifests leaves the views showing');
     const r = api.registerSource(source());
     eq([r.accepted, r.code, r.reason, typeof (r.registration && r.registration.dispose), Object.isFrozen(r)], [true, '', '', 'function', true],

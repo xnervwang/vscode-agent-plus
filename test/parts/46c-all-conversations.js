@@ -1,0 +1,74 @@
+// BSD 3-Clause License
+// Copyright (c) 2026, Xnerv Wang
+// All rights reserved.
+
+'use strict';
+/*
+ * The interface's allConversations() and onDidChangeAllConversations (src/host.js, src/views.js): every source's
+ * conversations, machine-wide and this window's, for an extension that links to them; gathered only while someone
+ * listens or the notifications are on; told as a change only when a conversation comes, goes, or is retitled. And the
+ * open path such a link takes: agentPlus.openConversation with what the list gives.
+ */
+const fake = require('../fake-vscode');
+const { boot } = require('../boot');
+
+module.exports = async ({ eq, tmp, root, wait }) => {
+  const viewOptions = { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20, attentionWarmupMs: 0, attentionBatchMs: 10 };
+  const C = '2bffe83d-78b2-4e4a-b15d-72b98b724ae2', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199a213-81c0-7800-8aa1-bbab2a035a53';
+  const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await wait(20); };
+  const b = boot(root, tmp, { viewOptions, config: { 'agentPlus.notifications.enabled': false } });
+  const claudeChanged = new fake.EventEmitter(), codexChanged = new fake.EventEmitter();
+  let machine = [{ sessionId: C, title: 'Black-box testing of ADV and AUV', cwd: '/w/a', lastActiveAt: 5000, running: true, state: 'working' }];
+  const here = [{ sessionId: C, title: 'Black-box testing of ADV and AUV', cwd: '/w/a', lastActiveAt: 5000, running: true, state: 'working' },
+    { sessionId: D, title: 'A stopped one with a plan', cwd: '/w/b', lastActiveAt: 1000, running: false, state: 'idle' }];
+  let asked = 0;
+  const opened = [];
+  b.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', onDidChangeConversations: claudeChanged.event,
+    listConversations: async () => here.map((c) => Object.assign({}, c)),
+    listAllConversations: async () => { asked++; return machine.map((c) => Object.assign({}, c)); } });
+  b.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', onDidChangeConversations: codexChanged.event,
+    listConversations: async () => [{ sessionId: X, title: '\u{1F451} Fix the login redirect', steward: true, cwd: '/w/c', lastActiveAt: 9000 }],
+    open: async (id, row) => { opened.push([id, row.title, row.cwd]); return 'here'; } });
+  await wait(250);
+  eq([asked, b.api.allConversations().length], [0, 0],
+    'with the notifications off and nothing listening, no source is asked for its machine-wide list and none is kept');
+
+  const told = [];
+  const sub = b.api.onDidChangeAllConversations(() => told.push(b.api.allConversations().map((c) => c.sessionId.slice(0, 4))));
+  await until(() => told.length);
+  const list = b.api.allConversations();
+  eq([told, list.map((c) => [c.sourceId, c.label, c.sessionId, c.title, c.cwd, c.lastActiveAt]), Object.isFrozen(list), Object.isFrozen(list[0])],
+    [[['2bff', 'aaaa', '0199']], [['claude-code', 'Claude Code', C, 'Black-box testing of ADV and AUV', '/w/a', 5000],
+      ['claude-code', 'Claude Code', D, 'A stopped one with a plan', '/w/b', 1000],
+      ['codex', 'Codex', X, '\u{1F451} Fix the login redirect', '/w/c', 9000]], true, true],
+    'once something listens, a pass runs at once and gives every source\'s conversations, machine-wide and this window\'s, each once, with its agent\'s label');
+
+  machine = [Object.assign({}, machine[0], { lastActiveAt: 7000 })];
+  claudeChanged.fire();
+  await wait(250);
+  eq([told.length, b.api.allConversations()[0].lastActiveAt], [1, 7000], 'a conversation only active again is not told as a change, and the list still has the new time');
+  machine.push({ sessionId: 'cccccccc-0000-4000-8000-000000000003', title: 'Another window', cwd: '/w/d', lastActiveAt: 8000, running: true });
+  claudeChanged.fire();
+  await until(() => told.length > 1);
+  here[1].title = 'Renamed';
+  claudeChanged.fire();
+  await until(() => told.length > 2);
+  eq([told.length, b.api.allConversations().map((c) => c.title)], [3, ['Black-box testing of ADV and AUV', 'Another window', 'Renamed', '\u{1F451} Fix the login redirect']],
+    'a conversation that comes, and one renamed, are each told as a change');
+
+  const codex = b.api.allConversations().find((c) => c.sourceId === 'codex');
+  await b.control.state.handlers['agentPlus.openConversation']({ sourceId: codex.sourceId, sessionId: codex.sessionId, title: codex.title, cwd: codex.cwd });
+  eq(opened, [[X, '\u{1F451} Fix the login redirect', '/w/c']],
+    'a link built from the list opens its conversation through agentPlus.openConversation, by the source\'s own open()');
+
+  sub.dispose();
+  sub.dispose();
+  const before = asked;
+  claudeChanged.fire();
+  await wait(250);
+  eq(asked, before, 'once nothing listens, with the notifications off, the machine-wide lists are not asked for again');
+  let threw = false;
+  try { b.api.onDidChangeAllConversations(null); } catch (_) { threw = true; }
+  eq(threw, true, 'a listener that is not a function is refused');
+  b.close();
+};

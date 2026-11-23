@@ -78,6 +78,30 @@ function start(context, log, opts = {}) {
     closing: () => closing,
   };
 
+  /*
+   * Every conversation of every source, for a dependent that links to them (allConversations in docs/protocol.md). The
+   * views gather it on each pass of the Conversations tree, from the lists they already read for the notices, and only
+   * while something listens for its changes.
+   */
+  const everyone = { list: [], listeners: 0, changes: sources.emitter() };
+  host.everyone = {
+    wanted: () => everyone.listeners > 0,
+    set(list, changed) {
+      everyone.list = Object.freeze(list.map((c) => Object.freeze(Object.assign({}, c))));
+      if (changed) everyone.changes.fire();
+    },
+  };
+  const listenEveryone = (listener, thisArgs, disposables) => {
+    if (typeof listener !== 'function') throw new TypeError('a listener is a function');
+    const d = everyone.changes.event(listener, thisArgs);
+    everyone.listeners++;
+    let gone = false;
+    const sub = disposable(() => { if (gone) return; gone = true; everyone.listeners--; d.dispose(); });
+    if (Array.isArray(disposables)) disposables.push(sub);
+    if (everyone.listeners === 1 && views && typeof views.listSoon === 'function') { try { views.listSoon(); } catch (_) { /* the next pass */ } }
+    return sub;
+  };
+
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
   const limit = typeof opts.limit === 'function' ? opts.limit(host, { home: opts.home }) : null;
   /* Built before the first look for dependents below: that look writes to globalState, and this has to read it as an
@@ -248,6 +272,8 @@ function start(context, log, opts = {}) {
         : `a conversation source was not registered (${r.code}): ${r.reason}`);
       return Object.freeze(r);
     },
+    allConversations() { return everyone.list; },
+    onDidChangeAllConversations: listenEveryone,
   });
 
   /* ── Commands ── */
@@ -287,6 +313,7 @@ function start(context, log, opts = {}) {
     if (choice) { try { choice.dispose(); } catch (_) { /* closing anyway */ } }
     for (const entry of registry.list()) unhook(entry.subs);
     registry.clear();
+    everyone.changes.dispose();
   } });
   host.api = agentPlus;
   host.views = () => views;

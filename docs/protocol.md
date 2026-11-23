@@ -42,8 +42,10 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | `version` | The core's marketplace version |
 | `protocol` | The newest protocol major the core implements; also the first number of `version` |
 | `accepts` | The source protocol majors the core accepts |
-| `features` | Optional core capabilities by name; none in major 1 |
+| `features` | Optional core capabilities by name: `'allConversations'` |
 | `registerSource(source)` | Registers a source; never throws; returns a frozen result |
+| `allConversations()` | With `'allConversations'`. A frozen array of every source's conversations, as each source's `listAllConversations()` (or, without it, `listConversations()`) and its `listConversations()` gave them on the last pass, each once: `{ sourceId, label, sessionId, title, steward, cwd, lastActiveAt }`, `label` being the source's label and `title` as the Conversations view shows it. Kept current only while something listens to `onDidChangeAllConversations`, and empty until then |
+| `onDidChangeAllConversations` | With `'allConversations'`. `vscode.Event<void>`: a conversation came or went, or its title or folder changed. A change of `lastActiveAt` alone is not told, though `allConversations()` has it. Listening starts a pass at once |
 
 ### Result of `registerSource`
 

@@ -244,12 +244,34 @@ function create(host, opts = {}) {
      running conversation whose source gives lastUserAt is read here, whichever folder it is in. */
   const withQuestions = (sourceId, list) => list.map((c) => (c.running && c.lastUserAt > 0
     ? conversations.withPlan(c, planOf(sourceId, c.sessionId).plan) : c));
+  /* What a dependent that links to conversations is given (src/host.js): each source's machine-wide list and this
+     window's, once each. Told as a change only when a conversation comes, goes, or changes its title or folder. */
+  const everyone = host.everyone || { wanted: () => false, set() {} };
+  let everyoneKey = null;
+  const publishEveryone = (gathered) => {
+    const out = [], seen = new Set();
+    for (const { entry, list, all } of gathered) {
+      const label = sources.labelOf(entry.source);
+      for (const c of all.concat(list)) {
+        const key = entry.id + '\n' + c.sessionId;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ sourceId: entry.id, label, sessionId: c.sessionId, title: c.title, steward: c.steward, cwd: c.cwd, lastActiveAt: c.lastActiveAt });
+      }
+    }
+    const key = JSON.stringify(out.map((c) => [c.sourceId, c.sessionId, c.title, c.cwd]));
+    everyone.set(out, key !== everyoneKey);
+    everyoneKey = key;
+  };
   /* After each list pass: what every source lists, through listAllConversations() where a source has it. */
   const publishAttention = async (pairs) => {
-    if (!notifySettings().enabled) { attentionLists = []; needs.publish([]); needs.refresh(); return; }
-    attentionLists = await Promise.all(pairs.map(async ({ entry, list }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
-      conversations: withQuestions(entry.id, await listAll(entry, list)) })));
+    const notifying = notifySettings().enabled, linking = everyone.wanted();
+    if (!notifying && !linking) { attentionLists = []; needs.publish([]); needs.refresh(); return; }
+    const gathered = await Promise.all(pairs.map(async ({ entry, list }) => ({ entry, list, all: await listAll(entry, list) })));
     if (closing) return;
+    if (linking) publishEveryone(gathered.filter((g) => registry.has(g.entry)));
+    attentionLists = notifying ? gathered.map(({ entry, all }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
+      conversations: withQuestions(entry.id, all) })) : [];
     needs.publish(attentionLists);
     needs.refresh();
   };
@@ -358,7 +380,7 @@ function create(host, opts = {}) {
       if (!conversationsOn()) {
         conversationsTree.set(NO_CONVERSATIONS, '', conversationsLang());
         paintConversations();
-        if (notifySettings().enabled) {
+        if (notifySettings().enabled || everyone.wanted()) {
           const asked = registry.list();
           const got = await Promise.all(asked.map((entry) => listFor(entry, cachedOnly)));
           if (!closing) await publishAttention(asked.map((entry, i) => ({ entry, list: got[i].list })).filter((x) => registry.has(x.entry)));
@@ -761,6 +783,8 @@ function create(host, opts = {}) {
     detach,
     commands,
     setActive(on) { active = !!on; paintConversations(); },
+    /* A dependent started listening for every conversation: a pass now, rather than at the next tick. */
+    listSoon() { askAll(); convSoon(); },
     /* For tests. */
     _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, attentionEntry, needs, opener, answerView, focus, courier: () => courier,
       plans: () => [...plans.keys()] },

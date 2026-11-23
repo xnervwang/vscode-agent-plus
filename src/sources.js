@@ -12,13 +12,14 @@
  */
 
 /* The protocol major this build implements, the source majors it accepts, and the optional host capabilities it offers.
-   package.json repeats them under "agentPlus" so they can be read without running this code; the tests hold the two
-   together. The extension's marketplace major is PROTOCOL. */
+   package.json repeats the first two under "agentPlus" so they can be read without running this code; the tests hold the
+   two together. The extension's marketplace major is PROTOCOL. */
 const titleMarks = require('./title-marks');
 
 const PROTOCOL = 1;
 const ACCEPTS = [1];
-const FEATURES = [];
+/* 'allConversations': the interface's allConversations() and onDidChangeAllConversations (docs/protocol.md). */
+const FEATURES = ['allConversations'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
 /* What a conversation is doing; whether it has an unread reply is separate. A source that gives no activity has one
