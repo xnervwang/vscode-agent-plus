@@ -5,10 +5,10 @@
 'use strict';
 /*
  * Conversations that need the user, across windows (src/attention.js): each window writes what its sources report, only
- * the window with the focus shows a notification, changes close together make one, and a window that reloads does not
- * show again what it showed before. The conversations here carry only `state`, which gives their activity;
- * 47-attention-activity.js has the activity rules themselves. In a running window the notification is a plain message
- * whose Open button opens the conversation.
+ * the window with the focus shows notifications, changes close together are shown together with one notification for
+ * each conversation, and a window that reloads does not show again what it showed before. The conversations here carry only `state`, which gives their activity;
+ * 47-attention-activity.js has the activity rules themselves. In a running window each notification is a plain message
+ * whose Open button opens its conversation.
  */
 const fs = require('fs');
 const path = require('path');
@@ -28,7 +28,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const w = { name, focused, shown: [], painted: [] };
     w.att = at.createAttention({ dir, windowId: `${name}-0000000${Object.keys(windows).length}`, now: () => clock, focused: () => w.focused,
       lookedAt: looking, settings: () => settings, warmupMs: 0, batchMs: 10,
-      show: (text, items) => { w.shown.push({ text, ids: items.map((it) => it.sessionId) }); },
+      show: (text, item) => { w.shown.push({ text, id: item.sessionId }); },
       paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`); } });
     windows[name] = w;
     return w;
@@ -55,8 +55,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock += at.STABLE_MS;
   a.att.refresh(); b.att.refresh();
   await settle();
-  eq([b.shown.map((n) => n.ids), fresh(b)], [[['x', 'y']], ['2 conversations need you (2 finished): "Fix the build", "Write the docs".']],
-    'two that finish together make one notification about both');
+  eq([b.shown.map((n) => n.id), fresh(b)], [['x', 'y'], ['"Fix the build" finished.', '"Write the docs" finished.']],
+    'two that finish together get a notification each, each naming its own conversation');
 
   a.att.publish(lists(conv('x', 'idle'), conv('y', 'unread', 'Write the docs')));
   a.att.refresh(); b.att.refresh();
@@ -169,7 +169,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     'once no window has the focus, both count again, and neither is announced');
   for (const w of [solo, p, q]) w.att.dispose();
 
-  /* In a running window: a plain message with an Open and a Dismiss button, or Show them for several. */
+  /* In a running window: a plain message with an Open and a Dismiss button for each conversation. */
   {
     const b = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20,
       attentionWarmupMs: 0, attentionBatchMs: 10 } });
@@ -188,13 +188,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const two = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20,
       attentionWarmupMs: 0, attentionBatchMs: 10 } });
     two.vscode.window.state = { focused: true };
+    two.control.state.answers.push(['is waiting for you', 'Open']);
+    const openedTwo = [];
     listed = [{ sessionId: 'p', title: 'One', cwd: '/w', state: 'prompt', activity: 'waiting', running: true },
       { sessionId: 'q', title: 'Two', cwd: '/w', state: 'prompt', activity: 'waiting', running: true }];
     two.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', listConversations: async () => [],
-      listAllConversations: async () => listed });
-    for (let i = 0; i < 100 && !two.control.state.said.some((m) => /need you/.test(m.message)); i++) await wait(50);
-    eq(two.control.state.said.filter((m) => /need you/.test(m.message)).map((m) => [m.message, m.buttons]),
-      [['2 conversations need you (2 waiting for you): "One", "Two".', ['Show them', 'Dismiss']]], 'several get Show them and Dismiss');
+      listAllConversations: async () => listed, open: async (id) => { openedTwo.push(id); return 'here'; } });
+    const saidTwo = () => two.control.state.said.filter((m) => /need|waiting|finished/.test(m.message)).map((m) => [m.message, m.buttons]);
+    for (let i = 0; i < 100 && !(saidTwo().length >= 2 && openedTwo.length >= 2); i++) await wait(50);
+    await wait(200);
+    eq([saidTwo(), openedTwo.slice().sort()], [[['"One" is waiting for you.', ['Open', 'Dismiss']], ['"Two" is waiting for you.', ['Open', 'Dismiss']]], ['p', 'q']],
+      'two that start to wait together get a notification each, each with Open and Dismiss, and Open on each opens its own conversation');
     two.close();
   }
 

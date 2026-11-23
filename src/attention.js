@@ -18,17 +18,18 @@
  * lastActiveAt is newer than any read before. An unread reply turning up on a conversation that had already stopped,
  * with nothing newer, is not announced.
  *
- * Only the window that has the focus shows a notification, so there is one on the screen however many windows are
- * open. Changes that come within BATCH_MS of each other are shown as one. A notification says what a waiting
- * conversation waits for when its source reports it (src/wait-reason.js); a window whose panel shows the prompt knows
- * more than one that read a machine-wide list, so the most precise of the reasons the windows report is kept.
+ * Only the window that has the focus shows notifications, so each conversation gets one on the screen however many
+ * windows are open. Changes that come within BATCH_MS of each other are shown together, one notification for each
+ * conversation. A notification says what a waiting conversation waits for when its source reports it
+ * (src/wait-reason.js); a window whose panel shows the prompt knows more than one that read a machine-wide list, so the
+ * most precise of the reasons the windows report is kept.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
  * in any window. A conversation the focused window shows anywhere else, in a tab behind others or a side bar, gets no
  * notification either: its tab's dot and the count tell of it, and the user is in the window where it is answered.
  *
  * A window without the focus keeps what it would have shown, and once it gets the focus shows what of that still needs
- * the user, once, as one notification. Every window notes in its file each conversation it has told the user of, or
+ * the user, once, one notification for each conversation. Every window notes in its file each conversation it has told the user of, or
  * found the user already had in front of them, with the time; a window drops what it kept when another window noted the
  * same conversation after it kept it, so what one window has shown is not shown again by the next window the user goes
  * to.
@@ -158,27 +159,17 @@ function readAll(dir, now) {
   return { merged, live, front, settled };
 }
 
-/* The notification's text for `items`. A waiting conversation's reason is named where the source gave one. */
-function message(items, { several }) {
-  const name = (it) => `${several ? it.source + ': ' : ''}"${it.title}"`;
-  const why = (it) => (it.kind === 'waiting' ? waitReason.reasonOf(it.waitingFor) : null);
-  if (items.length === 1) {
-    const it = items[0];
-    return `${name(it)} ${it.kind === 'waiting' ? waitReason.predicate(why(it)) : 'finished'}.`;
-  }
-  const waiting = items.filter((it) => it.kind === 'waiting').length;
-  const parts = [];
-  if (waiting) parts.push(`${waiting} waiting for you`);
-  if (items.length - waiting) parts.push(`${items.length - waiting} finished`);
-  const named = (it) => { const b = waitReason.brief(why(it)); return b ? `${name(it)} (${b})` : name(it); };
-  const shown = items.slice(0, 2).map(named).join(', ') + (items.length > 2 ? ` and ${items.length - 2} more` : '');
-  return `${items.length} conversations need you (${parts.join(', ')}): ${shown}.`;
+/* The text of the notification about conversation `it`. A waiting conversation's reason is named where the source gave
+   one; `several` puts the source's name first. */
+function message(it, { several }) {
+  const name = `${several ? it.source + ': ' : ''}"${it.title}"`;
+  return `${name} ${it.kind === 'waiting' ? waitReason.predicate(waitReason.reasonOf(it.waitingFor)) : 'finished'}.`;
 }
 
 /*
  * `lookedAt(item)` answers whether this window shows that conversation in front now, and `shownHere(item)` whether it
  * shows it anywhere, in front or not; `canWrite()` is false in Restricted Mode, where this window writes nothing;
- * `show(text, items)` shows a notification about `items`.
+ * `show(text, item)` shows a notification about the conversation `item`.
  */
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
   shownHere = () => false, settings, canWrite = () => true, show, paint = () => {}, several = () => false, log = () => {},
@@ -256,12 +247,16 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     write();
   }
 
-  /* Shows what of `items` the user does not have in front of them in this window; all of them count as told. */
+  /* Shows a notification for each of `items` the user does not have in front of them in this window; all of them count
+     as told. */
   function tell(items) {
     settle(items);
     const fresh = items.filter((it) => !looking.has(it.key) && !inFront(it) && !here(it));
     if (!fresh.length) return;
-    try { show(message(fresh, { several: several() }), fresh); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
+    const named = several();
+    for (const it of fresh) {
+      try { show(message(it, { several: named }), it); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
+    }
   }
 
   /* What is shown is each conversation as the windows report it now, not as it was when it was first seen. */

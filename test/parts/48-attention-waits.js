@@ -5,7 +5,8 @@
 'use strict';
 /*
  * What a waiting conversation waits for (src/wait-reason.js), named in the notices; no notice for a conversation the
- * focused window shows anywhere; what was kept while no window had the focus, shown once when one gets it; and the
+ * focused window shows anywhere; a notice for each conversation, also of several from more than one source; what was kept
+ * while no window had the focus, shown once when one gets it, one notice for each conversation; and the
  * question a source asks before it leaves its agent's own notice to these (announcesWaits).
  */
 const path = require('path');
@@ -25,11 +26,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   let clock = 5000000;
   const settings = { enabled: true, finished: true, waiting: true };
   const lists = (...cs) => [{ sourceId: 'claude-code', label: 'Claude Code', conversations: src.conversations(cs) }];
-  const make = (dir, name, { focused = false, here = [] } = {}) => {
+  const make = (dir, name, { focused = false, here = [], several = false } = {}) => {
     const w = { focused, here, shown: [], painted: [] };
     w.att = at.createAttention({ dir, windowId: `${name}-00000000`, now: () => clock, focused: () => w.focused,
-      shownHere: (it) => w.here.includes(it.sessionId), settings: () => settings, warmupMs: 0, batchMs: 10,
-      show: (text, items) => { w.shown.push({ text, ids: items.map((it) => it.sessionId) }); },
+      shownHere: (it) => w.here.includes(it.sessionId), settings: () => settings, warmupMs: 0, batchMs: 10, several: () => several,
+      show: (text, item) => { w.shown.push({ text, id: item.sessionId }); },
       paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`).sort(); } });
     return w;
   };
@@ -37,17 +38,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const round = async (...ws) => { for (const w of ws) w.att.refresh(); await settle(); for (const w of ws) w.att.refresh(); };
 
   /* The words for each reason. */
-  const one = (r) => at.message([{ kind: 'waiting', title: 'Fix the build', source: 'Claude Code', waitingFor: r }], { several: false });
+  const one = (r) => at.message({ kind: 'waiting', title: 'Fix the build', source: 'Claude Code', waitingFor: r }, { several: false });
   eq([one({ kind: 'permission', tool: 'Bash' }), one({ kind: 'permission' }), one({ kind: 'question' }), one({ kind: 'plan' }), one({ kind: 'choice' }),
     one({ kind: 'planQuestion' }), one(null), one({ kind: 'nap' })],
   ['"Fix the build" is waiting for you to approve Bash.', '"Fix the build" is waiting for your approval.', '"Fix the build" has a question for you.',
     '"Fix the build" has a plan for you to review.', '"Fix the build" is waiting for you to choose.', '"Fix the build" has a question for you in its plan.',
     '"Fix the build" is waiting for you.', '"Fix the build" is waiting for you.'],
   'a notice says what the conversation waits for, and without a reason says it is waiting as before');
-  eq(at.message([{ kind: 'waiting', title: 'A', source: 'Claude Code', waitingFor: { kind: 'permission', tool: 'Edit' } },
-    { kind: 'waiting', title: 'B', source: 'Codex', waitingFor: { kind: 'question' } }, { kind: 'finished', title: 'C', source: 'Codex' }], { several: true }),
-  '3 conversations need you (2 waiting for you, 1 finished): Claude Code: "A" (approve Edit), Codex: "B" (a question) and 1 more.',
-  'several keep the grouped form, with each waiting one\'s reason after its name');
+  eq([at.message({ kind: 'waiting', title: 'A', source: 'Claude Code', waitingFor: { kind: 'permission', tool: 'Edit' } }, { several: true }),
+    at.message({ kind: 'finished', title: 'C', source: 'Codex' }, { several: true })],
+  ['Claude Code: "A" is waiting for you to approve Edit.', 'Codex: "C" finished.'],
+  'with more than one source, a notice puts its source\'s name before the title');
   eq([reason.description({ kind: 'permission', tool: 'Bash' }), reason.description({ kind: 'question' }), reason.description(null)],
     ['waiting for you to approve Bash', 'has a question for you', 'waiting for you'], 'and the list of conversations that need you says the same after a name');
 
@@ -71,6 +72,23 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [['"Deploy" is waiting for you to approve Bash.'], [{ kind: 'permission', tool: 'Bash' }]],
       'when two windows report one waiting conversation, the reason that names the tool wins, whichever file is read first');
     for (const w of [a, b, f]) w.att.dispose();
+  }
+
+  /* Conversations of two sources that start to wait together: a notice for each, with its source's name. */
+  {
+    const dir = path.join(tmp('sources'), 'attention');
+    const a = make(dir, 'sa'), f = make(dir, 'sf', { focused: true, several: true });
+    const two = (cc, cx) => [{ sourceId: 'claude-code', label: 'Claude Code', conversations: src.conversations(cc) },
+      { sourceId: 'codex', label: 'Codex', conversations: src.conversations(cx) }];
+    a.att.publish(two([workingConv('c1', 'Claude one'), workingConv('c2', 'Claude two')], [workingConv('x1', 'Codex one')]));
+    await round(a, f);
+    a.att.publish(two([waiting('c1', 'Claude one', { kind: 'permission', tool: 'Edit' }), waiting('c2', 'Claude two', null)],
+      [waiting('x1', 'Codex one', { kind: 'question' })]));
+    await round(a, f);
+    eq([f.shown.map((n) => n.id).sort(), fresh(f).sort()], [['c1', 'c2', 'x1'],
+      ['Claude Code: "Claude one" is waiting for you to approve Edit.', 'Claude Code: "Claude two" is waiting for you.', 'Codex: "Codex one" has a question for you.']],
+    'conversations of two sources that start to wait together get a notice each, each with its own source\'s name');
+    for (const w of [a, f]) w.att.dispose();
   }
 
   /* The window that reads a machine-wide list hears of a permission prompt first, without the tool; the window whose panel
@@ -105,15 +123,16 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const dir = path.join(tmp('same'), 'attention');
     const src1 = make(dir, 'sa'), f = make(dir, 'sf', { focused: true, here: ['mine', 'done'] });
     src1.att.publish(lists(waiting('mine', 'Mine', { kind: 'permission', tool: 'Bash' }), waiting('other', 'Other', { kind: 'question' }),
-      workingConv('done', 'Done')));
+      waiting('third', 'Third', { kind: 'plan' }), workingConv('done', 'Done')));
     await round(src1, f);
     src1.att.publish(lists(waiting('mine', 'Mine', { kind: 'permission', tool: 'Bash' }), waiting('other', 'Other', { kind: 'question' }),
-      finishedConv('done', 'Done')));
+      waiting('third', 'Third', { kind: 'plan' }), finishedConv('done', 'Done')));
     await round(src1, f);
     clock += at.STABLE_MS;
     await round(src1, f);
-    eq([fresh(f), f.painted], [['"Other" has a question for you.'], ['done:finished', 'mine:waiting', 'other:waiting']],
-      'a conversation the focused window shows behind other tabs or in its side bar gets no notice, waiting or finished, and is still counted');
+    eq([fresh(f), f.painted], [['"Other" has a question for you.', '"Third" has a plan for you to review.'],
+      ['done:finished', 'mine:waiting', 'other:waiting', 'third:waiting']],
+    'of three that start to wait together, the two the focused window does not show get a notice each, and the one it shows behind other tabs or in its side bar gets none, waiting or finished, and is still counted');
     for (const w of [src1, f]) w.att.dispose();
   }
 
@@ -134,8 +153,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     clock += 10000;
     b.focused = true;
     await round(a, b);
-    eq(fresh(b), ['2 conversations need you (2 waiting for you): "Release notes" (approve Bash), "Shown in A" (a question).'],
-      'the window that gets the focus shows, once, what still waits, less what was answered meanwhile');
+    eq([b.shown.map((n) => n.id), fresh(b)], [['x', 'inA'], ['"Release notes" is waiting for you to approve Bash.', '"Shown in A" has a question for you.']],
+      'the window that gets the focus shows, once, a notice for each conversation that still waits, less what was answered meanwhile');
     await round(a, b);
     eq(fresh(b), [], 'and does not show it again on its next refresh');
     b.focused = false;

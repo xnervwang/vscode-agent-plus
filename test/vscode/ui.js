@@ -1037,18 +1037,26 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       conv('n-a', 'First of two', 'working', 'working'), conv('n-b', 'Second of two', 'working', 'working')]);
     await patch('n-a', { state: 'prompt', activity: 'waiting' });
     await patch('n-b', { state: 'prompt', activity: 'waiting' });
-    if (!canFocus) { check(await noToast('conversations need you', 6000), 'with no window focused, two conversations starting to wait are not announced'); return; }
-    const t = await toastWith('2 conversations need you (2 waiting for you): "First of two", "Second of two".', 10000);
-    check(!!t && sameList(t.buttons, ['Show them', 'Dismiss']), 'two conversations that start to wait together share one notification, with Show them and Dismiss', t || await toasts());
-    check(!(await toasts()).some((x) => /^"(First|Second) of two"/.test(x.text)), 'and get none of their own');
-    await look('notify-several', { toasts: true, expect: 'One notification: 2 conversations need you (2 waiting for you): "First of two", "Second of two"., with the buttons Show them and Dismiss, and no other notification about either.' },
-      toastLoc('2 conversations need you'));
-    await viaUi('agentPlus.showAttention', () => press('2 conversations need you', 'Show them'));
-    const rows = await pickRows();
-    check(!!rows && rows.some((r) => /First of two.*waiting for you/.test(r.text)) && rows.some((r) => /Second of two.*waiting for you/.test(r.text)),
-      'Show them lists the conversations that need you, each saying it is waiting', rows);
-    await pick('Second of two');
-    check(!!await frontIs('Second of two'), 'and picking one brings it to the front', await frontTab());
+    const FIRST = '"First of two" is waiting for you.', SECOND = '"Second of two" is waiting for you.';
+    if (!canFocus) { check(await noToast('of two', 6000), 'with no window focused, two conversations starting to wait are not announced'); return; }
+    const a = await toastWith(FIRST, 10000), b = await toastWith(SECOND, 5000);
+    const both = (await toasts()).filter((x) => /of two/.test(x.text));
+    check(!!a && !!b && sameList(a.buttons, ['Open', 'Dismiss']) && sameList(b.buttons, ['Open', 'Dismiss']) && both.length === 2,
+      'two conversations that start to wait together get a notification each, each with Open and Dismiss, and no other notification about either', both);
+    const area = await page.evaluate(() => {
+      const rs = [...document.querySelectorAll('.notification-toast')].filter((e) => e.offsetParent !== null && /of two/.test(e.innerText)).map((e) => e.getBoundingClientRect());
+      if (!rs.length) return null;
+      const x = Math.min(...rs.map((r) => r.left)), y = Math.min(...rs.map((r) => r.top));
+      return { x, y, width: Math.max(...rs.map((r) => r.right)) - x, height: Math.max(...rs.map((r) => r.bottom)) - y };
+    });
+    await look('notify-several', { toasts: true, expect: 'Two notifications at the bottom right, one above the other: "First of two" is waiting for you. and "Second of two" is waiting for you., each with the buttons Open and Dismiss, and no other notification about either.' },
+      area);
+    await viaUi('agentPlus.openAttention', () => press(SECOND, 'Open'));
+    check(!!await frontIs('Second of two'), 'Open on the notification about the second brings the second to the front', await frontTab());
+    if ((await toasts()).some((x) => x.text.includes(FIRST))) {
+      await viaUi('agentPlus.openAttention', () => press(FIRST, 'Open'));
+      check(!!await frontIs('First of two'), 'and Open on the one about the first, still on screen, brings the first to the front', await frontTab());
+    } else note('the notification about the first had left the screen before its Open was clicked');
     await openNotes();
   });
 

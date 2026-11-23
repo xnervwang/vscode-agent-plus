@@ -184,11 +184,9 @@ function create(host, opts = {}) {
     attentionEntry.show();
   };
   /* A plain message, since a progress notification can have only one button. */
-  const notify = (text, items) => {
-    const one = items.length === 1 ? items[0] : null;
-    const go = one ? 'Open' : 'Show them';
-    Promise.resolve(vscode.window.showInformationMessage(text, go, 'Dismiss'))
-      .then((pick) => (pick !== go ? undefined : one ? commands.openAttention(one.sourceId, one.sessionId) : commands.showAttention()))
+  const notify = (text, it) => {
+    Promise.resolve(vscode.window.showInformationMessage(text, 'Open', 'Dismiss'))
+      .then((pick) => (pick === 'Open' ? commands.openAttention(it.sourceId, it.sessionId) : undefined))
       .catch((e) => say('attention: ' + ((e && e.message) || e)));
   };
   /* Under a display with no window manager every window VS Code has once focused says it is focused for good, so a

@@ -45,7 +45,7 @@
   { "id": "notifications", "what": "A notification in the focused window when a conversation starts to wait, or stops with a reply not read and stays stopped for 5 seconds; none when only an envelope appears, none for a turn followed at once by another, and none for the conversation in front",
     "steps": ["notify-waiting", "notify-finished", "notify-envelope-only", "notify-queued", "notify-front"], "looks": ["notify-waiting", "notify-finished"],
     "settings": [], "commands": [], "views": [] },
-  { "id": "notification-open", "what": "Open on a notification about one conversation bringing it to the front, and Show them on one about several listing them to open one",
+  { "id": "notification-open", "what": "Open on a notification bringing its conversation to the front, and two conversations that start to wait together getting a notification each, each Open bringing its own one to the front",
     "steps": ["notify-open", "notify-several"], "looks": ["notify-several"], "settings": [], "commands": ["agentPlus.openAttention"], "views": [] },
   { "id": "attention-count", "what": "The bell and number in the status bar counting the conversations that wait or stopped with a reply not read, less the one in front, falling once one is read; a click lists them to open one",
     "steps": ["notify-waiting", "attention-count", "attention-list"], "looks": ["attention-count", "attention-list"], "settings": [], "commands": ["agentPlus.showAttention"], "views": [] },
