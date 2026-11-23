@@ -5,7 +5,8 @@
 'use strict';
 /*
  * A conversation's activity in the Conversations list (src/conversations.js): its source's, except that a question in
- * its plan put after the user's last message makes it wait for the user. A question from before that message, and any
+ * its plan put after the user's last message makes it wait for the user once its turn is no longer running. A question
+ * from before that message, and any
  * question of a conversation whose source gives no lastUserAt, leaves the activity as the source has it.
  */
 const fs = require('fs');
@@ -51,7 +52,7 @@ module.exports = async ({ eq, tmp, root }) => {
   eq(of('noUser'), ['working', false, 'needs'], 'with no lastUserAt the activity is the source\'s, question or not');
   eq([of('since'), of('undated'), of('plain')], [['waiting', false, 'needs'], ['stopped', false, 'needs'], ['background', false, 'idle']],
     'a question with no asked time is dated by its row\'s since, and one with neither is not taken to be new');
-  eq(of('busy'), ['waiting', true, 'needs'], 'a new question outranks a turn still running, and the unseen reply stays');
+  eq(of('busy'), ['working', true, 'needs'], 'a new question waits for the turn still running to end, as the question reaches the user in its reply');
   eq(of('stopped'), ['waiting', false, 'needs'], 'a conversation no longer running still waits on a question it put after the user last wrote');
   const drop = C({ sessionId: 'x', state: 'working', activity: 'working', running: false });
   eq(conv.activityOf(drop, []), 'stopped', 'a conversation no longer running has stopped, whatever its source said it was doing');

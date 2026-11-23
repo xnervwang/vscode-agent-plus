@@ -178,17 +178,20 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const asked = new Date(Date.now() - 1000).toISOString();
     fs.writeFileSync(path.join(plans, 'q.json'), JSON.stringify({ nodes: [{ title: 'r', state: 'waiting', waitingOn: 'user', question: 'Go?', asked }] }));
     fs.writeFileSync(path.join(plans, 'o.json'), JSON.stringify({ nodes: [{ title: 'r', state: 'waiting', waitingOn: 'user', question: 'Go?', asked }] }));
+    fs.writeFileSync(path.join(plans, 'w.json'), JSON.stringify({ nodes: [{ title: 'r', state: 'waiting', waitingOn: 'user', question: 'Go?', asked }] }));
     const listed = [
       { sessionId: 'q', title: 'Asks', cwd: '/elsewhere', state: 'idle', activity: 'stopped', running: true, lastUserAt: Date.now() - 60000 },
       { sessionId: 'o', title: 'Asked before', cwd: '/elsewhere', state: 'idle', activity: 'working', running: true, lastUserAt: Date.now() },
+      { sessionId: 'w', title: 'Asks mid-turn', cwd: '/elsewhere', state: 'working', activity: 'working', running: true, lastUserAt: Date.now() - 60000 },
     ];
     b.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', planPath: (id) => path.join(plans, id + '.json'), planDir: () => plans,
       listConversations: async () => [], listAllConversations: async () => listed });
     await wait(150);
     const files = fs.readdirSync(path.join(b.home, 'attention'));
     const items = files.length === 1 ? JSON.parse(fs.readFileSync(path.join(b.home, 'attention', files[0]), 'utf8')).items : [];
-    eq(items.map((it) => [it.sessionId, it.activity]), [['q', 'waiting'], ['o', 'working']],
-      'a window reads the plans of the conversations it reports, wherever they are, so a new question counts as waiting in every window');
+    eq(items.map((it) => [it.sessionId, it.activity]), [['q', 'waiting'], ['o', 'working'], ['w', 'working']],
+      'a window reads the plans of the conversations it reports, wherever they are, so a new question counts as waiting in every window '
+      + 'once the turn that put it has ended, and not while it still runs');
     b.close();
   }
 };
