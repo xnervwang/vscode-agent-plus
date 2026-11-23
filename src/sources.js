@@ -15,11 +15,13 @@
    package.json repeats the first two under "agentPlus" so they can be read without running this code; the tests hold the
    two together. The extension's marketplace major is PROTOCOL. */
 const titleMarks = require('./title-marks');
+const waitReason = require('./wait-reason');
 
 const PROTOCOL = 1;
 const ACCEPTS = [1];
-/* 'allConversations': the interface's allConversations() and onDidChangeAllConversations (docs/protocol.md). */
-const FEATURES = ['allConversations'];
+/* 'allConversations': the interface's allConversations() and onDidChangeAllConversations (docs/protocol.md).
+   'waitingFor': conversations' waitingFor is read and named in the notices, and a source can ask announcesWaits(). */
+const FEATURES = ['allConversations', 'waitingFor'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
 /* What a conversation is doing; whether it has an unread reply is separate. A source that gives no activity has one
@@ -199,13 +201,15 @@ function conversation(raw) {
   const hasPlan = get(raw, 'hasPlan'), activity = get(raw, 'activity'), unseen = get(raw, 'unseen');
   const state = STATES.includes(given) ? given : 'idle';
   const steward = get(raw, 'steward') === true;
+  const doing = ACTIVITIES.includes(activity) ? activity : activityOfState(state);
   return {
     sessionId,
     title: titleMarks.withMarks(typeof title === 'string' ? title.slice(0, 500) : '', { steward }),
     steward,
     cwd: typeof cwd === 'string' ? cwd : '',
     state,
-    activity: ACTIVITIES.includes(activity) ? activity : activityOfState(state),
+    activity: doing,
+    waitingFor: doing === 'waiting' ? waitReason.reasonOf(get(raw, 'waitingFor')) : null,
     unseen: typeof unseen === 'boolean' ? unseen : state === 'unread',
     running: running !== false,
     lastActiveAt: moment(get(raw, 'lastActiveAt')),

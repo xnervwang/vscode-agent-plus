@@ -29,6 +29,15 @@ async function findCore(vscode) {
 
 /** Whether the host offers an optional capability by name (protocol, "Adding to the protocol"). */
 const coreHas = (core, name) => !!(core && Array.isArray(core.features) && core.features.includes(name));
+/*
+ * Whether Agent Plus tells the user, in this window, when one of the source's conversations starts to wait for them, so
+ * that the agent's own notice of it can be left out (protocol, Notifications). False for a host without 'waitingFor',
+ * which shows nothing while no window has the focus and would leave such a wait untold.
+ */
+function announcesWaits(core) {
+  if (!coreHas(core, 'waitingFor') || typeof core.announcesWaits !== 'function') return false;
+  try { return core.announcesWaits() === true; } catch (_) { return false; }
+}
 
 /*
  * Registers `source`. Resolves to { registered, registration, code, reason, core }. `contextKey`, when given, is set to
@@ -79,4 +88,4 @@ function oncePerDelivery(deliver) {
   };
 }
 
-module.exports = { CORE_ID, findCore, coreHas, link, oncePerDelivery };
+module.exports = { CORE_ID, findCore, coreHas, announcesWaits, link, oncePerDelivery };

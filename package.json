@@ -269,7 +269,7 @@
         "agentPlus.notifications.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show a notification in the focused VS Code window when a conversation in any window on this machine waits for you or stops with a reply you have not read, and count those conversations in the status bar. No notification is shown while no VS Code window has the focus. The two settings below turn off only notifications, not the count."
+          "markdownDescription": "Show a notification in the focused VS Code window when a conversation in any window on this machine waits for you or stops with a reply you have not read, and count those conversations in the status bar. A conversation the focused window shows, in any tab or its side bar, gets no notification there; one that comes while no VS Code window has the focus is shown once a window has it again. The two settings below turn off only notifications, not the count."
         },
         "agentPlus.notifications.finished": {
           "type": "boolean",

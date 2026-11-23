@@ -49,7 +49,10 @@ function activityOf(c, questions) {
 
 /* A conversation as a source listed it, with the questions of `plan` taken into its activity. */
 function withPlan(c, plan) {
-  return Object.assign({}, c, { activity: activityOf(c, planQuestions(plan && plan.nodes)) });
+  const activity = activityOf(c, planQuestions(plan && plan.nodes));
+  const own = activity === 'waiting' && c.activity === 'waiting' && c.running !== false;
+  return Object.assign({}, c, { activity,
+    waitingFor: activity !== 'waiting' ? null : own ? c.waitingFor || null : { kind: 'planQuestion' } });
 }
 
 /* A source that gives no plan path is believed about hasPlan. */

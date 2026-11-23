@@ -19,10 +19,19 @@
  * with nothing newer, is not announced.
  *
  * Only the window that has the focus shows a notification, so there is one on the screen however many windows are
- * open. Changes that come within BATCH_MS of each other are shown as one.
+ * open. Changes that come within BATCH_MS of each other are shown as one. A notification says what a waiting
+ * conversation waits for when its source reports it (src/wait-reason.js); a window whose panel shows the prompt knows
+ * more than one that read a machine-wide list, so the most precise of the reasons the windows report is kept.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
- * in any window.
+ * in any window. A conversation the focused window shows anywhere else, in a tab behind others or a side bar, gets no
+ * notification either: its tab's dot and the count tell of it, and the user is in the window where it is answered.
+ *
+ * A window without the focus keeps what it would have shown, and once it gets the focus shows what of that still needs
+ * the user, once, as one notification. Every window notes in its file each conversation it has told the user of, or
+ * found the user already had in front of them, with the time; a window drops what it kept when another window noted the
+ * same conversation after it kept it, so what one window has shown is not shown again by the next window the user goes
+ * to.
  *
  * A window of an older version writes `state` alone, and only `prompt` and `unread`, read here as waiting and as
  * stopped with an unread reply. Such a window never reports a turn running, so its unread reply is announced on
@@ -33,6 +42,7 @@ const path = require('path');
 const { writeAtomic, sharedHome } = require('./files');
 const { ACTIVITIES, STATES, activityOfState } = require('./sources');
 const titleMarks = require('./title-marks');
+const waitReason = require('./wait-reason');
 
 const ATTENTION_DIR = 'attention';
 /* Items gained `activity` and `unseen` within format 1, so that a window of an older version still reads `state`. */
@@ -48,6 +58,9 @@ const REMEMBER_MS = 120000;
 const MAX_ITEMS = 200;
 const MAX_SEEN = 2000;
 const MAX_TITLE = 120;
+/* How long a window's note that it told the user of a conversation is kept: as long as another window may still hold
+   a notice of it from a time no window had the focus. */
+const SETTLED_MS = 24 * 3600 * 1000;
 /* When two windows report one conversation differently, the report that needs the user most wins. */
 const RANK = { waiting: 0, working: 1, background: 2, stopped: 3 };
 const WINDOW = /^[0-9a-z]+-[0-9a-f]{8}\.json$/;
@@ -84,7 +97,8 @@ function itemsOf(lists) {
       if (unwritten(activity, unseen)) continue;
       out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
         state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true, lastActiveAt: activeAt(c),
-        title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '' });
+        title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '',
+        waitingFor: activity === 'waiting' ? waitReason.reasonOf(c.waitingFor) : null });
     }
   }
   const need = (it) => { const k = kindOf(it); return k === 'waiting' ? 0 : k ? 1 : 2; };
@@ -92,13 +106,14 @@ function itemsOf(lists) {
 }
 
 /*
- * Every live window's items, by key, each with `from`, the windows that reported it, and `kind`. `live` is the set of
- * windows whose file is fresh; `front` maps each of them to the keys it shows in front while it has the focus.
+ * Every live window's items, by key, each with `from`, the windows that reported it, `kind` and `waitingFor`. `live` is
+ * the set of windows whose file is fresh; `front` maps each of them to the keys it shows in front while it has the focus;
+ * `settled` maps each of them to its notes of conversations it told the user of, key -> time.
  */
 function readAll(dir, now) {
-  const merged = new Map(), live = new Set(), front = new Map();
+  const merged = new Map(), live = new Set(), front = new Map(), settled = new Map();
   let names = [];
-  try { names = fs.readdirSync(dir); } catch (_) { return { merged, live, front }; }
+  try { names = fs.readdirSync(dir); } catch (_) { return { merged, live, front, settled }; }
   for (const n of names) {
     if (!WINDOW.test(n)) continue;
     let d;
@@ -107,6 +122,13 @@ function readAll(dir, now) {
     live.add(n);
     front.set(n, new Set((Array.isArray(d.front) ? d.front.slice(0, MAX_ITEMS) : [])
       .filter((p) => Array.isArray(p) && typeof p[0] === 'string' && typeof p[1] === 'string').map((p) => keyOf(p[0], p[1]))));
+    const notes = new Map();
+    for (const p of Array.isArray(d.settled) ? d.settled.slice(0, MAX_ITEMS) : []) {
+      if (!Array.isArray(p) || typeof p[0] !== 'string' || typeof p[1] !== 'string' || !Number.isFinite(p[2])) continue;
+      const k = keyOf(p[0], p[1]);
+      if (!(notes.get(k) >= p[2])) notes.set(k, p[2]);
+    }
+    settled.set(n, notes);
     for (const raw of d.items.slice(0, MAX_ITEMS)) {
       if (!raw || typeof raw.sourceId !== 'string' || typeof raw.sessionId !== 'string') continue;
       const { activity, unseen, legacy } = reading(raw);
@@ -116,7 +138,8 @@ function readAll(dir, now) {
       const steward = typeof raw.steward === 'boolean' ? raw.steward : title.startsWith(titleMarks.CROWN);
       const it = { key: k, from: new Set([n]), sourceId: raw.sourceId, sessionId: raw.sessionId, source: clip(raw.source, 40) || raw.sourceId,
         title: titleMarks.withMarks(title, { steward }) || raw.sessionId, steward, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity,
-        unseen, legacy, lastActiveAt: Number.isFinite(raw.lastActiveAt) ? raw.lastActiveAt : 0 };
+        unseen, legacy, lastActiveAt: Number.isFinite(raw.lastActiveAt) ? raw.lastActiveAt : 0,
+        waitingFor: activity === 'waiting' ? waitReason.reasonOf(raw.waitingFor) : null };
       const had = merged.get(k);
       if (!had) { merged.set(k, it); continue; }
       const win = RANK[activity] < RANK[had.activity] ? it : had;
@@ -124,39 +147,49 @@ function readAll(dir, now) {
       win.unseen = had.unseen || unseen;
       win.legacy = had.legacy && legacy;
       win.lastActiveAt = Math.max(had.lastActiveAt, it.lastActiveAt);
+      win.waitingFor = win.activity === 'waiting' ? waitReason.better(had.waitingFor, it.waitingFor) : null;
       merged.set(k, win);
     }
   }
   for (const it of merged.values()) it.kind = kindOf(it);
-  return { merged, live, front };
+  return { merged, live, front, settled };
 }
 
-/* The notification's text for `items`. */
+/* The notification's text for `items`. A waiting conversation's reason is named where the source gave one. */
 function message(items, { several }) {
   const name = (it) => `${several ? it.source + ': ' : ''}"${it.title}"`;
+  const why = (it) => (it.kind === 'waiting' ? waitReason.reasonOf(it.waitingFor) : null);
   if (items.length === 1) {
     const it = items[0];
-    return `${name(it)} ${it.kind === 'waiting' ? 'is waiting for you' : 'finished'}.`;
+    return `${name(it)} ${it.kind === 'waiting' ? waitReason.predicate(why(it)) : 'finished'}.`;
   }
   const waiting = items.filter((it) => it.kind === 'waiting').length;
   const parts = [];
   if (waiting) parts.push(`${waiting} waiting for you`);
   if (items.length - waiting) parts.push(`${items.length - waiting} finished`);
-  const shown = items.slice(0, 2).map(name).join(', ') + (items.length > 2 ? ` and ${items.length - 2} more` : '');
+  const named = (it) => { const b = waitReason.brief(why(it)); return b ? `${name(it)} (${b})` : name(it); };
+  const shown = items.slice(0, 2).map(named).join(', ') + (items.length > 2 ? ` and ${items.length - 2} more` : '');
   return `${items.length} conversations need you (${parts.join(', ')}): ${shown}.`;
 }
 
 /*
- * `lookedAt(item)` answers whether this window shows that conversation in front now; `canWrite()` is false in Restricted
- * Mode, where this window writes nothing; `show(text, items)` shows a notification about `items`.
+ * `lookedAt(item)` answers whether this window shows that conversation in front now, and `shownHere(item)` whether it
+ * shows it anywhere, in front or not; `canWrite()` is false in Restricted Mode, where this window writes nothing;
+ * `show(text, items)` shows a notification about `items`.
  */
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
-  settings, canWrite = () => true, show, paint = () => {}, several = () => false, log = () => {}, batchMs = BATCH_MS,
-  warmupMs = WARMUP_MS, stableMs = STABLE_MS }) {
+  shownHere = () => false, settings, canWrite = () => true, show, paint = () => {}, several = () => false, log = () => {},
+  batchMs = BATCH_MS, warmupMs = WARMUP_MS, stableMs = STABLE_MS }) {
   const ownName = `${windowId}.json`;
   const own = path.join(dir, ownName);
   const startedAt = now();
-  let written = '', writtenAt = 0, union = null, timer = null, closed = false;
+  let written = '', writtenAt = 0, union = null, timer = null, closed = false, hadFocus = false;
+  /* key -> { kind, queuedAt }: what this window would have shown while it did not have the focus. */
+  const missed = new Map();
+  /* [sourceId, sessionId, at]: the conversations this window told the user of, newest last. */
+  let told = [];
+  /* key -> the latest time another live window told the user of that conversation, as of the last refresh. */
+  let toldElsewhere = new Map();
   /* What this window last reported, and the keys it shows in front, sorted. */
   let ownItems = [], ownFront = [];
   /* The keys some window with the focus shows in front, as of the last refresh. */
@@ -170,14 +203,16 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
      is used instead, since a rename or a hook's note also makes a conversation active. */
   const activeSeen = new Map();
 
+  const isFocused = () => { try { return focused() === true; } catch (_) { return false; } };
+
   function write() {
     if (closed || !canWrite()) return;
     const front = ownFront.map((k) => JSON.parse(k));
-    const text = JSON.stringify([ownItems, front]);
+    const text = JSON.stringify([ownItems, front, told]);
     if (text === written && now() - writtenAt < BEAT_MS) return;
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-      writeAtomic(own, JSON.stringify({ format: FORMAT, at: now(), items: ownItems, front }) + '\n', 0o600);
+      writeAtomic(own, JSON.stringify({ format: FORMAT, at: now(), items: ownItems, front, settled: told }) + '\n', 0o600);
       written = text;
       writtenAt = now();
     } catch (e) { log('attention: writing ' + own + ': ' + ((e && e.message) || e)); }
@@ -207,6 +242,24 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   }
 
   const inFront = (it) => { try { return lookedAt(it) === true; } catch (_) { return false; } };
+  const here = (it) => { try { return shownHere(it) === true; } catch (_) { return false; } };
+
+  /* Notes that the user has been told of `items`, or had them in front of them, in this window's file. */
+  function settle(items) {
+    if (!items.length) return;
+    const t = now(), keys = new Set(items.map((it) => it.key));
+    told = told.filter((p) => t - p[2] < SETTLED_MS && !keys.has(keyOf(p[0], p[1])))
+      .concat(items.map((it) => [it.sourceId, it.sessionId, t])).slice(-MAX_ITEMS);
+    write();
+  }
+
+  /* Shows what of `items` the user does not have in front of them in this window; all of them count as told. */
+  function tell(items) {
+    settle(items);
+    const fresh = items.filter((it) => !looking.has(it.key) && !inFront(it) && !here(it));
+    if (!fresh.length) return;
+    try { show(message(fresh, { several: several() }), fresh); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
+  }
 
   function flush() {
     timer = null;
@@ -217,10 +270,31 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       return cur && cur.kind === it.kind && s[it.kind] !== false;
     });
     pending.clear();
-    if (!s.enabled || !items.length || !focused()) return;
-    const fresh = items.filter((it) => !looking.has(it.key) && !inFront(it));
-    if (!fresh.length) return;
-    try { show(message(fresh, { several: several() }), fresh); } catch (e) { log('attention: showing: ' + ((e && e.message) || e)); }
+    if (!s.enabled || !items.length) return;
+    if (isFocused()) { tell(items); return; }
+    for (const it of items) {
+      missed.delete(it.key);
+      missed.set(it.key, { kind: it.kind, queuedAt: it.queuedAt });
+      if (missed.size > MAX_ITEMS) missed.delete(missed.keys().next().value);
+    }
+  }
+
+  /* On getting the focus: what this window kept while it had none, less what moved on since and what another window
+     told the user of after it was kept. Windows read the shared files at their own moments, so a window that told of a
+     change can have done so up to a batch before this one saw it. */
+  function replay() {
+    if (!missed.size) return;
+    const s = settings(), kept = [...missed.entries()];
+    missed.clear();
+    if (!s.enabled) return;
+    const due = [];
+    for (const [k, m] of kept) {
+      const cur = union && union.get(k);
+      if (!cur || cur.kind !== m.kind || s[m.kind] === false) continue;
+      if (toldElsewhere.get(k) >= m.queuedAt - batchMs) continue;
+      due.push(cur);
+    }
+    tell(due);
   }
 
   /* Reads every window's file and acts on what changed since the last read. Returns the union less the conversations
@@ -228,13 +302,24 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   function refresh() {
     if (closed) return [];
     const t = now();
-    const { merged: next, live, front } = readAll(dir, t);
-    const mine = focused() ? [...next.values()].filter((it) => it.kind && inFront(it)).map((it) => it.key).sort() : [];
+    const { merged: next, live, front, settled } = readAll(dir, t);
+    const focus = isFocused();
+    const mine = focus ? [...next.values()].filter((it) => it.kind && inFront(it)).map((it) => it.key).sort() : [];
     if (mine.join('\n') !== ownFront.join('\n')) { ownFront = mine; write(); }
     looking = new Set(mine);
     for (const [n, keys] of front) if (n !== ownName) for (const k of keys) looking.add(k);
+    toldElsewhere = new Map();
+    for (const [n, notes] of settled) {
+      if (n === ownName) continue;
+      for (const [k, at] of notes) if (!(toldElsewhere.get(k) >= at)) toldElsewhere.set(k, at);
+    }
     const warm = t - startedAt >= warmupMs;
-    const queue = (k, it) => { pending.set(k, it); if (!timer) timer = setTimeout(flush, batchMs); };
+    const queue = (k, it) => {
+      const had = pending.get(k);
+      it.queuedAt = had ? had.queuedAt : t;
+      pending.set(k, it);
+      if (!timer) timer = setTimeout(flush, batchMs);
+    };
     for (const [k, it] of next) {
       const was = last.get(k);
       const seenActive = activeSeen.has(k) ? activeSeen.get(k) : startedAt + warmupMs;
@@ -257,6 +342,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       if ([...was.from].some((w) => live.has(w)) || t - was.at >= REMEMBER_MS) last.delete(k);
     }
     union = next;
+    if (focus && !hadFocus) replay();
+    hadFocus = focus;
     const all = [...next.values()].filter((it) => it.kind && !looking.has(it.key));
     try { paint(settings().enabled ? all : []); } catch (_) { /* the next refresh */ }
     return all;
@@ -272,4 +359,4 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
 }
 
 module.exports = { createAttention, itemsOf, readAll, message, keyOf, kindOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, STABLE_MS,
-  WARMUP_MS, REMEMBER_MS };
+  WARMUP_MS, REMEMBER_MS, SETTLED_MS };

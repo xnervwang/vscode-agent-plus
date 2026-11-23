@@ -26,6 +26,7 @@ const { AnswerView, questionKey } = require('./answer-view');
 const answers = require('./answers');
 const { sharedHome } = require('./files');
 const attention = require('./attention');
+const waitReason = require('./wait-reason');
 const windowOpen = require('./window-open');
 
 const CONFIG = 'agentPlus';
@@ -176,8 +177,9 @@ function create(host, opts = {}) {
   const paintAttention = (items) => {
     if (!active || !items.length) { attentionEntry.hide(); return; }
     attentionEntry.text = `$(bell-dot) ${items.length}`;
+    const why = (it) => { const b = it.kind === 'waiting' ? waitReason.brief(it.waitingFor) : ''; return b ? ` (${b})` : ''; };
     attentionEntry.tooltip = `${items.length === 1 ? '1 conversation needs' : `${items.length} conversations need`} you:\n`
-      + items.slice(0, 10).map((it) => `${it.kind === 'waiting' ? 'Waiting' : 'Finished'}: ${it.title}`).join('\n')
+      + items.slice(0, 10).map((it) => `${it.kind === 'waiting' ? 'Waiting' : 'Finished'}: ${it.title}${why(it)}`).join('\n')
       + (items.length > 10 ? `\nand ${items.length - 10} more` : '');
     attentionEntry.show();
   };
@@ -189,13 +191,21 @@ function create(host, opts = {}) {
       .then((pick) => (pick !== go ? undefined : one ? commands.openAttention(one.sourceId, one.sessionId) : commands.showAttention()))
       .catch((e) => say('attention: ' + ((e && e.message) || e)));
   };
-  const windowFocused = () => { try { return vscode.window.state.focused === true; } catch (_) { return false; } };
+  /* Under a display with no window manager every window VS Code has once focused says it is focused for good, so a
+     window test can say instead, through a global of this process, whether this window has the focus. Only when the
+     window was started with AGENT_PLUS_TEST_FOCUS=1. */
+  const testFocus = process.env.AGENT_PLUS_TEST_FOCUS === '1';
+  const windowFocused = () => {
+    if (testFocus && typeof globalThis.__agentPlusTestFocused === 'boolean') return globalThis.__agentPlusTestFocused;
+    try { return vscode.window.state.focused === true; } catch (_) { return false; }
+  };
   const lookedAt = (it) => {
     const source = registry.get(it.sourceId);
     return !!source && windowFocused() && sources.call(source, 'isFocused', [it.sessionId], false) === true;
   };
   const needs = keep(attention.createAttention({ dir: shared(attention.ATTENTION_DIR), windowId, focused: windowFocused,
-    lookedAt, settings: notifySettings, canWrite: trusted, show: notify, paint: paintAttention, several: () => registry.size > 1, log: say,
+    lookedAt, shownHere: (it) => showsHere(it.sourceId, it.sessionId), settings: notifySettings, canWrite: trusted, show: notify,
+    paint: paintAttention, several: () => registry.size > 1, log: say,
     warmupMs: Number.isFinite(opts.attentionWarmupMs) ? opts.attentionWarmupMs : attention.WARMUP_MS,
     batchMs: Number.isFinite(opts.attentionBatchMs) ? opts.attentionBatchMs : attention.BATCH_MS }));
   const showsHere = (sourceId, sessionId) => {
@@ -280,6 +290,10 @@ function create(host, opts = {}) {
     opener.take().catch((e) => say('open: ' + ((e && e.message) || e)));
   }, Number.isFinite(opts.attentionMs) ? opts.attentionMs : 1000);
   keep({ dispose: () => clearInterval(attentionTick) });
+  /* What was kept while no window had the focus is shown the moment this one gets it, not at the next tick. */
+  if (typeof vscode.window.onDidChangeWindowState === 'function') {
+    keep(vscode.window.onDidChangeWindowState(() => { try { needs.refresh(); } catch (e) { say('attention: ' + ((e && e.message) || e)); } }));
+  }
 
   /* Each source's list is asked for when it registers, when it fires onDidChangeConversations, on the tick and on a
      folder or settings change. A pass waits LIST_WAIT_MS for it and otherwise draws its previous list; a list that
@@ -741,7 +755,8 @@ function create(host, opts = {}) {
       if (!items.length) { vscode.window.showInformationMessage('No conversation needs you now.'); return; }
       const several = registry.size > 1;
       const pick = await vscode.window.showQuickPick(items.map((it) => ({ label: it.title,
-        description: `${it.kind === 'waiting' ? 'waiting for you' : 'finished'}${several ? ' · ' + it.source : ''}`, detail: it.cwd || undefined, it })),
+        description: `${it.kind === 'waiting' ? waitReason.description(it.waitingFor) : 'finished'}${several ? ' · ' + it.source : ''}`,
+        detail: it.cwd || undefined, it })),
       { placeHolder: 'Conversations that need you' });
       if (pick) await commands.openAttention(pick.it.sourceId, pick.it.sessionId);
     },
@@ -785,6 +800,9 @@ function create(host, opts = {}) {
     setActive(on) { active = !!on; paintConversations(); },
     /* A dependent started listening for every conversation: a pass now, rather than at the next tick. */
     listSoon() { askAll(); convSoon(); },
+    /* Whether this window tells the user when a conversation starts to wait, so that a source can leave its agent's own
+       notice of it to this. */
+    announcesWaits() { const s = notifySettings(); return !closing && !!active && trusted() && s.enabled && s.waiting; },
     /* For tests. */
     _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, attentionEntry, needs, opener, answerView, focus, courier: () => courier,
       plans: () => [...plans.keys()] },

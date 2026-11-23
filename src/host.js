@@ -274,6 +274,11 @@ function start(context, log, opts = {}) {
     },
     allConversations() { return everyone.list; },
     onDidChangeAllConversations: listenEveryone,
+    /* Whether this window tells the user, in its own notification, when a conversation starts to wait for them
+       (feature 'waitingFor'). */
+    announcesWaits() {
+      try { return !closing && !!views && typeof views.announcesWaits === 'function' && views.announcesWaits() === true; } catch (_) { return false; }
+    },
   });
 
   /* ── Commands ── */
