@@ -247,7 +247,7 @@ function create(host, opts = {}) {
   /* What a dependent that links to conversations is given (src/host.js): each source's machine-wide list and this
      window's, once each. Told as a change only when a conversation comes, goes, or changes its title or folder. */
   const everyone = host.everyone || { wanted: () => false, set() {} };
-  let everyoneKey = null;
+  let everyoneKey = JSON.stringify([]);
   const publishEveryone = (gathered) => {
     const out = [], seen = new Set();
     for (const { entry, list, all } of gathered) {
