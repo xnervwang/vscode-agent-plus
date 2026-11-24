@@ -109,7 +109,7 @@
       },
       {
         "command": "agentPlus.answerQuestionOf",
-        "title": "Agent Plus: Answer a Conversation's Question"
+        "title": "Agent Plus: Answer a Question in a Conversation's Plan"
       }
     ],
     "viewsContainers": {
