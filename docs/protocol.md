@@ -251,7 +251,7 @@ Both commands take `{ sourceId, sessionId }`. Neither appears in the command pal
 | Command | Does |
 |---|---|
 | `agentPlus.showWorkPlanOf` | Moves the Work plan view to the conversation, as a focus report does, and brings the view into sight. The next editor tab change moves the view as usual. |
-| `agentPlus.answerQuestionOf` | Reads the plan as it is now and shows the first question in the Answer view, in the same plan order the Conversations view uses. This works even for a conversation the Conversations view leaves out, such as one outside the window's folders. A conversation counts as running when its source lists it as running. If there is no question, a message says that nothing in the conversation's plan waits for an answer. The Answer view's button opens the conversation through its source's `open()` when the source provides it, so a Codex conversation opens in Codex. |
+| `agentPlus.answerQuestionOf` | Reads the plan as it is now and shows the first question in the Answer view, in the same plan order the Conversations view uses. This works even for a conversation the Conversations view leaves out, such as one outside the window's folders. A conversation counts as running when its source lists it as running. If the source's last list omits the conversation, the core asks the source for its list once more and waits up to 3 seconds (the same limit the Conversations view uses) before treating the conversation as not running. If there is no question, a message says that nothing in the conversation's plan waits for an answer. The Answer view's button opens the conversation through its source's `open()` when the source provides it, so a Codex conversation opens in Codex. |
 
 ## Timing and limits
 

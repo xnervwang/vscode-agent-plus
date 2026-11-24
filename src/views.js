@@ -471,12 +471,14 @@ function create(host, opts = {}) {
     const data = conversationsTree.data;
     return data.running.concat(data.stopped).some((x) => x.sourceId === sourceId && x.sessionId === sessionId);
   };
+  const listedBy = (entry, sessionId) => {
+    const st = listState(entry);
+    return ((st.last && st.last.list) || []).find((x) => x.sessionId === sessionId) || null;
+  };
   const conversationOf = (sourceId, sessionId) => {
     const entry = registry.entry(sourceId);
     if (!entry) return null;
-    const st = listState(entry);
-    const raw = ((st.last && st.last.list) || []).find((x) => x.sessionId === sessionId)
-      || { sessionId, cwd: '', title: '', state: 'idle', running: false };
+    const raw = listedBy(entry, sessionId) || { sessionId, cwd: '', title: '', state: 'idle', running: false };
     const { plan, file } = planOf(sourceId, sessionId);
     return Object.assign(conversations.entry(raw, plan, !!file), { sourceId });
   };
@@ -841,6 +843,12 @@ function create(host, opts = {}) {
     answerQuestionOf: async (target) => {
       const t = targetOf(target);
       if (!t) return;
+      /* A conversation its source did not list last time, such as one opened since, is asked about once more, for as
+         long as a pass of the Conversations view waits for a list, before it is taken as not running and untitled. */
+      const entry = registry.entry(t.sourceId);
+      if (entry && !listedBy(entry, t.sessionId)) {
+        await Promise.race([ask(entry), new Promise((r) => after(r, listWait))]).catch(() => {});
+      }
       const c = conversationOf(t.sourceId, t.sessionId);
       const q = c && c.questions[0];
       if (!q) { vscode.window.showInformationMessage('Agent Plus: no question in that conversation\'s plan is waiting for your answer.'); return; }

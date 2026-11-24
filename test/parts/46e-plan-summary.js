@@ -190,6 +190,20 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   await wait(150);
   eq([answer.current && answer.current.gone, answer.current && answer.current.question], [false, 'Skip negative amounts?'],
     'the next pass keeps that question as one still asked, though the Conversations view does not list its conversation');
+  {
+    const lateDir = tmp('late-plans');
+    const L = 'bbbbbbbb-0000-4000-8000-000000000002';
+    let listed = [];
+    write(lateDir, L, { nodes: [row('Pick a format', 'waiting', { waitingOn: 'user', question: 'CSV or JSON?' })] });
+    b.api.registerSource({ protocol: 1, id: 'late', label: 'Late', planPath: (id) => path.join(lateDir, id + '.json'), planDir: () => lateDir,
+      listConversations: async () => listed.map((c) => Object.assign({}, c)) });
+    await wait(120);
+    listed = [{ sessionId: L, title: 'Opened a moment ago', cwd: ws, state: 'idle', running: true }];
+    await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 'late', sessionId: L });
+    eq([answer.current && answer.current.conversation, answer.current && answer.current.running, answer.current && answer.current.question],
+      ['Opened a moment ago', true, 'CSV or JSON?'],
+      'a conversation its source did not list last time is asked about once more, so the question comes with its title and as running');
+  }
   await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 'codex', sessionId: D });
   await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 7 });
   eq(b.control.state.said.filter((m) => /no question in that conversation/.test(m.message)).length, 1,
