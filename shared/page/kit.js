@@ -166,20 +166,24 @@ var agentPlusKit = (function () {
    * react-markdown renders).
    *
    * A conversation is named by its title inside the corner brackets U+300C and U+300D, by its title standing on its
-   * own, by its whole session id, or by the first 8 characters of that id when no other conversation's id starts with
-   * them. Titles are compared as they are shown, without the marks the extensions draw with them (src/title-marks.js).
-   * The minimum lengths keep short titles from matching common words: a title in brackets needs 4 characters or 2 CJK
-   * characters, and a title standing on its own needs a width of 10, in which a CJK character counts 2, with no letter
-   * or digit right before or after it. An id that is part of a path, next to a slash or followed by a file extension,
-   * names a folder or a file rather than the conversation, and is left alone. Where two matches overlap the longer one
-   * is kept. Of several conversations with one title the most recently active is linked and the others are listed with
-   * it. The conversation the text belongs to is never linked, nor any other with its title.
+   * own, by its whole session id, or by the first 8 characters of an id of the UUID form when no other conversation's
+   * id starts with them. A UUID matches in any case. An id of any other form, such as OpenCode's ses_ ids, matches only
+   * whole and as it is written, and only when it is 8 to 200 letters, digits, _ or -. Titles are compared as they are
+   * shown, without the marks the extensions draw with them (src/title-marks.js). The minimum lengths keep short titles
+   * from matching common words: a title in brackets needs 4 characters or 2 CJK characters, and a title standing on its
+   * own needs a width of 10, in which a CJK character counts 2, with no letter or digit right before or after it. An id
+   * that is part of a path, next to a slash or followed by a file extension, names a folder or a file rather than the
+   * conversation, and is left alone. Where two matches overlap the longer one is kept. Of several conversations with
+   * one title the most recently active is linked and the others are listed with it. The conversation the text belongs
+   * to is never linked, nor any other with its title.
    */
   var LQ = '\u300C', RQ = '\u300D';
   var MARKS = /(?:\uD83D\uDC51|\uD83D\uDECE|\uD83D\uDCE9|\u2709)[\uFE0E\uFE0F]?/g;
   var PLACEHOLDERS = { '(untitled)': 1, 'untitled': 1, 'new chat': 1, 'new session': 1, 'new conversation': 1 };
   var UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
   var SHORT = /[0-9a-fA-F]{8}/g;
+  var UUID_FORM = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  var WHOLE = /^[0-9A-Za-z_\-]{8,200}$/, RUN = /[0-9A-Za-z_\-]+/g;
   var ID_CHAR = /[0-9A-Za-z_\-\/\\]/;
   var EXTENSION = /^\.[0-9A-Za-z*]/;
   /* Letters and digits, which may not stand right before or after an unbracketed title. CJK text is written without
@@ -226,7 +230,7 @@ var agentPlusKit = (function () {
   function mentionIndex(known, self) {
     var me = self || {}, list = Array.isArray(known) ? known : [];
     var ix = { ids: Object.create(null), short: Object.create(null), quoted: Object.create(null), bare: Object.create(null),
-      self: typeof me.sessionId === 'string' ? me.sessionId.toLowerCase() : '', size: 0 };
+      whole: Object.create(null), wholes: 0, self: typeof me.sessionId === 'string' ? me.sessionId.toLowerCase() : '', size: 0 };
     var groups = Object.create(null), prefixes = Object.create(null), selfTitle = me.title ? titleKey(me.title) : '';
     var isSelf = function (c) { return !!ix.self && c.sessionId.toLowerCase() === ix.self && (!me.sourceId || c.sourceId === me.sourceId); };
     for (var i = 0; i < list.length; i++) {
@@ -239,6 +243,10 @@ var agentPlusKit = (function () {
       if (isSelf(c)) { if (!selfTitle) selfTitle = c.title; continue; }
       ix.ids[id] = c;
       ix.size++;
+      if (!UUID_FORM.test(c.sessionId) && WHOLE.test(c.sessionId)) {
+        if (!own(ix.whole, c.sessionId)) ix.wholes++;
+        ix.whole[c.sessionId] = c;
+      }
       if (!c.title || own(PLACEHOLDERS, c.title.toLowerCase()) || /^[0-9a-f]{8}(?:-[0-9a-f-]*)?$/i.test(c.title)) continue;
       if (!own(groups, c.title)) groups[c.title] = [];
       groups[c.title].push(c);
@@ -281,6 +289,13 @@ var agentPlusKit = (function () {
     while ((m = SHORT.exec(s))) {
       c = ix.short[m[0].toLowerCase()];
       if (c && idApart(s, m.index, m.index + 8)) add(m.index, m.index + 8, 'short', c);
+    }
+    if (ix.wholes) {
+      RUN.lastIndex = 0;
+      while ((m = RUN.exec(s))) {
+        c = own(ix.whole, m[0]) ? ix.whole[m[0]] : null;
+        if (c && idApart(s, m.index, m.index + m[0].length)) add(m.index, m.index + m[0].length, 'id', c);
+      }
     }
     if (!o.idsOnly) {
       var at = s.indexOf(LQ);
