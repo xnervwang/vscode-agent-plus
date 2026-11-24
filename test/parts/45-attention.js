@@ -212,6 +212,22 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([...at.readAll(tdir, clock).merged.values()].map((it) => [it.sessionId, it.title]),
     [['s', 'Steward \u{1F451}'], ['o', 'Old steward \u{1F451}'], ['p', 'Plain']],
     'a title read from a window\'s file is drawn again, a steward\'s with one crown after it; a title from an older window that carries a crown is taken as a steward\'s');
+  /* A window's file that cannot be read for a moment, as on Windows while that window renames its new copy into place. */
+  {
+    const kept = new Map();
+    const file = path.join(tdir, 'n1-00000000.json');
+    const good = fs.readFileSync(file, 'utf8');
+    const ids = (r) => [...r.merged.values()].map((it) => it.sessionId);
+    eq(ids(at.readAll(tdir, clock, kept)), ['s', 'o', 'p'], 'a window\'s file read whole is kept');
+    fs.writeFileSync(file, good.slice(0, 20));
+    eq([ids(at.readAll(tdir, clock, kept)), ids(at.readAll(tdir, clock))], [['s', 'o', 'p'], []],
+      'a read of it that fails uses the copy last read whole, so its conversations stay; with nothing kept they drop out');
+    eq(ids(at.readAll(tdir, clock + at.STALE_MS + 1, kept)), [], 'and the kept copy goes stale by the time the window wrote into it');
+    fs.unlinkSync(file);
+    at.readAll(tdir, clock, kept);
+    eq(kept.size, 0, 'a window whose file is gone is forgotten');
+    fs.writeFileSync(file, good);
+  }
   eq(at.itemsOf([{ sourceId: 'claude-code', label: 'Claude Code', conversations: [require(path.join(root, 'src', 'sources.js'))
     .conversation({ sessionId: 'm', title: 'Manager \u{1F6CE}', state: 'prompt', steward: true })] }]).map((it) => [it.title, it.steward]),
   [['Manager \u{1F451}', true]], 'and a window writes the drawn title with steward beside it');

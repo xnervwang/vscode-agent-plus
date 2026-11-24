@@ -113,14 +113,19 @@ function itemsOf(lists) {
  * the set of windows whose file is fresh; `front` maps each of them to the keys it shows in front while it has the focus;
  * `settled` maps each of them to the conversations it told the user about, key -> time.
  */
-function readAll(dir, now) {
+function readAll(dir, now, kept = null) {
   const merged = new Map(), live = new Set(), front = new Map(), settled = new Map();
   let names = [];
   try { names = fs.readdirSync(dir); } catch (_) { return { merged, live, front, settled }; }
+  /* `kept` holds each window's file as last read whole. A read that fails, as one can on Windows while that window
+     renames its new copy into place, uses it instead, so the window's conversations do not drop out of the union for
+     that one read; how old it is is still judged by the time the window wrote into it. */
+  if (kept) for (const n of [...kept.keys()]) if (!names.includes(n)) kept.delete(n);
   for (const n of names) {
     if (!WINDOW.test(n)) continue;
     let d;
-    try { d = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); } catch (_) { continue; }
+    try { d = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); if (kept) kept.set(n, d); }
+    catch (_) { d = kept ? kept.get(n) : null; if (!d) continue; }
     if (!d || d.format !== FORMAT || !Array.isArray(d.items) || !(now - d.at < STALE_MS)) continue;
     live.add(n);
     front.set(n, new Set((Array.isArray(d.front) ? d.front.slice(0, MAX_ITEMS) : [])
@@ -177,6 +182,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   const own = path.join(dir, ownName);
   const startedAt = now();
   let written = '', writtenAt = 0, union = null, timer = null, closed = false, hadFocus = false;
+  /* file name -> that window's file as last read whole (readAll). */
+  const lastRead = new Map();
   /* key -> { kind, queuedAt }: what this window would have shown while it did not have the focus. */
   const missed = new Map();
   /* [sourceId, sessionId, at]: the conversations this window told the user about, newest last. */
@@ -307,7 +314,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   function refresh() {
     if (closed) return [];
     const t = now();
-    const { merged: next, live, front, settled } = readAll(dir, t);
+    const { merged: next, live, front, settled } = readAll(dir, t, lastRead);
     const focus = isFocused();
     const mine = focus ? [...next.values()].filter((it) => it.kind && inFront(it)).map((it) => it.key).sort() : [];
     if (mine.join('\n') !== ownFront.join('\n')) { ownFront = mine; write(); }
