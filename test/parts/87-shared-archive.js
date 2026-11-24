@@ -135,8 +135,15 @@ module.exports = async ({ eq, note, tmp, root }) => {
       row(p, 'set', '6', '--note', 'touched');
       const after = readPlanAt(p.file, SID);
       before.nodes[5].note = 'touched';
-      eq(JSON.stringify(after.nodes), JSON.stringify(before.nodes),
+      /* Rows read back from the archive say so (`archived`), for the plan bar's figures; everything else is as before. */
+      const marked = [];
+      const unmark = (nodes, prefix = '') => nodes.map((n, i) => {
+        if (n.archived) marked.push(prefix + (i + 1));
+        return Object.assign({}, n, { archived: false, children: unmark(n.children, prefix + (i + 1) + '.') });
+      });
+      eq(JSON.stringify(unmark(after.nodes)), JSON.stringify(unmark(before.nodes)),
         `${agent}: the core reads the plan and its closed rows into the same rows it read before they were moved`);
+      eq(marked, ['1', '4.2'], `${agent}: and marks the rows that came back from the archive as archived`);
       fs.rmSync(path.join(p.data, 'closed'), { recursive: true, force: true });
       const alone = readPlanAt(p.file, SID);
       eq([alone.error, alone.nodes[0].title, alone.nodes[0].state, alone.nodes[0].children.length], ['',

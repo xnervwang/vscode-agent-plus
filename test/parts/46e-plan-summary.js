@@ -59,9 +59,31 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const s = summarize(plan([row('A', 'done'), row('B', 'dropped', { children: [row('B1', 'done')] }), row('C', 'done')]));
     eq([s.current, s.allDone, s.total, s.done, s.open], [null, true, 3, 3, []], 'with every counted row done there is no current row, and allDone is set');
   }
-  eq([summarize(null), summarize({ error: 'Unexpected end', nodes: [] }), summarize(plan([])), summarize(plan([row('A', 'dropped')])),
-    summarize(plan([row('A', 'reviewing')]))], [null, null, null, null, null],
-  'no plan, one that does not parse, and one with no counted row have nothing to draw; a state this version does not know is not counted');
+  eq([summarize(null), summarize({ error: 'Unexpected end', nodes: [] }), summarize(plan([])), summarize(plan([row('A', 'reviewing')])),
+    summarize(plan([row('A', 'done'), row('B', 'reviewing')])).allDone],
+  [null, null, null, null, false],
+  'no plan, one that does not parse, an empty one and one whose only row is in a state this version does not know have nothing to draw; such a row is not counted, and is not done either');
+  {
+    const s = summarize(plan([row('A', 'dropped')]));
+    eq([s.total, s.done, s.allDone, s.current], [0, 0, true, null], 'a plan whose rows were all dropped has none open: all done, with nothing counted');
+  }
+
+  /* A plan keeps its closed rows; those archived beside it are left out of every figure. */
+  {
+    const dir = tmp('archived'), file = path.join(dir, 'long.json');
+    const archived = Array.from({ length: 462 }, (_, i) => ({ title: 'Closed long ago ' + (i + 1), state: i % 10 ? 'done' : 'dropped', archived: true }));
+    const open = Array.from({ length: 17 }, (_, i) => row('Open ' + (i + 1), i ? 'todo' : 'doing'));
+    fs.writeFileSync(file, JSON.stringify({ nodes: archived.concat([row('Closed today', 'done')], open) }));
+    fs.mkdirSync(path.join(dir, 'closed'));
+    fs.writeFileSync(path.join(dir, 'closed', 'long.json'), JSON.stringify({ format: 1, nodes: [Object.assign(row('Closed long ago 1', 'dropped',
+      { children: [row('Its child', 'done')] }), { row: '1' })] }));
+    const s = summarize(readPlanAt(file, 'long'));
+    eq([s.total, s.done, s.counts, s.current.number, s.open.length, s.allDone],
+      [18, 1, { discussing: 0, todo: 16, doing: 1, waiting: 0, parked: 0, done: 1 }, '464', 17, false],
+      'a plan of 462 archived rows, one closed today and 17 open counts 18 rows, one done: the archived rows, whether read back from closed/ with their children or left as placeholders, are left out, and the open rows keep their numbers');
+    const all = summarize(readPlanAt(path.join(dir, 'gone.json'), 'gone') || plan(archived));
+    eq([all.total, all.done, all.allDone, all.current], [0, 0, true, null], 'a plan whose every row is archived has none open: all done');
+  }
   {
     const many = Array.from({ length: 40 }, (_, i) => row('Row ' + (i + 1), i % 2 ? 'todo' : 'discussing', { children: i === 0 ? [row('Under the first', 'doing')] : [] }));
     const s = summarize(plan([row('Finished', 'done')].concat(many)));
@@ -96,8 +118,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
 
   const cc = b.api.planSummary('claude-code', C);
   eq([cc.total, cc.done, cc.counts.done, cc.current.number, cc.questions, Object.isFrozen(cc), Object.isFrozen(cc.current)],
-    [6, 3, 3, '2.1', 1, true, true],
-    'a Claude Code conversation: its closed rows are read back from the archive beside the plan, so the done count has them, and no number moves');
+    [3, 0, 0, '2.1', 1, true, true],
+    'a Claude Code conversation: the closed rows archived beside its plan are left out with their children, and no number moves');
   const cx = b.api.planSummary({ sourceId: 'codex', sessionId: X });
   eq([cx.total, cx.done, cx.current], [2, 1, { number: '2', title: 'Handle refunds later', state: 'parked', dim: true }],
     'a Codex conversation, asked with one object argument');
@@ -112,8 +134,23 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   await until(() => told.length);
   await wait(60);
   const after = b.api.planSummary('claude-code', C);
-  eq([told, after.allDone, after.done, after.questions], [[['claude-code', C]], true, 6, 0],
+  eq([told, after.allDone, after.done, after.questions], [[['claude-code', C]], true, 3, 0],
     'a change to one plan fires once, carrying the agent and the conversation, and the summary asked for then has the change');
+  {
+    const grown = Array.from({ length: 9 }, (_, i) => row('Row ' + (i + 1), 'todo'));
+    write(claudeDir, C, { nodes: [{ title: 'Collect the requirements', state: 'done', archived: true }].concat(grown) });
+    for (const w of b.control.state.watchers) w.fire('change');
+    await until(() => told.length > 1);
+    const nine = b.api.planSummary('claude-code', C);
+    write(claudeDir, C, { nodes: [{ title: 'Collect the requirements', state: 'done', archived: true }].concat(grown,
+      Array.from({ length: 111 }, (_, i) => row('Added ' + (i + 1), 'todo'))) });
+    for (const w of b.control.state.watchers) w.fire('change');
+    await until(() => told.length > 2);
+    const more = b.api.planSummary('claude-code', C);
+    eq([told.length, nine.total, more.total, more.open.length, more.counts.todo], [3, 9, 120, 30, 120],
+      'rows added to a plan between two reads raise the count at once and fire the change each time');
+    told.length = 1;
+  }
   write(codexDir, X, { nodes: [row('Fix the login redirect', 'done'), row('Handle refunds later', 'parked'), row('Note', 'todo')] });
   write(claudeDir, D, { nodes: [row('Something else', 'todo')] });
   for (const w of b.control.state.watchers) w.fire('change');

@@ -8,8 +8,12 @@
  * docs/protocol.md, shared/page/plan-bar.js): how many rows are done of how many, the count in each state, the row to
  * show as the current one, how many questions wait for the user, and the rows still open.
  *
- * It reads a plan as src/workplan.js parsed it, closed rows moved out already put back, and numbers rows as the work
- * plan view does: by their place in the file, 1, 2.1.1. No editor API here: the tests load it directly.
+ * It reads a plan as src/workplan.js parsed it and numbers rows as the work plan view does: by their place in the file,
+ * 1, 2.1.1. A plan keeps every row it ever had, so a long conversation's plan holds hundreds of closed rows; counted
+ * against those, a bar would stay all but full whatever the conversation does now. So the rows moved out to the archive
+ * beside the plan, closed more than a day ago (`archived` in src/workplan.js), are left out with everything under them,
+ * and the figures are those of the rows still open and the ones closed since. No editor API here: the tests load it
+ * directly.
  */
 const { planQuestions } = require('./folders');
 
@@ -20,10 +24,12 @@ const COUNTED = ['done', 'doing', 'waiting', 'discussing', 'todo', 'parked'];
 const MAX_OPEN = 30;
 const MAX_TITLE = 200;
 
-/* Every row in file order, with its number and its depth: 1 for a row at the top, 2 for its children, and so on. */
+/* Every row in file order that is not archived, with its number and its depth: 1 for a row at the top, 2 for its
+   children, and so on. An archived row's place still counts for the numbers after it. */
 function walk(nodes, prefix = '', depth = 1, out = []) {
   (nodes || []).forEach((n, i) => {
     const number = (prefix ? prefix + '.' : '') + (i + 1);
+    if (n.archived) return;
     out.push({ n, number, depth });
     walk(n.children, number, depth + 1, out);
   });
@@ -34,22 +40,24 @@ const row = (r, dim) => ({ number: r.number, title: String(r.n.title || '').slic
 
 /*
  * The summary of `plan` (readPlanAt() in src/workplan.js), or null when there is nothing for a bar to draw: no plan, a
- * plan that does not parse, or one with no counted row.
+ * plan that does not parse or has no rows, or one whose rows left after the archived ones are neither counted nor done
+ * (in a state this version does not know).
  *
  * The current row is the deepest `doing` row, the earlier in the file at equal depth; without one, the first `waiting`
  * row, then the first `discussing` and then the first `todo`. With only parked rows left it is the first parked row,
- * marked `dim`. With every counted row done there is none, and `allDone` is true.
+ * marked `dim`. With no row open there is none, and `allDone` is true, even when every row is archived or dropped and
+ * `total` is 0.
  */
 function summarize(plan) {
-  if (!plan || plan.error || !Array.isArray(plan.nodes)) return null;
+  if (!plan || plan.error || !Array.isArray(plan.nodes) || !plan.nodes.length) return null;
   const rows = walk(plan.nodes);
   const counts = { discussing: 0, todo: 0, doing: 0, waiting: 0, parked: 0, done: 0 };
   const open = [];
-  let deepest = null;
+  let deepest = null, unknown = 0;
   const first = {};
   for (const r of rows) {
     const state = r.n.state;
-    if (!COUNTED.includes(state)) continue;
+    if (!COUNTED.includes(state)) { if (state !== 'dropped') unknown++; continue; }
     counts[state]++;
     if (state === 'done') continue;
     if (open.length < MAX_OPEN) open.push({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), state, depth: r.depth });
@@ -57,11 +65,12 @@ function summarize(plan) {
     if (!first[state]) first[state] = r;
   }
   const total = COUNTED.reduce((sum, k) => sum + counts[k], 0);
-  if (!total) return null;
+  const allDone = total === counts.done && !unknown;
+  if (!total && !allDone) return null;
   const pick = deepest || first.waiting || first.discussing || first.todo;
   const current = pick ? row(pick, false) : first.parked ? row(first.parked, true) : null;
   return {
-    total, done: counts.done, counts, current, allDone: counts.done === total,
+    total, done: counts.done, counts, current, allDone,
     questions: planQuestions(plan.nodes).length, open,
   };
 }

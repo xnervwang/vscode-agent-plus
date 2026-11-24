@@ -10,22 +10,51 @@
  * names cannot collide with names already in either page; under Node it is also a module, for the tests. The source is
  * ASCII and ES5, like the page scripts.
  *
- * Left to right: a list icon and "Plan"; a bar of one segment per state, each as long as its share of the rows; done of
- * total; the current row, with its state's icon; when the plan has questions waiting for the user, a red part saying how
- * many; an arrow. The colours are the work plan view's for its state icons, and the red is the red of a tab whose
- * conversation waits for the user. Narrower than COMPACT_BELOW, only the done count and the number of questions are
- * left. Hovering lists the rows not done.
+ * Left to right: a list icon and "Plan"; a track of one segment per state of the rows still open, each as long as its
+ * share of them; how many rows are open; the current row, with its state's icon; when the plan has questions waiting
+ * for the user, a red part saying how many; an arrow. The colours are the work plan view's for its state icons, and the
+ * red is the red of a tab whose conversation waits for the user. Narrower than COMPACT_BELOW, only the count and the
+ * number of questions are left. Hovering shows the current row's whole title and lists the rows still open.
+ *
+ * The bar never changes size with what the plan holds: it is as wide as the element it is placed in, one line high, the
+ * track has one width, the count has room for three digits in figures of one width, and the current row takes what is
+ * left and ends in an ellipsis. A width near COMPACT_BELOW does not flip the form back and forth: the bar turns compact
+ * below it and full again only HYSTERESIS pixels above it.
  *
  * A click on the bar calls opts.onOpen, a click on the red part opts.onAnswer. The page places `el` itself and gives it
  * the summary to draw with update(); a null summary hides the bar.
  */
 var agentPlusPlanBar = (function () {
   'use strict';
-  /* Below this width, in CSS pixels, the bar keeps only "Plan", the done count, the number of questions and the arrow. At
+  /* Below this width, in CSS pixels, the bar keeps only "Plan", the count, the number of questions and the arrow. At
      this width the full bar still leaves its current row about a hundred pixels. */
   var COMPACT_BELOW = 400;
-  /* The order of the segments: what is finished, then what is moving, then what waits to start. */
-  var ORDER = ['done', 'doing', 'waiting', 'discussing', 'todo', 'parked'];
+  /* How far above COMPACT_BELOW a compact bar has to get before it is drawn full again. */
+  var HYSTERESIS = 24;
+  /* The track's width in CSS pixels, whatever the plan holds: more rows make the segments thinner, not the track longer.
+     Every segment drawn is at least SEGMENT_MIN wide, so a state with one row among many still shows. */
+  var TRACK_WIDTH = 72;
+  var SEGMENT_MIN = 2;
+  /* The most open rows the hover lists; the summary gives no more than this either. */
+  var MAX_LIST = 30;
+  /* How long the pointer rests on the bar before the hover shows. */
+  var HOVER_MS = 350;
+  var MARK = 'data-agent-plus-plan-bar';
+
+  /*
+   * What the bar counts, decided here and nowhere else. A plan keeps every row it was ever given, so done against total
+   * says little about a long conversation; what is left does. So the track shows the open rows by state, in the order
+   * below (what is moving, then what waits to start), and the count says how many are open. To count done against total
+   * instead, put 'done' first in SEGMENTS and have countOf() return s.done + '/' + s.total: the summary carries both.
+   * COUNT_ROOM is the longest count the layout keeps room for, so the title does not move as the count grows.
+   */
+  var SEGMENTS = ['doing', 'waiting', 'discussing', 'todo', 'parked'];
+  var countOf = function (s) {
+    var left = Math.max(0, (+s.total || 0) - (+s.done || 0));
+    return left ? left + ' open' : '';
+  };
+  var COUNT_ROOM = '999 open';
+
   /* The colours of the work plan view's state icons (LOOK in src/workplan-view.js), as the page's theme variables. */
   var COLOR = {
     done: 'var(--vscode-charts-green, #89d185)',
@@ -38,9 +67,6 @@ var agentPlusPlanBar = (function () {
   /* The dot both extensions draw on a tab whose conversation waits for the user. */
   var RED = '#ef4444';
   var MUTED = 'var(--vscode-descriptionForeground, #8c8c8c)';
-  /* How long the pointer rests on the bar before the list of open rows shows. */
-  var HOVER_MS = 350;
-  var MARK = 'data-agent-plus-plan-bar';
 
   /* 16 by 16 shapes in the spirit of the work plan view's icons; each takes the colour of the text around it. */
   var svg = function (body) { return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' + body + '</svg>'; };
@@ -58,24 +84,24 @@ var agentPlusPlanBar = (function () {
     chevron: svg('<path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.5"/>')
   };
 
-  var CSS = '[' + MARK + ']{display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;min-width:0;margin:0 0 6px;'
-    + 'padding:3px 8px 3px 10px;cursor:pointer;user-select:none;font-size:12px;line-height:18px;white-space:nowrap;'
-    + 'color:var(--vscode-foreground, #ccc);background:var(--vscode-input-background, #252526);'
+  var CSS = '[' + MARK + ']{display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;min-width:0;height:26px;'
+    + 'margin:0 0 6px;padding:0 8px 0 10px;overflow:hidden;cursor:pointer;user-select:none;font-size:12px;line-height:18px;'
+    + 'white-space:nowrap;color:var(--vscode-foreground, #ccc);background:var(--vscode-input-background, #252526);'
     + 'border:1px solid var(--vscode-input-border, var(--vscode-widget-border, rgba(128,128,128,.35)));border-radius:6px}'
     + '[' + MARK + ']:hover{border-color:var(--vscode-focusBorder, #007fd4)}'
     + '[' + MARK + ']:focus-visible{outline:1px solid var(--vscode-focusBorder, #007fd4);outline-offset:-1px}'
     + '[' + MARK + '] svg{display:block;flex:none}'
     + '.apb-icon{display:flex;flex:none;color:' + MUTED + '}'
     + '.apb-name{flex:none;font-weight:700}'
-    + '.apb-track{display:flex;flex:none;gap:1px;width:72px;height:6px;border-radius:3px;overflow:hidden;'
+    + '.apb-track{display:flex;flex:none;gap:1px;width:' + TRACK_WIDTH + 'px;height:6px;border-radius:3px;overflow:hidden;'
     + 'background:var(--vscode-input-border, rgba(128,128,128,.35))}'
-    + '.apb-seg{display:block;height:100%;min-width:2px}'
-    + '.apb-count{flex:none;color:' + MUTED + '}'
+    + '.apb-seg{display:block;height:100%;min-width:' + SEGMENT_MIN + 'px}'
+    + '.apb-count{flex:none;box-sizing:content-box;text-align:right;font-variant-numeric:tabular-nums;color:' + MUTED + '}'
     + '.apb-sep{flex:none;color:' + MUTED + '}'
-    + '.apb-row{display:flex;align-items:center;gap:5px;flex:1;min-width:0}'
-    + '.apb-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}'
+    + '.apb-row{display:flex;align-items:center;gap:5px;flex:1 1 0;min-width:0;overflow:hidden}'
+    + '.apb-text{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     + '.apb-dim{color:' + MUTED + '}'
-    + '.apb-gap{flex:1;min-width:0}'
+    + '.apb-gap{flex:1 1 0;min-width:0}'
     + '.apb-q{display:flex;align-items:center;gap:5px;flex:none;padding:0 8px;border-radius:9px;'
     + 'background:color-mix(in srgb, ' + RED + ' 22%, transparent)}'
     + '.apb-q:hover{background:color-mix(in srgb, ' + RED + ' 36%, transparent)}'
@@ -87,6 +113,7 @@ var agentPlusPlanBar = (function () {
     + 'font-size:12px;line-height:18px;color:var(--vscode-foreground, #ccc);'
     + 'background:var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background, #252526));'
     + 'border:1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, #454545));border-radius:6px}'
+    + '.apb-now{white-space:normal;overflow-wrap:anywhere;margin:0 0 4px}'
     + '.apb-li{display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden}'
     + '.apb-li .apb-text{flex:1;min-width:0}'
     + '.apb-head,.apb-more{color:' + MUTED + '}';
@@ -96,19 +123,20 @@ var agentPlusPlanBar = (function () {
   /*
    * What the bar draws for `summary` at `width`, or null for no bar: { compact, segments: [{ state, n }], count,
    * current: { state, text, dim } or null, questions: the red part's text or '', label: the bar's spoken text, list:
-   * { head, rows: [{ state, text, depth }], more } }. A width of 0 is one not measured yet, and draws the full bar.
+   * { now, head, rows: [{ state, text, depth }], more } or null }. `wasCompact` is the form drawn last, for the
+   * hysteresis. A width of 0 is one not measured yet, and draws the full bar.
    */
-  function model(summary, width) {
+  function model(summary, width, wasCompact) {
     var s = summary;
-    if (!s || typeof s !== 'object' || !(s.total > 0)) return null;
+    if (!s || typeof s !== 'object' || !(s.total > 0 || s.allDone)) return null;
     var counts = s.counts || {};
-    var compact = width > 0 && width < COMPACT_BELOW;
+    var compact = width > 0 && width < (wasCompact ? COMPACT_BELOW + HYSTERESIS : COMPACT_BELOW);
     var segments = [];
-    for (var i = 0; i < ORDER.length; i++) {
-      var n = +counts[ORDER[i]] || 0;
-      if (n > 0) segments.push({ state: ORDER[i], n: n });
+    for (var i = 0; i < SEGMENTS.length; i++) {
+      var n = +counts[SEGMENTS[i]] || 0;
+      if (n > 0) segments.push({ state: SEGMENTS[i], n: n });
     }
-    var done = +s.done || 0, total = +s.total, q = +s.questions || 0;
+    var q = +s.questions || 0;
     var current = null;
     if (s.allDone) current = { state: 'done', text: 'All rows done', dim: true };
     else if (s.current && s.current.title) {
@@ -116,21 +144,22 @@ var agentPlusPlanBar = (function () {
     }
     var open = Array.isArray(s.open) ? s.open : [];
     var rows = [];
-    for (var j = 0; j < open.length; j++) {
+    for (var j = 0; j < open.length && rows.length < MAX_LIST; j++) {
       var r = open[j];
       if (r && r.title) rows.push({ state: r.state, text: (r.number ? r.number + ' ' : '') + r.title, depth: Math.max(1, +r.depth || 1) });
     }
-    var left = Math.max(0, total - done);
-    var label = 'Work plan: ' + done + ' of ' + plural(total, 'row', 'rows') + ' done'
+    var left = Math.max(0, (+s.total || 0) - (+s.done || 0));
+    var label = 'Work plan: ' + (s.allDone ? 'all rows done' : plural(left, 'row', 'rows') + ' open')
       + (current && !s.allDone ? '; ' + current.text : '') + (q ? '; ' + plural(q, 'question waits', 'questions wait') + ' for your answer' : '');
     return {
       compact: compact,
-      segments: compact ? [] : segments,
-      count: done + '/' + total,
-      current: compact ? null : current,
+      segments: segments,
+      count: countOf(s),
+      current: current,
       questions: q ? (compact ? String(q) : q + ' to decide') : '',
       label: label,
-      list: left ? { head: plural(left, 'row', 'rows') + ' not done', rows: rows, more: Math.max(0, left - rows.length) } : null
+      list: left ? { now: current && !s.allDone ? current.text : '', head: plural(left, 'row', 'rows') + ' not done', rows: rows,
+        more: Math.max(0, left - rows.length) } : null
     };
   }
 
@@ -138,10 +167,9 @@ var agentPlusPlanBar = (function () {
   function ensureStyle(doc) {
     var head = doc.head || doc.documentElement;
     if (!head) return;
-    var id = MARK + '-style';
     if (styled.doc === doc && styled.el && styled.el.parentNode) return;
     var el = doc.createElement('style');
-    el.setAttribute(id, '1');
+    el.setAttribute(MARK + '-style', '1');
     el.textContent = CSS;
     head.appendChild(el);
     styled = { doc: doc, el: el };
@@ -159,6 +187,8 @@ var agentPlusPlanBar = (function () {
     e.innerHTML = ICON[name] || ICON.todo;
     return e;
   };
+  /* The count's box is as wide as COUNT_ROOM in the bar's figures; `ch` is the width of a figure there. */
+  var countWidth = COUNT_ROOM.length + 'ch';
 
   /*
    * A bar for document `doc`. `opts.onOpen()` runs on a click on the bar or Enter on it, `opts.onAnswer()` on a click
@@ -174,7 +204,7 @@ var agentPlusPlanBar = (function () {
     el.setAttribute('tabindex', '0');
     if (o.css) el.style.cssText = o.css;
     el.style.display = 'none';
-    var shown = null, summary = null, width = 0, drawn = '', list = null, timer = 0, hovering = false;
+    var shown = null, summary = null, width = 0, compact = false, drawn = '', list = null, timer = 0, hovering = false;
     var win = doc.defaultView || (typeof window === 'object' ? window : null);
     var call = function (fn) { if (typeof fn === 'function') { try { fn(); } catch (e) { /* the page's own handler */ } } };
 
@@ -189,6 +219,7 @@ var agentPlusPlanBar = (function () {
       if (list && list.parentNode) list.parentNode.removeChild(list);
       var box = part(doc, 'div', '');
       box.setAttribute(MARK + '-list', '1');
+      if (shown.list.now) box.appendChild(part(doc, 'div', 'apb-now', shown.list.now));
       box.appendChild(part(doc, 'div', 'apb-head', shown.list.head));
       for (var i = 0; i < shown.list.rows.length; i++) {
         var r = shown.list.rows[i], li = part(doc, 'div', 'apb-li');
@@ -197,7 +228,7 @@ var agentPlusPlanBar = (function () {
         li.appendChild(part(doc, 'span', 'apb-text', r.text));
         box.appendChild(li);
       }
-      if (shown.list.more) box.appendChild(part(doc, 'div', 'apb-more', 'and ' + shown.list.more + ' more'));
+      if (shown.list.more) box.appendChild(part(doc, 'div', 'apb-more', 'and ' + shown.list.more + ' more open'));
       doc.body.appendChild(box);
       list = box;
       var at = null, size = null;
@@ -211,7 +242,7 @@ var agentPlusPlanBar = (function () {
     }
 
     function paint() {
-      var m = model(summary, width);
+      var m = model(summary, width, compact);
       shown = m;
       if (!m) {
         drawn = '';
@@ -219,6 +250,7 @@ var agentPlusPlanBar = (function () {
         hideList();
         return;
       }
+      compact = m.compact;
       if (el.style.display === 'none') el.style.display = '';
       var key = JSON.stringify(m);
       if (key === drawn) return;
@@ -228,20 +260,28 @@ var agentPlusPlanBar = (function () {
       el.setAttribute('data-compact', m.compact ? '1' : '0');
       el.appendChild(icon(doc, 'list', ''));
       el.appendChild(part(doc, 'span', 'apb-name', 'Plan'));
-      if (m.segments.length) {
+      if (!m.compact) {
         var track = part(doc, 'span', 'apb-track');
         for (var i = 0; i < m.segments.length; i++) {
           var seg = part(doc, 'span', 'apb-seg');
           seg.setAttribute('data-state', m.segments[i].state);
-          seg.style.flexGrow = String(m.segments[i].n);
+          seg.style.flex = m.segments[i].n + ' 1 0px';
           seg.style.background = COLOR[m.segments[i].state];
           track.appendChild(seg);
         }
         el.appendChild(track);
       }
-      el.appendChild(part(doc, 'span', 'apb-count', m.count));
-      if (m.current) {
-        el.appendChild(part(doc, 'span', 'apb-sep', String.fromCharCode(183)));
+      var count = part(doc, 'span', 'apb-count', m.count);
+      count.style.minWidth = countWidth;
+      el.appendChild(count);
+      if (m.compact) {
+        if (m.current && m.current.state === 'done') el.appendChild(icon(doc, 'done', COLOR.done));
+        el.appendChild(part(doc, 'span', 'apb-gap'));
+      } else if (m.current) {
+        /* With no count beside it the dot would stand alone; it keeps its room, so the title does not move. */
+        var sep = part(doc, 'span', 'apb-sep', String.fromCharCode(183));
+        if (!m.count) sep.style.visibility = 'hidden';
+        el.appendChild(sep);
         var cur = part(doc, 'span', 'apb-row');
         cur.setAttribute('data-state', m.current.state);
         cur.appendChild(icon(doc, m.current.state, COLOR[m.current.state]));
@@ -298,10 +338,9 @@ var agentPlusPlanBar = (function () {
       /* The width the bar has, when the page knows it before the bar is laid out. */
       fit: function (w) {
         var next = +w > 0 ? +w : 0;
-        if (!next) return;
-        var first = !width, crossed = (next < COMPACT_BELOW) !== (width < COMPACT_BELOW);
+        if (!next || next === width) return;
         width = next;
-        if (first || crossed) paint();
+        paint();
       },
       model: function () { return shown; },
       destroy: function () {
@@ -313,6 +352,7 @@ var agentPlusPlanBar = (function () {
     return bar;
   }
 
-  return { COMPACT_BELOW: COMPACT_BELOW, ORDER: ORDER, COLOR: COLOR, RED: RED, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
+  return { COMPACT_BELOW: COMPACT_BELOW, HYSTERESIS: HYSTERESIS, TRACK_WIDTH: TRACK_WIDTH, SEGMENT_MIN: SEGMENT_MIN, MAX_LIST: MAX_LIST,
+    SEGMENTS: SEGMENTS, COUNT_ROOM: COUNT_ROOM, COLOR: COLOR, RED: RED, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
 })();
 if (typeof module === 'object' && module) module['exports'] = agentPlusPlanBar;

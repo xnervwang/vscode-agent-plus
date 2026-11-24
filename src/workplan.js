@@ -35,7 +35,8 @@
  * Closed rows a day old are moved by plan-row.py to closed/<session id>.json beside the plan, a file of the same shape
  * whose rows each carry `row`, their number in the plan. The plan keeps a placeholder in each one's place, with only a
  * short title, the state and `"archived": true`, so no number changes. The rows are read from both files and put back
- * where their placeholders are; a placeholder whose row is not in the archive is drawn as it is.
+ * where their placeholders are; a placeholder whose row is not in the archive is drawn as it is. Either way the row
+ * read keeps `archived: true`, for a reader that leaves out what was closed long ago (src/plan-summary.js).
  *
  * A child is something that has to be finished before its parent can be. Nesting means exactly that and nothing else.
  *
@@ -119,7 +120,7 @@ function node(raw, depth, budget) {
   return {
     title, state, known: STATES.includes(state), note: text(raw.note, 120), detail: detail(raw.detail),
     opened: when(raw.opened), since: when(raw.since), closed: when(raw.closed), waitingOn, question,
-    asked: question ? when(raw.asked) : 0, children,
+    asked: question ? when(raw.asked) : 0, archived: raw.archived === true, children,
   };
 }
 
@@ -162,7 +163,7 @@ function restoreArchived(nodes, rows, prefix = '', depth = 0) {
     const num = prefix + (i + 1);
     let n = raw;
     if (n && typeof n === 'object' && n.archived === true && rows.has(num)) {
-      n = Object.assign({}, rows.get(num));
+      n = Object.assign({}, rows.get(num), { archived: true });
       delete n.row;
     }
     if (n && typeof n === 'object' && Array.isArray(n.children)) n = Object.assign({}, n, { children: restoreArchived(n.children, rows, num + '.', depth + 1) });

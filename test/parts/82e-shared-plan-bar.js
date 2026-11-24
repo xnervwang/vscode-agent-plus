@@ -67,18 +67,29 @@ module.exports = async ({ eq, root, wait }) => {
   const wide = bar.COMPACT_BELOW + 200, narrow = bar.COMPACT_BELOW - 1;
   const look = (m) => m && [m.compact, m.segments.map((s) => s.state + ':' + s.n).join(' '), m.count, m.current && [m.current.state, m.current.text, m.current.dim], m.questions];
   eq([look(bar.model(doing, wide)), look(bar.model(waiting, wide)), look(bar.model(parked, wide)), look(bar.model(finished, wide))], [
-    [false, 'done:4 doing:2 discussing:3 todo:3', '4/12', ['doing', '3.2 CLI: budget subcommand', false], '2 to decide'],
-    [false, 'done:7 waiting:1 todo:4', '7/12', ['waiting', '3.3.1 Warnings in report', false], ''],
-    [false, 'done:9 parked:1', '9/10', ['parked', '10 Handle refunds later', true], ''],
-    [false, 'done:12', '12/12', ['done', 'All rows done', true], ''],
-  ], 'each state: segments in the order done, doing, waiting, discussing, todo, parked; done of total; the current row with its state; the questions; all done says so in grey');
+    [false, 'doing:2 discussing:3 todo:3', '8 open', ['doing', '3.2 CLI: budget subcommand', false], '2 to decide'],
+    [false, 'waiting:1 todo:4', '5 open', ['waiting', '3.3.1 Warnings in report', false], ''],
+    [false, 'parked:1', '1 open', ['parked', '10 Handle refunds later', true], ''],
+    [false, '', '', ['done', 'All rows done', true], ''],
+  ], 'each state: the track has the open rows only, in the order doing, waiting, discussing, todo, parked; the count says how many are open; the current row with its state; the questions; with none open, a check and All rows done in grey');
+  eq([bar.SEGMENTS, bar.COUNT_ROOM], [['doing', 'waiting', 'discussing', 'todo', 'parked'], '999 open'], 'what the track and the count show is set in one place');
   eq([look(bar.model(doing, narrow)), look(bar.model(doing, bar.COMPACT_BELOW)), look(bar.model(doing, 0))[0]],
-    [[true, '', '4/12', null, '2'], look(bar.model(doing, wide)), false],
-    'below the threshold only the done count and the number of questions are left; at the threshold, or before the width is known, the full bar');
-  eq([bar.model(null, wide), bar.model({ total: 0 }, wide), bar.model('x', wide)], [null, null, null], 'no summary, or one with no rows, draws no bar');
+    [[true, 'doing:2 discussing:3 todo:3', '8 open', ['doing', '3.2 CLI: budget subcommand', false], '2'], look(bar.model(doing, wide)), false],
+    'below the threshold the bar is compact and the red part has only the number; at the threshold, or before the width is known, it is full');
+  eq([bar.model(doing, bar.COMPACT_BELOW + bar.HYSTERESIS - 1, true).compact, bar.model(doing, bar.COMPACT_BELOW + bar.HYSTERESIS, true).compact,
+    bar.model(doing, bar.COMPACT_BELOW + 1, false).compact, bar.HYSTERESIS > 0],
+  [true, false, false, true], 'a compact bar is drawn full again only once it is HYSTERESIS pixels past the threshold, so a width near it does not flip the form');
+  eq([bar.model(null, wide), bar.model({ total: 0 }, wide), bar.model('x', wide), look(bar.model({ total: 0, done: 0, counts: {}, allDone: true }, wide))],
+    [null, null, null, [false, '', '', ['done', 'All rows done', true], '']],
+    'no summary, or one with nothing counted and something not done, draws no bar; one with every row archived or dropped is all done');
   eq([bar.model(doing, wide).list, bar.model(finished, wide).list],
-    [{ head: '8 rows not done', rows: [{ state: 'doing', text: '3 CLI', depth: 1 }, { state: 'doing', text: '3.2 CLI: budget subcommand', depth: 2 }], more: 6 }, null],
-    'the hover lists the open rows it was given and says how many more there are; a plan with every row done has none');
+    [{ now: '3.2 CLI: budget subcommand', head: '8 rows not done', rows: [{ state: 'doing', text: '3 CLI', depth: 1 }, { state: 'doing', text: '3.2 CLI: budget subcommand', depth: 2 }], more: 6 }, null],
+    'the hover has the current row\'s whole title, then the open rows it was given and how many more are open; a plan with none open has none');
+  {
+    const many = Object.assign({}, doing, { total: 140, done: 4, open: Array.from({ length: 40 }, (_, i) => ({ number: String(i + 1), title: 'Row ' + (i + 1), state: 'todo', depth: 1 })) });
+    const list = bar.model(many, wide).list;
+    eq([list.rows.length, bar.MAX_LIST, list.rows[29].text, list.more], [30, 30, '30 Row 30', 106], 'the hover ends at 30 rows and says how many more are open');
+  }
   eq(Object.keys(bar.COLOR).map((k) => k + ' ' + bar.COLOR[k].replace(/^var\(--vscode-([\w-]+).*$/, '$1')), [
     'done charts-green', 'doing charts-blue', 'waiting charts-orange', 'discussing charts-yellow', 'todo charts-purple', 'parked descriptionForeground'],
   'the colours are the theme colours of the work plan view\'s state icons');
@@ -92,6 +103,14 @@ module.exports = async ({ eq, root, wait }) => {
     eq(theirs, Object.keys(bar.COLOR).map((k) => bar.COLOR[k].replace(/^var\(--vscode-([\w-]+).*$/, '$1')), 'the same as LOOK in src/workplan-view.js says');
   }
   eq(bar.RED, '#ef4444', 'the red part is the red of a tab whose conversation waits for the user');
+  {
+    const css = (text.match(/var CSS = ([\s\S]*?);\n/) || [])[1] || '';
+    eq([/\.apb-track\{[^}]*flex:none[^}]*width:' \+ TRACK_WIDTH \+ 'px/.test(css), /\.apb-seg\{[^}]*min-width:' \+ SEGMENT_MIN \+ 'px/.test(css),
+      bar.TRACK_WIDTH, bar.SEGMENT_MIN, /\.apb-count\{[^}]*flex:none[^}]*font-variant-numeric:tabular-nums/.test(css),
+      /\]\{display:flex[^}]*height:26px[^}]*overflow:hidden[^}]*white-space:nowrap/.test(css), /\.apb-text\{[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/.test(css)],
+    [true, true, 72, 2, true, true, true],
+    'the layout does not change with the plan: a track of one width whose segments are at least 2 px, a count in figures of one width, one line of one height, and a title that ends in an ellipsis');
+  }
 
   /* Drawn into a document. */
   const doc = stand();
@@ -105,18 +124,26 @@ module.exports = async ({ eq, root, wait }) => {
   b.fit(wide);
   b.update(doing);
   const q = b.el.find('apb-q');
-  eq([b.el.style.display, b.el.find('apb-track').childNodes.map((s) => s.getAttribute('data-state')), b.el.find('apb-count').textContent,
-    b.el.find('apb-row').getAttribute('data-state'), b.el.find('apb-row').textContent, q && q.textContent, b.el.getAttribute('aria-label')],
-  ['', ['done', 'doing', 'discussing', 'todo'], '4/12', 'doing', '3.2 CLI: budget subcommand', '2 to decide',
-    'Work plan: 4 of 12 rows done; 3.2 CLI: budget subcommand; 2 questions wait for your answer'],
-  'with a summary it shows: the segments, the count, the current row, the red part, and a spoken label');
+  const segs = b.el.find('apb-track').childNodes;
+  eq([b.el.style.display, segs.map((s) => s.getAttribute('data-state') + ' ' + s.style.flex), b.el.find('apb-count').textContent,
+    b.el.find('apb-count').style.minWidth, b.el.find('apb-row').getAttribute('data-state'), b.el.find('apb-row').textContent, q && q.textContent,
+    b.el.getAttribute('aria-label')],
+  ['', ['doing 2 1 0px', 'discussing 3 1 0px', 'todo 3 1 0px'], '8 open', '8ch', 'doing', '3.2 CLI: budget subcommand', '2 to decide',
+    'Work plan: 8 rows open; 3.2 CLI: budget subcommand; 2 questions wait for your answer'],
+  'with a summary it shows: the segments, each as long as its share, the count in a box with room for 999 open, the current row, the red part, and a spoken label');
   b.fit(narrow);
-  eq([b.el.getAttribute('data-compact'), !!b.el.find('apb-track'), !!b.el.find('apb-row'), b.el.find('apb-q').textContent], ['1', false, false, '2'],
-    'narrowed below the threshold it turns compact');
+  eq([b.el.getAttribute('data-compact'), !!b.el.find('apb-track'), !!b.el.find('apb-row'), b.el.find('apb-count').textContent, b.el.find('apb-q').textContent],
+    ['1', false, false, '8 open', '2'], 'narrowed below the threshold it turns compact');
+  b.fit(bar.COMPACT_BELOW + 4);
+  eq(b.el.getAttribute('data-compact'), '1', 'and stays compact just above the threshold');
   b.fit(wide);
   b.update(parked);
   eq([b.el.getAttribute('data-compact'), b.el.find('apb-text').className, !!b.el.find('apb-q')], ['0', 'apb-text apb-dim', false],
-    'widened again it is full; a parked row is grey, and a plan with no question has no red part');
+    'widened past the hysteresis it is full again; a parked row is grey, and a plan with no question has no red part');
+  b.update(finished);
+  eq([b.el.find('apb-count').textContent, b.el.find('apb-track').childNodes.length, b.el.find('apb-row').getAttribute('data-state'), b.el.find('apb-row').textContent],
+    ['', 0, 'done', 'All rows done'], 'with nothing open the count is empty but keeps its room, the track is empty, and the check says All rows done');
+  eq(b.el.find('apb-sep').style.visibility, 'hidden', 'and the dot after the count keeps its room without showing');
 
   b.update(doing);
   b.el.fire('click');
@@ -130,9 +157,9 @@ module.exports = async ({ eq, root, wait }) => {
   eq(doc.body.childNodes.length, 1, 'the list of open rows waits a moment before it shows');
   await wait(bar.HOVER_MS + 50);
   const list = doc.body.childNodes[1];
-  eq([list && list.getAttribute(bar.MARK + '-list'), list && list.childNodes.map((c) => c.textContent), list && list.childNodes[2].style.paddingLeft],
-    ['1', ['8 rows not done', '3 CLI', '3.2 CLI: budget subcommand', 'and 6 more'], '12px'],
-    'then it lists the rows not done, each indented by its depth, and how many more');
+  eq([list && list.getAttribute(bar.MARK + '-list'), list && list.childNodes.map((c) => c.textContent), list && list.childNodes[3].style.paddingLeft],
+    ['1', ['3.2 CLI: budget subcommand', '8 rows not done', '3 CLI', '3.2 CLI: budget subcommand', 'and 6 more open'], '12px'],
+    'then it shows the current row\'s whole title and the rows not done, each indented by its depth, and how many more are open');
   eq([list.style.left, list.style.top], ['20px', '468px'], 'placed just above the bar when there is room, at its left edge');
   b.el.fire('mouseleave');
   eq(doc.body.childNodes.length, 1, 'and it goes when the pointer leaves');
