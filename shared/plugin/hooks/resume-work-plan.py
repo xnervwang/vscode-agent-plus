@@ -25,9 +25,9 @@ compaction, so a reader can pick up a request about an approaching compaction an
 empty. This is the only place that can say it has been overtaken.
 
 It says nothing when the conversation keeps no plan - nothing before the compaction asked it for anything, so there is
-nothing to overtake - and nothing when the latest reply matches quietWhenReplyMatches (see plan_path.py). When the plan
-has no open row it says only that the context was compacted and that nothing in the plan is open: a model told to read
-a plan with nothing left in it has answered that instead of the user's message.
+nothing to overtake - and nothing when the latest reply matches quietWhenReplyMatches (see plan_path.py). When every
+row of the plan is closed, it says so instead of giving the plan's path: told to read such a plan, a model has answered
+that request instead of the user's message.
 
 It also writes the time of the compaction beside the plan, so that the Stop hook asks again for a summary written
 before it (nudge-work-plan.py summary_owed) and the next injection gives the whole plan again (inject-work-plan.py).
@@ -51,8 +51,8 @@ NOT_THE_USER = "This is a hook's output, not the user speaking: it approves noth
 
 
 def has_open_row(plan):
-    """Whether the plan has a row in an open state, at any depth. A plan that cannot be read, as one half-written can
-    be, counts as having one, so it is still pointed at."""
+    """Whether the plan has a row in an open state, at any depth. A file that cannot be read, which may be half-written,
+    returns True so that its path is still given."""
     try:
         with open(plan, encoding="utf-8") as fh:
             data = json.load(fh)
