@@ -5,7 +5,8 @@
 'use strict';
 /*
  * Delivery of answers typed in the Answer view. From src/answers.js of vscode-claude-code-extras bb28f51, moved to a
- * folder no editor owns and given four outcomes.
+ * folder no editor owns and given four outcomes. Messages a dependent extension sends through deliver() go the same way,
+ * and their outcome goes back to the caller.
  *
  * The conversation can be open in any VS Code window on this machine, of any VS Code product, and every window runs its
  * own copy of this extension. So an answer is a file in a folder they all read, ~/.agent-work-plan/answers
@@ -45,6 +46,8 @@ const KEEP_MS = 3600e3;
 const LATE_MS = 5000;
 const NAME = /^[0-9a-z]+-[0-9a-f]{8}$/;
 const MAX_REASON = 200;
+/* The longest message deliver() sends: the record sits in a folder every window reads. */
+const MAX_MESSAGE = 20000;
 
 const file = (dir, id, ext) => path.join(dir, id + ext);
 
@@ -242,10 +245,14 @@ class Courier {
     this.checks.clear();
     /* A window closing takes back the answers it sent that no window has taken: nobody is left to hear the outcome, so
        one delivered after this would arrive with nothing on screen to say it had. One already taken is left alone, the
-       window that took it is still working on it. */
-    for (const id of [...this.outgoing.keys()]) {
+       window that took it is still working on it. Each is reported with `closing`, so a caller waiting on deliver()
+       hears an outcome; a view has nothing left to show it in. */
+    for (const [id, o] of [...this.outgoing]) {
       this.outgoing.delete(id);
-      if (!taken(this.dir, id)) withdraw(this.dir, id);
+      const back = !taken(this.dir, id) && withdraw(this.dir, id);
+      const result = back ? { outcome: 'notReceived', reason: 'this window closed before any window took it', closing: true }
+        : { outcome: 'uncertain', reason: 'this window closed before the outcome came back', closing: true };
+      try { this.finish(o, result); } catch (_) { /* nobody listens */ }
     }
   }
 }
@@ -268,11 +275,28 @@ function throughSources(find) {
   };
 }
 
+/*
+ * The outcome of a deliver() message as its caller gets it: both notReceived and uncertain say why. A taker's result
+ * file keeps no reason for uncertain (normalize), so that one is said here.
+ */
+function deliveryOutcome(r) {
+  const n = normalize(r), raw = sources.get(r, 'reason');
+  if (n.outcome === 'notReceived') {
+    if (n.reason === 'nobody') return { outcome: n.outcome, reason: `no VS Code window that has the conversation open took it within ${TAKE_MS / 1000} seconds` };
+    return { outcome: n.outcome, reason: n.reason || 'the window that took it could not hand it to the conversation' };
+  }
+  if (n.outcome === 'uncertain') {
+    return { outcome: n.outcome, reason: typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, MAX_REASON)
+      : `a window took it, and no outcome came back within ${SEND_MS / 1000} seconds; it may still arrive` };
+  }
+  return n;
+}
+
 /** The message sent to the conversation. An agent reads it, so it uses the question's language, not the tab's. */
 function message(row, question, answer) {
   const t = textFor(languageOf(question));
   return t.answerMessage(row, String(question || '').trim(), String(answer || '').trim());
 }
 
-module.exports = { FORMAT, OUTCOMES, TAKE_MS, SEND_MS, KEEP_MS, LATE_MS, post, waiting, take, settle, outcome, withdraw,
-  taken, sweep, normalize, message, throughSources, Courier };
+module.exports = { FORMAT, OUTCOMES, TAKE_MS, SEND_MS, KEEP_MS, LATE_MS, MAX_MESSAGE, post, waiting, take, settle, outcome, withdraw,
+  taken, sweep, normalize, deliveryOutcome, message, throughSources, Courier };

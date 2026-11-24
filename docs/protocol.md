@@ -6,7 +6,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 
 | Part | Who | Does |
 | --- | --- | --- |
-| Core | Agent Plus | Work plan view, Conversations view, Answer view, the Conversations and token mode entries in the status bar, the token mode setting, reading plan files, answers across windows, notifications of conversations that need the user, opening a conversation in the window that shows it, VS Code's webview request limit |
+| Core | Agent Plus | Work plan view, Conversations view, Answer view, the Conversations and token mode entries in the status bar, the token mode setting, reading plan files, answers across windows, messages a feature extension sends into a conversation, notifications of conversations that need the user, opening a conversation in the window that shows it, VS Code's webview request limit |
 | Source | Each feature extension (Claude Code Plus, Codex Plus) | One agent's conversations, plans, tabs, focus, answer typing |
 
 ## Setting up a feature extension
@@ -42,13 +42,15 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | `version` | The core's marketplace version |
 | `protocol` | The newest protocol major the core implements; also the first number of `version` |
 | `accepts` | The source protocol majors the core accepts |
-| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()` and `onDidChangePlanSummary` (below) and the two commands in Plan bar. |
+| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()` and `onDidChangePlanSummary` (below) and the two commands in Plan bar. `'deliver'` provides `deliver()` and `'planPathOf'` provides `planPathOf()` (below). |
 | `registerSource(source)` | Registers a source; never throws; returns a frozen result |
 | `allConversations()` | With `'allConversations'`. Returns a frozen array with one entry per conversation from the last time the core read the sources' lists. For each source, the core includes the results of `listConversations()` and, if the source implements it, `listAllConversations()` (see Source members). Each entry has the form `{ sourceId, label, sessionId, title, steward, cwd, lastActiveAt }` (`sourceId` is the source's `id`; the other fields as in Conversations), where `label` is the source's label and `title` is the title displayed in the Conversations view. Kept current only while something listens to `onDidChangeAllConversations` (next row), and empty until then |
 | `onDidChangeAllConversations` | With `'allConversations'`. `vscode.Event<void>`: a conversation came or went, or its title or folder changed. If only `lastActiveAt` changes, the event does not fire, but `allConversations()` returns the new value. Listening starts a pass at once |
 | `announcesWaits()` | With `'waitingFor'`: whether this window tells the user when a conversation starts to wait for them (the core's views are shown in this window, the workspace is trusted, `agentPlus.notifications.enabled` and `.waiting` are on). If a source's agent has its own notice for the same wait, such as an approval request, the source skips that notice while `announcesWaits()` returns true and shows it when the call returns false. The source calls `announcesWaits()` again when the `agentPlus.notifications` settings or workspace trust change |
 | `planSummary(sourceId, sessionId)` | With `'planSummary'`. Also accepts `{ sourceId, sessionId }` as one argument. Returns a frozen object with the figures for one conversation's plan bar (see Plan bar). Returns `null` if the source is not registered, the conversation has no plan file, the file does not parse or has no rows, or no row left after the archived ones is counted and at least one of them is in a state this version of the core does not know. Calling `planSummary()` makes the core follow that conversation's summary for changes. |
 | `onDidChangePlanSummary` | With `'planSummary'`. `vscode.Event<{ sourceId, sessionId }>`: a summary requested through `planSummary()` changed, including to or from `null`. While the event has a listener, the core recalculates the summaries each time it rereads the plans: when a plan folder changes, on its 30-second tick, or when a source registers or goes away. A page redraws its bar only for its own conversation. |
+| `deliver({ sourceId, sessionId, text })` | With `'deliver'`. Sends `text` to that conversation as a message, through the answers folder and whichever window can type into the conversation (see Answers). Returns a `Promise` of a frozen `{ outcome, reason }` and never rejects. `outcome` is one of the four in Answers; `reason` says why for `notReceived` and `uncertain`, and is `''` otherwise. `text` is a non-empty string of at most 20000 characters. Each call is one message: the core neither drops a repeated text nor retries. In Restricted Mode, while the window is closing, or with an argument it cannot use, the call resolves to `notReceived` at once. Every call settles within about 40 seconds (see Timing and limits); one still waiting when this window closes settles then, `notReceived` if no window had taken it and `uncertain` if one had |
+| `planPathOf(sourceId, sessionId)` | With `'planPathOf'`. Also accepts `{ sourceId, sessionId }` as one argument. Returns the absolute path the source's `planPath` gives for that conversation, or `''` when the source is not registered in this window, gives nothing or a relative path, or throws. Only the sources registered in this window are asked |
 
 ### Result of `registerSource`
 
@@ -128,7 +130,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Item | Rule |
 | --- | --- |
 | What counts | A running conversation that is `waiting`, or `stopped` and `unseen` |
-| Shared | Each window writes its sources' running conversations, except those stopped and not `unseen`, to `attention/<window>.json` under the shared folder, each with `state`, `activity`, `unseen`, `steward` and, while waiting, `waitingFor`. A file is rewritten at least every 20 seconds; one older than a minute is a window that has gone. While a window has the focus, `front` lists the conversations in its file that it shows in front. The `settled` list records `[sourceId, sessionId, time]` for each conversation the window notified the user about in the last day or would have notified them about if the conversation had not already been in front of them. Every window reads all of them. An item without `activity`, from an older version, is read from `state`: `prompt` is waiting, `unread` is stopped and `unseen`. An item without `steward` is a steward's when its title starts with the crown. When windows report one waiting conversation with different reasons, a `permission` with its `tool` or any other kind wins over a `permission` without one |
+| Shared | Each window writes its sources' running conversations, except those stopped and not `unseen`, to `attention/<window>.json` under the shared folder, whether or not its own notifications are on; it reads the sources' lists for this while its notifications are on or something listens to `onDidChangeAllConversations`, and with neither writes an empty list. Each conversation is written with `state`, `activity`, `unseen`, `steward` and, while waiting, `waitingFor`. A file is rewritten at least every 20 seconds; one older than a minute is a window that has gone. While a window has the focus, `front` lists the conversations in its file that it shows in front. The `settled` list records `[sourceId, sessionId, time]` for each conversation the window notified the user about in the last day or would have notified them about if the conversation had not already been in front of them. Every window reads all of them. An item without `activity`, from an older version, is read from `state`: `prompt` is waiting, `unread` is stopped and `unseen`. An item without `steward` is a steward's when its title starts with the crown. When windows report one waiting conversation with different reasons, a `permission` with its `tool` or any other kind wins over a `permission` without one |
 | When | A conversation that becomes `waiting`. A conversation that goes from `working` or `background` to `stopped` and `unseen`, once it has stayed that way for 5 seconds; one that turns up `stopped` and `unseen` with a `lastReplyAt` (or, without it, a `lastActiveAt`) newer than any this window read before for it counts too, as its turn ran between two reads. Not one that only becomes `unseen`, nor one that starts working again within those 5 seconds. An older window's `unread` is announced when it appears, after the 5 seconds. What a window reads in its first 10 seconds, and a conversation whose window went away and came back the same within two minutes, is not new. A notice says what the windows report when it is shown, not when the wait was first seen; if no window has reported the `tool` for a `permission` wait, the core waits for the tool name until 3 seconds after the wait was first seen |
 | Who shows it | Only the window with the focus, after waiting 2 seconds for others that change with it, one notice for each conversation. The window skips the notice if it shows the conversation in front (`isFocused`), in any tab (`sessionForTab`) or where only its source can see it, such as a side bar (`shows`): the user is already looking at a conversation shown in front; for the others, the user is already in the window where they answer the conversation, and its tab dot and the count show that it needs attention. That holds for a reply left unread as for a wait. Every window's status bar entry counts the waiting conversations and the stopped `unseen` ones, less the conversations the window with the focus shows in front |
 | While no window has the focus | Each window keeps what it would have shown. The first window that gets the focus again shows each pending notice once if the conversation still needs the user. The window skips conversations it shows and any that no longer need the user, such as those with an answered wait or a reply the user has read. It also skips a pending notice if another window's `settled` list has an entry for that conversation from after this window saved the notice. The next window that gets the focus does not repeat what the first window has told the user about |
@@ -182,7 +184,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Item | Rule |
 | --- | --- |
 | Folder | `~/.agent-work-plan/answers`, mode 0700, the same for every VS Code product and window of this user; made once a source is registered in a trusted window |
-| Record | `<id>.json` with `format: 1`, `id`, `sourceId`, `sessionId`, `row`, `text`, `at`; one record per answer |
+| Record | `<id>.json` with `format: 1`, `id`, `sourceId`, `sessionId`, `row`, `text`, `at`; one record per answer. A message sent through `deliver()` has no `row` |
 | Taking | Renaming `<id>.json` to `<id>.taken` in the same folder; only one window succeeds |
 | Withdrawing | The sender renames an answer nobody took after 15 seconds, and on the way out renames back every one it sent that no window had taken |
 | Too late to deliver | A receiving window throws away a record more than 15 seconds plus 5 seconds old rather than delivering it, and writes `notReceived` as its outcome |
@@ -200,8 +202,9 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 - A row that stopped asking, or whose conversation stopped, takes no answer: the view says so instead. A row now asking something else keeps its draft and drops the outcome of the question before it.
 
 - A timeout is `uncertain`, never a failure: the answer may still arrive.
+- A message sent through `deliver()` gets the same outcomes, given to its caller: nothing is shown in the Answer view and nothing is put on the clipboard.
 - Send is disabled for a question while its answer is on the way.
-- The folder is read when it changes, on a 2 second interval of its own while a registered source could take an answer, and on `onDidFocus` and `onDidChangeConversations` from any source.
+- The folder is read when it changes, on a 2 second interval of its own while a registered source could take an answer or a `deliver()` call waits for its outcome, and on `onDidFocus` and `onDidChangeConversations` from any source.
 
 ## Plan bar
 
@@ -263,6 +266,8 @@ Both commands take `{ sourceId, sessionId }`. Neither appears in the command pal
 | Answer waiting to be taken | 15 seconds |
 | Taken answer waiting for its outcome | 20 seconds |
 | Answers folder read on its own interval | 2 seconds |
+| Message sent through `deliver()` | 20000 characters |
+| A `deliver()` call settles | Within about 40 seconds: 15 to be taken, 20 for the outcome, 5 to spare |
 | Plan folder and conversation list events gathered up for | 250 ms |
 | Conversations per list | 2000 |
 | Plan file | 8 MB, regular files only |
@@ -276,6 +281,7 @@ Both commands take `{ sourceId, sessionId }`. Neither appears in the command pal
 - The views read and draw only.
 - No answer is sent or taken, no icon is written, VS Code's files are left alone.
 - Sources should not type into conversations either (`canDeliver` false).
+- `deliver()` resolves to `notReceived` at once; `planPathOf()` answers as usual.
 
 ## Installed with nothing that uses it
 

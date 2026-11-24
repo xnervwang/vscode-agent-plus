@@ -8,8 +8,11 @@
  * that links to conversations: the list holds each source's machine-wide conversations and this window's, is gathered
  * only while someone listens or the notifications are on, and listeners hear of a change only when a conversation
  * comes, goes, or is retitled. Also how such a link opens its conversation: agentPlus.openConversation with the
- * sourceId, sessionId, title and cwd of a list entry.
+ * sourceId, sessionId, title and cwd of a list entry. With the notifications off and someone listening, the window's
+ * attention file still lists its running conversations, for the other windows and dependent extensions that read it.
  */
+const fs = require('fs');
+const path = require('path');
 const fake = require('../fake-vscode');
 const { boot } = require('../boot');
 
@@ -72,4 +75,28 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   try { b.api.onDidChangeAllConversations(null); } catch (_) { threw = true; }
   eq(threw, true, 'a listener that is not a function is refused');
   b.close();
+
+  {
+    const W = 'dddddddd-0000-4000-8000-000000000004';
+    const items = (home) => {
+      const d = path.join(home, 'attention');
+      let names = [];
+      try { names = fs.readdirSync(d).filter((n) => n.endsWith('.json')); } catch (_) { return []; }
+      return names.flatMap((n) => JSON.parse(fs.readFileSync(path.join(d, n), 'utf8')).items || []).map((it) => [it.sourceId, it.sessionId, it.activity]);
+    };
+    const q = boot(root, tmp, { viewOptions, config: { 'agentPlus.notifications.enabled': false } });
+    q.api.registerSource({ protocol: 1, id: 'opencode-plus', label: 'OpenCode', listConversations: async () => [{ sessionId: W,
+      title: 'Waits for approval', cwd: '/w/e', lastActiveAt: 3000, running: true, state: 'prompt', activity: 'waiting',
+      waitingFor: { kind: 'permission', tool: 'bash' } }] });
+    await wait(250);
+    const before = items(q.home);
+    const listening = q.api.onDidChangeAllConversations(() => {});
+    await until(() => items(q.home).length);
+    await wait(150);
+    eq([before, items(q.home), q.control.state.said.filter((m) => String(m.message).includes('Waits for approval')).length,
+      q.control.state.status.find((x) => x.id === 'agentPlus.attention').shown], [[], [['opencode-plus', W, 'waiting']], 0, false],
+      'with the notifications off, the attention file lists the running conversations once something listens, and this window still shows no notification and no count');
+    listening.dispose();
+    q.close();
+  }
 };

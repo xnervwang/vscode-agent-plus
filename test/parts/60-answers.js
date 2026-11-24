@@ -25,7 +25,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const finished = [];
     const via = answers.throughSources((id) => have[id] || null);
     const courier = new answers.Courier({ dir, now: () => clock, later, cancel, claiming, canShow: via.canShow, hand: via.hand,
-      finish: (sent, result) => finished.push([sent.key, result.outcome, result.reason]) });
+      finish: (sent, result) => finished.push([sent.key, result.outcome, result.reason].concat(result.closing ? ['closing'] : [])) });
     return { courier, finished };
   };
   const delivered = [];
@@ -95,8 +95,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const untaken = leaving.courier.send({ sourceId: 'codex', sessionId: 'T', row: '10', text: 'on its way out' }, { key: 'untaken' });
   const there = fs.existsSync(path.join(dir, untaken + '.json'));
   leaving.courier.dispose();
-  eq([there, fs.existsSync(path.join(dir, untaken + '.json'))], [true, false],
-    'a window closing takes back the answers it sent that no window had taken');
+  eq([there, fs.existsSync(path.join(dir, untaken + '.json')), leaving.finished],
+    [true, false, [['untaken', 'notReceived', 'this window closed before any window took it', 'closing']]],
+    'a window closing takes back the answers it sent that no window had taken, and reports each as not received');
 
   /* One already taken is left alone: the window that took it is still working on it. */
   const handedOver = window({});
@@ -104,7 +105,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const busyId = handedOver.courier.send({ sourceId: 'codex', sessionId: 'S', row: '11', text: 'in hand' }, { key: 'inhand' });
   working.courier.pump(); await settle();
   handedOver.courier.dispose();
-  eq(fs.existsSync(path.join(dir, busyId + '.taken')), true, 'one a window has taken is left with it');
+  eq([fs.existsSync(path.join(dir, busyId + '.taken')), handedOver.finished],
+    [true, [['inhand', 'uncertain', 'this window closed before the outcome came back', 'closing']]],
+    'one a window has taken is left with it, and reported as uncertain');
   working.courier.dispose();
   fs.unlinkSync(path.join(dir, busyId + '.taken'));
 

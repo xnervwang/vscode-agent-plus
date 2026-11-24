@@ -277,15 +277,17 @@ function create(host, opts = {}) {
     everyone.set(out, key !== everyoneKey);
     everyoneKey = key;
   };
-  /* After each list pass: what every source lists, through listAllConversations() where a source has it. */
+  /* After each list pass: what every source lists, through listAllConversations() where a source has it. Once gathered
+     it goes into this window's attention file whether or not the notifications are on here: other windows and dependent
+     extensions read that file, and showing a notification or a count is decided separately (src/attention.js). */
   const publishAttention = async (pairs) => {
     const notifying = notifySettings().enabled, linking = everyone.wanted();
     if (!notifying && !linking) { attentionLists = []; needs.publish([]); needs.refresh(); return; }
     const gathered = await Promise.all(pairs.map(async ({ entry, list }) => ({ entry, list, all: await listAll(entry, list) })));
     if (closing) return;
     if (linking) publishEveryone(gathered.filter((g) => registry.has(g.entry)));
-    attentionLists = notifying ? gathered.map(({ entry, all }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
-      conversations: withQuestions(entry.id, all) })) : [];
+    attentionLists = gathered.map(({ entry, all }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
+      conversations: withQuestions(entry.id, all) }));
     needs.publish(attentionLists);
     needs.refresh();
   };
@@ -604,6 +606,8 @@ function create(host, opts = {}) {
 
   /* Created only once a source is registered and the window is trusted, which is also when the folder is made. */
   let courier = null, answersWatch = null, answersSoon = 0, answersPoll = 0;
+  /* deliver() calls waiting for their outcome. */
+  const deliveries = new Set();
   const answerPollMs = Number.isFinite(opts.answerPollMs) ? opts.answerPollMs : ANSWER_POLL_MS;
   const delivery = answers.throughSources((id) => registry.get(id));
   const pumpSoon = () => {
@@ -641,8 +645,10 @@ function create(host, opts = {}) {
     }
     try { courier.pump(); } catch (e) { say('answer: ' + ((e && e.message) || e)); }
   };
+  /* Also while a deliver() call waits: its outcome is read on the same interval, so a watcher that stopped working
+     cannot hold it back until the last check. */
   const tuneAnswerPoll = () => {
-    const want = !!courier && !closing && mayDeliver();
+    const want = !!courier && !closing && (mayDeliver() || deliveries.size > 0);
     if (want && !answersPoll) answersPoll = setInterval(pollAnswers, answerPollMs);
     else if (!want && answersPoll) { clearInterval(answersPoll); answersPoll = 0; }
   };
@@ -656,6 +662,8 @@ function create(host, opts = {}) {
       hand: delivery.hand,
       claiming: () => trusted() && !closing,
       finish: (sent, result) => {
+        if (sent.delivery) { sent.delivery.resolve(result); return; }
+        if (result.closing) return;
         /* One taken back because its row asks something else is not shown in the view, which has moved on to the new
            question with the draft still in the box, so nothing is put on the clipboard behind the reader's back. */
         if (result.outcome === 'notReceived' && !result.recalled) Promise.resolve(vscode.env.clipboard.writeText(sent.text)).catch(() => {});
@@ -671,6 +679,45 @@ function create(host, opts = {}) {
     tuneAnswerPoll();
     return courier;
   };
+  /*
+   * A message from a dependent extension into a conversation (deliver in docs/protocol.md). It goes through the answers
+   * folder as an answer does, with no row, and its outcome goes to the caller: nothing in the Answer view, nothing on
+   * the clipboard. Never rejects.
+   */
+  const deliver = (target) => new Promise((resolve) => {
+    const end = (outcome, reason) => resolve(Object.freeze({ outcome, reason: reason || '' }));
+    try {
+      const sourceId = sources.get(target, 'sourceId'), sessionId = sources.get(target, 'sessionId'), text = sources.get(target, 'text');
+      if (!sources.usableId(sourceId) || !sources.usableId(sessionId)) { end('notReceived', 'the target has no usable sourceId and sessionId'); return; }
+      if (typeof text !== 'string' || !text.trim() || text.length > answers.MAX_MESSAGE) {
+        end('notReceived', `there is no text, or it is longer than ${answers.MAX_MESSAGE} characters`);
+        return;
+      }
+      if (closing) { end('notReceived', 'this window is closing'); return; }
+      if (!trusted()) { end('notReceived', 'Agent Plus sends nothing in Restricted Mode'); return; }
+      const c = courierNow();
+      if (!c) { end('notReceived', 'the answers folder cannot be used in this window'); return; }
+      const pending = {
+        resolve: (r) => {
+          if (!deliveries.delete(pending)) return;
+          tuneAnswerPoll();
+          const o = answers.deliveryOutcome(r);
+          say(`message for ${sourceId}: ${o.outcome}${o.reason ? ' (' + o.reason + ')' : ''}`);
+          end(o.outcome, o.reason);
+        },
+      };
+      deliveries.add(pending);
+      try { c.send({ sourceId, sessionId, text }, { delivery: pending }); }
+      catch (e) {
+        deliveries.delete(pending);
+        end('notReceived', 'the message could not be written: ' + String((e && e.message) || e).slice(0, 160));
+        return;
+      }
+      tuneAnswerPoll();
+    } catch (e) {
+      end('notReceived', String((e && e.message) || e).slice(0, 200));
+    }
+  });
 
   /* ── Which conversation is in front ── */
   /* Focus can change inside another extension's message handler, so the redraw is deferred to read no file there.
@@ -910,11 +957,14 @@ function create(host, opts = {}) {
     listSoon() { askAll(); convSoon(); },
     /* The plan summary of one conversation, for a plan bar; remembered so that its changes are heard. */
     planSummary: (sourceId, sessionId) => summaryFor(sourceId, sessionId),
+    /* A dependent extension's message into a conversation, through the answers folder. */
+    deliver,
     /* Whether this window tells the user when a conversation starts to wait. While it does, a source can leave out its
        agent's own notice of the wait. */
     announcesWaits() { const s = notifySettings(); return !closing && !!active && trusted() && s.enabled && s.waiting; },
     /* For tests. */
     _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, attentionEntry, needs, opener, answerView, focus, courier: () => courier,
+      deliveries: () => deliveries.size,
       plans: () => [...plans.keys()], summaries: () => [...summaries.values()].map((s) => [s.sourceId, s.sessionId]) },
     dispose() {
       closing = true;

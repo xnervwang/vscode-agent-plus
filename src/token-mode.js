@@ -54,6 +54,7 @@ const SWITCHES = Object.freeze([
   { key: 'codexPlus.wakeUps', feature: 'wakeUps', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.codex-plus', default: true },
   { key: 'opencodePlus.workPlan', feature: 'workPlan', extension: 'xnervwang.opencode-plus', default: true },
+  { key: 'opencodePlus.tellOpenCodeYourTimeZone', feature: 'timeZone', extension: 'xnervwang.opencode-plus', default: true },
   { key: 'opencodePlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.opencode-plus', default: true },
 ].map((s) => Object.freeze(s)));
 

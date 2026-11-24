@@ -11,6 +11,7 @@
  * installed manifests, and everything that touches the disk is deferred and runs only while there is a dependent and
  * the workspace is trusted.
  */
+const path = require('path');
 const vscode = require('vscode');
 const sources = require('./sources');
 const dependents = require('./dependents');
@@ -124,6 +125,30 @@ function start(context, log, opts = {}) {
     const one = a && typeof a === 'object';
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
     try { return views && typeof views.planSummary === 'function' ? views.planSummary(sourceId, sessionId) : null; } catch (e) { say(`plan summary: ${(e && e.message) || e}`); return null; }
+  };
+
+  /*
+   * A message from a dependent extension into a conversation (deliver in docs/protocol.md): deliver({ sourceId,
+   * sessionId, text }) resolves to a frozen { outcome, reason } and never rejects.
+   */
+  const deliverTo = (target) => {
+    const no = (reason) => Promise.resolve(Object.freeze({ outcome: 'notReceived', reason }));
+    if (closing) return no('this window is closing');
+    if (!host.trusted()) return no('Agent Plus sends nothing in Restricted Mode');
+    try {
+      if (!views || typeof views.deliver !== 'function') return no('nothing in this window uses Agent Plus');
+      return Promise.resolve(views.deliver(target)).catch((e) => Object.freeze({ outcome: 'notReceived', reason: String((e && e.message) || e).slice(0, 200) }));
+    } catch (e) { return no(String((e && e.message) || e).slice(0, 200)); }
+  };
+  /* planPathOf(sourceId, sessionId), or planPathOf({ sourceId, sessionId }): the absolute path the source registered in
+     this window gives for that conversation's plan, or ''. */
+  const planPathOf = (a, b) => {
+    const one = a && typeof a === 'object';
+    const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
+    if (!sources.usableId(sourceId) || !sources.usableId(sessionId)) return '';
+    const source = registry.get(sourceId);
+    const file = source ? sources.planFileOf(source, sessionId) : '';
+    return file && path.isAbsolute(file) ? file : '';
   };
 
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
@@ -302,6 +327,10 @@ function start(context, log, opts = {}) {
     planSummary: summaryOf,
     /* With 'planSummary': vscode.Event<{ sourceId, sessionId }>, a conversation whose summary has changed. */
     onDidChangePlanSummary: listenSummaries,
+    /* With 'deliver': a message from a dependent extension into a conversation, through the answers folder. */
+    deliver: deliverTo,
+    /* With 'planPathOf': the plan file of a conversation, from its source in this window, or ''. */
+    planPathOf,
     /* Whether this window shows its own notification when a conversation starts waiting for the user (feature
        'waitingFor'). */
     announcesWaits() {
