@@ -4,10 +4,10 @@
 
 'use strict';
 /*
- * A development extension in the window that test/vscode/ui.js drives. ui.js cannot reach the vscode API from
- * outside the window, so it writes a request file into the control folder (AGENT_PLUS_UI_CONTROL) and this extension runs
- * the request's body with `vscode` in scope and writes the result back. Files rather than a socket, because the
- * window is closed and opened again during the run: the requests left in the folder wait for the next extension host.
+ * A development extension in the window that test/vscode/ui.js drives. That script cannot reach the vscode API from
+ * outside the window, so it writes a request file into the control folder (AGENT_PLUS_UI_CONTROL) and this extension
+ * runs the request's body with `vscode` in scope and writes the result back. Files rather than a socket, because the
+ * window is closed and opened again during the run, and a request left in the folder waits for the next extension host.
  * Each extension host writes host-<pid>.json when it is up.
  */
 const fs = require('fs');

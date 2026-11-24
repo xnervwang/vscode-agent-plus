@@ -4,10 +4,11 @@
 
 'use strict';
 /*
- * The interface's allConversations() and onDidChangeAllConversations (src/host.js, src/views.js): every source's
- * conversations, machine-wide and this window's, for an extension that links to them; gathered only while someone
- * listens or the notifications are on; told as a change only when a conversation comes, goes, or is retitled. And the
- * open path such a link takes: agentPlus.openConversation with what the list gives.
+ * The interface's allConversations() and onDidChangeAllConversations (src/host.js, src/views.js), for an extension
+ * that links to conversations: the list holds each source's machine-wide conversations and this window's, is gathered
+ * only while someone listens or the notifications are on, and listeners hear of a change only when a conversation
+ * comes, goes, or is retitled. Also how such a link opens its conversation: agentPlus.openConversation with the
+ * sourceId, sessionId, title and cwd of a list entry.
  */
 const fake = require('../fake-vscode');
 const { boot } = require('../boot');
@@ -41,12 +42,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     [[['2bff', 'aaaa', '0199']], [['claude-code', 'Claude Code', C, 'Black-box testing of ADV and AUV', '/w/a', 5000],
       ['claude-code', 'Claude Code', D, 'A stopped one with a plan', '/w/b', 1000],
       ['codex', 'Codex', X, '\u{1F451} Fix the login redirect', '/w/c', 9000]], true, true],
-    'once something listens, a pass runs at once and gives every source\'s conversations, machine-wide and this window\'s, each once, with its agent\'s label');
+    'when something starts to listen, a pass runs right away and lists each source\'s conversations, machine-wide and in this window, each one a single time with its agent\'s label');
 
   machine = [Object.assign({}, machine[0], { lastActiveAt: 7000 })];
   claudeChanged.fire();
   await wait(250);
-  eq([told.length, b.api.allConversations()[0].lastActiveAt], [1, 7000], 'a conversation only active again is not told as a change, and the list still has the new time');
+  eq([told.length, b.api.allConversations()[0].lastActiveAt], [1, 7000], 'a conversation that is only active again fires no change, and the list still has its new time');
   machine.push({ sessionId: 'cccccccc-0000-4000-8000-000000000003', title: 'Another window', cwd: '/w/d', lastActiveAt: 8000, running: true });
   claudeChanged.fire();
   await until(() => told.length > 1);
@@ -54,19 +55,19 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   claudeChanged.fire();
   await until(() => told.length > 2);
   eq([told.length, b.api.allConversations().map((c) => c.title)], [3, ['Black-box testing of ADV and AUV', 'Another window', 'Renamed', '\u{1F451} Fix the login redirect']],
-    'a conversation that comes, and one renamed, are each told as a change');
+    'a new conversation and a renamed one each fire a change');
 
   const codex = b.api.allConversations().find((c) => c.sourceId === 'codex');
   await b.control.state.handlers['agentPlus.openConversation']({ sourceId: codex.sourceId, sessionId: codex.sessionId, title: codex.title, cwd: codex.cwd });
   eq(opened, [[X, '\u{1F451} Fix the login redirect', '/w/c']],
-    'a link built from the list opens its conversation through agentPlus.openConversation, by the source\'s own open()');
+    'a link built from the list opens its conversation with agentPlus.openConversation, which calls the source\'s own open()');
 
   sub.dispose();
   sub.dispose();
   const before = asked;
   claudeChanged.fire();
   await wait(250);
-  eq(asked, before, 'once nothing listens, with the notifications off, the machine-wide lists are not asked for again');
+  eq(asked, before, 'once nothing listens and the notifications are off, no source is asked for its machine-wide list again');
   let threw = false;
   try { b.api.onDidChangeAllConversations(null); } catch (_) { threw = true; }
   eq(threw, true, 'a listener that is not a function is refused');

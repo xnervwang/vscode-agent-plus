@@ -5,7 +5,7 @@
 
 'use strict';
 /*
- * Each VS Code window of an extension writes the conversations it shows to <plan dir>/windows/<pid>.json, when that
+ * Each VS Code window writes the conversations this extension shows in it to <plan dir>/windows/<pid>.json, when that
  * changes and once a minute besides. The other windows read these files, so that a conversation open in one window is
  * not deleted from another, by hand or by the daily sweep.
  */
@@ -14,7 +14,7 @@ const path = require('path');
 const { writeAtomic } = require('./files');
 
 const WINDOWS_DIR = 'windows';
-/* An entry older than this belongs to a window that has gone. */
+/* An entry older than this is from a window that has closed or stopped writing. */
 const STALE_MS = 120000;
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

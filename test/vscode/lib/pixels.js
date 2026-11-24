@@ -4,9 +4,9 @@
 
 'use strict';
 /*
- * PNG in and out for the element screenshots, with no dependencies: decode() takes the 8-bit RGB or RGBA,
- * non-interlaced PNG that Chromium writes and returns { width, height, data } with four bytes per pixel; encode() writes
- * such an image back as RGBA.
+ * Reads and writes the PNG files of the element screenshots without any dependency. decode() takes the 8-bit RGB or
+ * RGBA, non-interlaced PNG that Chromium writes and returns { width, height, data } with four bytes per pixel. encode()
+ * writes such an image back as RGBA.
  */
 const zlib = require('zlib');
 

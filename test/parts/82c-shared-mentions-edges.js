@@ -4,8 +4,8 @@
 
 'use strict';
 /*
- * Edges of the mention matcher in shared/page/kit.js: corner brackets nested or left open, one title named twice, a
- * title written across two text nodes, and the hover label of a title many conversations share.
+ * Edges of the mention matcher in shared/page/kit.js: nested and unclosed corner brackets, a title named twice, a title
+ * split across two text nodes, and the hover label when many conversations share one title.
  */
 const path = require('path');
 
@@ -27,7 +27,7 @@ module.exports = async ({ eq, root }) => {
     const tree = { type: 'root', children: [{ type: 'element', tagName: 'p', properties: {}, children: [t('Fix the login '),
       { type: 'element', tagName: 'strong', properties: {}, children: [t('redirect')] }]}] };
     eq(kit.linkMentionsTree(tree, ix([conv(1, 'Fix the login redirect')]), () => ({ type: 'element', tagName: 'a', properties: {}, children: [] })), 0,
-      'a title split across two text nodes, as by bold on part of it, is not matched');
+      'a title split across two text nodes, for instance by bold on part of it, is not matched');
   }
   {
     const known = [1, 2, 3, 4, 5, 6].map((n) => conv(n, 'One shared title'));

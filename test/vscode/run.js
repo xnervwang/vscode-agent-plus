@@ -13,12 +13,12 @@
  *
  * HOME (USERPROFILE on Windows), VS Code's user data and extensions folders, the shared folder of every window
  * (~/.agent-work-plan) and the stand-in source's plans all point into a new folder under RUNNER_TEMP or the system's
- * temporary folder. It still refuses to run outside CI unless --local is given. A run
- * changes the request limit in its VS Code's own service-worker.js and puts it back, so two runs at once must not share
- * the one --vscode names.
+ * temporary folder. It still refuses to run outside CI unless --local is given. A run changes the request limit in the
+ * service-worker.js of the VS Code it uses and puts it back, so two runs at the same time must not share a VS Code given
+ * with --vscode.
  *
- * After the download the window stage runs as a child of this script, with a proxy that does not exist for every
- * program it starts: nothing here needs the network.
+ * After the download the window stage runs as a child of this script, with the proxy of every program it starts set
+ * to 127.0.0.1:9, where nothing listens: nothing in that stage needs the network.
  *
  * With --look every step also saves a close view and the whole window at twice the pixel density, listed in look.json.
  *
@@ -162,7 +162,6 @@ const LOCAL = has('--local');
 const LOOK = has('--look');
 (async () => {
   if (STAGE === 'test') return testStage();
-  /* Every home is a temporary one, but on a developer's own machine it takes --local to start. */
   if (process.env.CI !== 'true' && !LOCAL) throw new Error('runs only where CI=true, or with --local: it starts VS Code and installs extensions');
   return fetchStage();
 })().catch((e) => { console.error(e && e.stack || e); process.exitCode = 1; });

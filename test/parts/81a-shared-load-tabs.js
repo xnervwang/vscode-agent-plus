@@ -5,7 +5,7 @@
 'use strict';
 /*
  * shared/host/load-tabs.js against stand-in tab groups: which tabs it brings to the front, in what order, and where it
- * leaves each group and the focus. Which tabs are the agent's is the caller's to say.
+ * leaves each group and the focus. The caller says which tabs are the agent's.
  */
 const path = require('path');
 
@@ -23,9 +23,9 @@ module.exports = async ({ eq, root }) => {
   eq([n, ran], [3, ['workbench.action.focusFirstEditorGroup', 'workbench.action.openEditorAtIndex 0', 'workbench.action.openEditorAtIndex 2',
     'workbench.action.openEditorAtIndex 1', 'workbench.action.focusThirdEditorGroup', 'workbench.action.openEditorAtIndex 0',
     'workbench.action.openEditorAtIndex 1', 'workbench.action.focusSecondEditorGroup']],
-  'each background tab the caller names is shown once, group by group, then each group shows its old front tab and the focus goes back');
+  'each background tab the caller names is shown once, one group after another; then every group shows its front tab again and the focus returns to where it was');
 
   ran.length = 0;
   const none = await lt.loadAll({ groups, front: groups[1], isTab: () => false, exec, sleep: async () => {}, stepMs: 0 });
-  eq([none, ran], [0, []], 'with no tab of the agent behind another, nothing is shown and the focus is not moved');
+  eq([none, ran], [0, []], 'with none of the agent\'s tabs in the background, nothing is shown and the focus is not moved');
 };

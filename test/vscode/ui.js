@@ -16,11 +16,11 @@
  *   restricted   the same two in Restricted Mode
  *
  * The feature list check reads three helpers in each step: setting() and exec(), and viaUi(), which names the command
- * a click in the window runs. Every look() saves a screenshot to <out>/shots;
- * with --look each also writes a close view and an entry of <out>/look.json.
+ * a click in the window runs. Every look() saves a screenshot to <out>/shots; with --look each also writes a close view
+ * and an entry of <out>/look.json.
  *
- * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match; a step that relies on an earlier
- * one says so when that one was left out.
+ * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match; a step that needs an earlier one
+ * fails, naming it, when that step did not run to its end.
  */
 const fs = require('fs');
 const path = require('path');
@@ -126,7 +126,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     e.remove();
     return c;
   }, name);
-  /* A view's pane is found by its header's aria-label, which begins with the view's name. */
+  /* How the aria-label of each view's pane header starts; a pane is found by it. */
   const HEADERS = { 'agentPlus.conversations': 'Conversations Section', 'agentPlus.answer': 'Answer Section', 'agentPlus.workPlan': 'Work plan' };
   const treeRows = (view) => page.evaluate((h) => {
     const pane = [...document.querySelectorAll('.pane')].find((p) => { const x = p.querySelector(':scope > .pane-header'); return x && (x.getAttribute('aria-label') || '').startsWith(h); });
@@ -169,7 +169,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     return rowLoc(view, title).click(opts);
   };
   const showPlanView = async () => { await exec('workbench.view.extension.agentPlus'); await sleep(500); };
-  /* Drags the side bar's edge until the side bar is about `want` CSS pixels wide, as far as the window allows. */
+  /* Drags the edge of the side bar until it is about `want` CSS pixels wide, or as close to that as the window allows. */
   const sideBarWidth = async (want) => {
     const edge = await page.evaluate(() => {
       const b = document.getElementById('workbench.parts.sidebar').getBoundingClientRect();
@@ -212,7 +212,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   };
   const unhover = async () => { await page.mouse.move(5, 5); await sleep(300); };
 
-  /* Notifications: each on screen with its message and the labels of its buttons. */
+  /* The notifications on screen, each with its message and its buttons' labels. */
   const toasts = () => page.evaluate(() => [...document.querySelectorAll('.notification-toast')].filter((e) => e.offsetParent !== null).map((e) => ({
     text: ((e.querySelector('.notification-list-item-message') || e).innerText || '').trim(),
     buttons: [...e.querySelectorAll('.notification-list-item-buttons-container .monaco-button')].map((b) => b.innerText.trim()) })));
@@ -272,8 +272,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   };
   /*
    * A picture of the step's state. `target` is a locator or a box in CSS pixels for the close view, or null for the whole
-   * window. Outside --look it saves the whole window only. The pointer is moved off and the notifications cleared first,
-   * unless spec.pointer or spec.toasts says the picture is of a hover or a notification.
+   * window. Outside --look it saves the whole window only. First the pointer is moved off, unless spec.pointer is set
+   * for a picture of a hover, and the notifications are cleared, unless spec.toasts is set for a picture of one.
    */
   const look = async (name, spec, target = null) => {
     if (!spec.pointer) await page.mouse.move(5, 5);
@@ -310,7 +310,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await step('alone', async () => {
     const notice = await toastWith(ALONE, 30000);
     check(!!notice && sameList(notice.buttons, ['Install Claude Code Plus', 'Install Codex Plus']),
-      'installed with nothing that uses it, Agent Plus says so once, with a button to install each extension that does', notice || await toasts());
+      'installed with no extension that uses it, Agent Plus shows one notice with a button to install each extension that would', notice || await toasts());
     const ours = await page.evaluate(() => [...document.querySelectorAll('.statusbar-item')].filter((e) => e.offsetParent && /^xnervwang\.agent-plus\./.test(e.id)).map((e) => e.id));
     check(!ours.length, 'it shows no status bar entry', ours);
     const bar = await page.evaluate(() => [...document.querySelectorAll('.activitybar .action-item .action-label')].map((a) => a.getAttribute('aria-label') || '')
@@ -371,7 +371,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await clearToasts();
     await setting('agentPlus.webviewRequestLimit', 'raise');
     if (linux) {
-      check(await noToast(ASK_LIMIT, 6000) && swLimit() === 32, 'on Linux, raise neither raises the limit unasked nor asks again about a build it asked about', swLimit());
+      check(await noToast(ASK_LIMIT, 6000) && swLimit() === 32, 'on Linux, with raise the limit is not raised without asking, and a build already asked about is not asked about again', swLimit());
     } else {
       check(!!await until(() => swLimit() === 1000000, 20000, 250), `on ${process.platform}, raise raises the limit at once`, swLimit());
       check(await noToast(ASK_LIMIT, 1000), 'without asking');
@@ -399,7 +399,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   const LOOK_OF = { working: ['codicon-circle-filled', 'charts.green'], background: ['codicon-circle', 'charts.green'], waiting: ['codicon-circle-filled', 'charts.red'],
     stopped: ['codicon-blank', ''] };
   const WORDS = { working: 'Running a turn', background: 'Turn over, only background work running', waiting: 'Waiting for you', stopped: 'Stopped' };
-  /* Checks each row of DOTS: icon, colour and envelope. `glyph` is the envelope the theme should draw. */
+  /* Checks the icon, colour and envelope of each row of DOTS; `glyph` is the envelope the theme should draw. */
   const dotsWrong = async (glyph) => {
     const rows = await convRows() || [];
     const colors = { 'charts.green': await themeColor('charts.green'), 'charts.red': await themeColor('charts.red') };
@@ -568,7 +568,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       pane('agentPlus.conversations'));
   });
 
-  /* The Answer view's page once it shows the conversation titled `want.title`: a question, or its brief when `want.brief`. */
+  /* Waits for the Answer view's page to show the conversation titled `want.title`, with a question, or with its brief
+     when `want.brief` is set. */
   const answerFrame = (want) => until(async () => {
     for (const f of page.frames()) {
       try {
@@ -619,7 +620,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await answer.locator('#text').press('Control+Enter');
     check(!!await until(async () => (await answers()).length > before, 20000, 300), 'Ctrl+Enter sends it too');
     const said = await until(async () => { const s = await answerSays(answer); return /^Put in the conversation's input box at \d\d:\d\d, not sent\./.test(s.status) && s; }, 15000, 300);
-    check(!!said && said.text === 'From the hotfix branch.', 'an answer left in the conversation\'s input box is said to be there and not sent, and the draft is kept', said || await answerSays(answer));
+    check(!!said && said.text === 'From the hotfix branch.', 'for an answer left in the conversation\'s input box, the view says it is there and was not sent, and keeps the draft', said || await answerSays(answer));
     await look('answer-drafted', { expect: 'The Answer view keeps From the hotfix branch. in the box, and says it was put in the conversation\'s input box at a time, not sent, and to press Enter there.' }, pane('agentPlus.answer'));
   });
 
@@ -629,7 +630,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await clearToasts();
     await answer.locator('#send').click();
     const said = await until(async () => { const s = await answerSays(answer); return /^Not sent: no VS Code window with this conversation open took it\. Copied to the clipboard\.$/.test(s.status) && s; }, 40000, 500);
-    check(!!said, 'an answer no window takes in 15 seconds is said not to have been sent, and copied to the clipboard', said || await answerSays(answer));
+    check(!!said, 'when no window takes an answer in 15 seconds, the view says it was not sent and copies it to the clipboard', said || await answerSays(answer));
     const clip = await call('return vscode.env.clipboard.readText();');
     check(clip === `My answer to row 1 ("${Q1}"):\nFrom the hotfix branch.`, 'the clipboard holds the answer as it would have been sent', clip);
     await look('answer-not-received', { expect: 'The Answer view keeps the draft and says, in red, Not sent: no VS Code window with this conversation open took it. Copied to the clipboard.' }, pane('agentPlus.answer'));
@@ -661,7 +662,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(/Summary\s*written 2m ago/.test(text.sections) && text.sections.includes('Porting the importer to the new storage API')
       && /Where it stands\s*written 2m ago/.test(text.sections) && /Doing\s*Porting the batch writer/.test(text.sections) && /Latest\s*The reader is ported/.test(text.sections)
       && /Next\s*Port the writer/.test(text.sections) && !/May be out of date/.test(text.sections),
-    'with its summary and where it stands, each with when it was written', text);
+    'with its summary and where it stands, and when each was written', text);
     check(/^Now: working · 1\. Port the importer \(doing for 5m\)$/.test(text.live), 'and a line for what runs now', text.live);
     await look('brief-page', { expect: 'The Answer view shows the brief of Keeps a brief: its title with a Go to the conversation button, a blue line Now: working · 1. Port the importer (doing for 5m), a Summary section written 2m ago with one sentence about porting the importer, and Where it stands written 2m ago with Doing, Latest and Next lines. Nothing says it may be out of date.' },
       pane('agentPlus.answer'));
@@ -714,7 +715,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!await frontIs('Keeps a brief'), 'and Go to a Conversation does the same for any conversation it is handed', await frontTab());
     await clearToasts();
     await exec('agentPlus.openConversation', { sourceId: 'codex', sessionId: 'nowhere', title: 'Not open anywhere', cwd: profile.folder });
-    check(!!await toastWith('"Not open anywhere" is not open in any VS Code window on this machine.', 15000), 'for one no window shows, it says so', await toasts());
+    check(!!await toastWith('"Not open anywhere" is not open in any VS Code window on this machine.', 15000), 'for a conversation no window shows, it says it is not open anywhere', await toasts());
     await clearToasts();
     await openNotes();
   });
@@ -763,7 +764,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       check(a[1].icon === 'codicon-debug-start' && a[1].color === blue && opened.test(a[1].description) && / · for 10m$/.test(a[1].description)
         && /codicon-(clockface|watch)/.test(a[2].icon) && a[2].color === orange && / · for 1m$/.test(a[2].description)
         && a[0].icon === 'codicon-circle-large-outline' && a[0].color === purple && opened.test(a[0].description) && !/for/.test(a[0].description),
-      'each row\'s icon says its state, beside it when it was opened, and for a doing or waiting row how long it has been so', a);
+      'each row\'s icon shows its state, with when it was opened beside it, and a doing or waiting row says how long it has been in that state', a);
     }
     await look('plan-follows-tab', { expect: 'The Agent Plus side bar shows the Work plan of Asked about the release branch, top to bottom: 3. Update the changelog with a purple ring, 2. Rewrite the parser with a blue triangle and for 10m, 1. Pick the release branch with an orange clock and for 1m. The Agent Plus icon in the activity bar carries a badge of 1.' },
       page.locator('#workbench\\.parts\\.sidebar'));
@@ -819,7 +820,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       await look('plan-file-menu', { pointer: true, toasts: true, expect: 'A right-click menu beside the row 1. Port the importer in the Work plan view, with the entry Agent Plus: Open the Work Plan File.' },
         page.locator('.monaco-menu-container, .context-view').first());
       await viaUi('agentPlus.openWorkPlanFile', () => item.click());
-      check(!!await until(async () => { const x = await frontTab(); return x && x.label === 'briefed.json'; }, 15000, 300), 'and so does the same entry on a row\'s right-click menu', await frontTab());
+      check(!!await until(async () => { const x = await frontTab(); return x && x.label === 'briefed.json'; }, 15000, 300), 'and the same entry on a row\'s right-click menu opens the file too', await frontTab());
     } else {
       note(`no right-click menu was drawn in the window on ${process.platform}, so the row's menu entry was not clicked`);
       await page.keyboard.press('Escape');
@@ -830,7 +831,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await step('plan-refresh', async () => {
     needs('plan-follows-tab');
     const file = path.join(profile.plans, 'asks-new.json');
-    /* Whole seconds, since the file system may keep no finer modification time. */
+    /* Whole seconds, since some file systems keep modification times only to the second. */
     const stamp = Math.floor(Date.now() / 1000) - 5;
     fs.utimesSync(file, stamp, stamp);
     await openConv('asks-new');
@@ -883,10 +884,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       page.locator('#workbench\\.parts\\.sidebar'));
     writePlan('asks-new', Object.assign({}, plan, { format: 2 }));
     check(!!await until(async () => { const r = await planRows(); return r && r[0] && r[0].title === 'This plan is in a newer format' && /^format 2; this version reads 1$/.test(r[0].description); }, 15000, 300),
-      'a plan in a newer format gets a row saying so above its rows', await planRows());
+      'a plan in a newer format gets a row above its rows naming its format and the one this version reads', await planRows());
     fs.writeFileSync(path.join(profile.plans, 'asks-new.json'), '{ "nodes": [ { "title": ');
     check(!!await until(async () => { const r = await planRows(); return r && r.length === 1 && r[0].title === 'This work plan could not be read'; }, 20000, 500),
-      'and a plan that does not parse, once it has stayed that way past a write, is shown as one that could not be read', await planRows());
+      'and a plan that still does not parse after the time a write may take is shown as unreadable', await planRows());
     QPLANS();
   });
 
@@ -995,7 +996,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await patch('n-queue', { state: 'unread', activity: 'stopped', unseen: true });
     await sleep(1500);
     await patch('n-queue', { state: 'working', activity: 'working' });
-    check(await noToast(NQUEUE, 9000), 'a conversation that stops and starts working again within five seconds, as a queued message makes it, is not announced');
+    check(await noToast(NQUEUE, 9000), 'a conversation that stops and starts working again within five seconds, as it does with a queued message, is not announced');
     check((await bell()) === before, 'and, working again, is not counted', { before, now: await bell() });
   });
 
@@ -1011,7 +1012,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await patch('n-front', { state: 'working', activity: 'working' });
     await settle();
     await patch('n-front', { state: 'unread', activity: 'stopped', unseen: true });
-    check(await noToast(NFRONT, 9000), 'nor its stopping with a reply');
+    check(await noToast(NFRONT, 9000), 'nor is it announced when it then stops with a reply');
     check((await bell()) === before, 'which is not counted either while it is in front', { before, now: await bell() });
     await openNotes();
     check(!!await until(async () => (await bell()) === before + 1, 10000, 300), 'once another tab is in front, it is counted', { before, now: await bell() });
@@ -1042,7 +1043,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const a = await toastWith(FIRST, 10000), b = await toastWith(SECOND, 5000);
     const both = (await toasts()).filter((x) => /of two/.test(x.text));
     check(!!a && !!b && sameList(a.buttons, ['Open', 'Dismiss']) && sameList(b.buttons, ['Open', 'Dismiss']) && both.length === 2,
-      'two conversations that start to wait together get a notification each, each with Open and Dismiss, and no other notification about either', both);
+      'two conversations that start to wait together get one notification each, with Open and Dismiss, and nothing else is shown about them', both);
     const area = await page.evaluate(() => {
       const rs = [...document.querySelectorAll('.notification-toast')].filter((e) => e.offsetParent !== null && /of two/.test(e.innerText)).map((e) => e.getBoundingClientRect());
       if (!rs.length) return null;
@@ -1143,13 +1144,13 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await pick('Interface features');
     check(!!await until(async () => (await userValue('agentPlus.tokenMode')) === 'interface', 5000, 200), 'picking Interface features sets the mode');
     check(!!await until(async () => { const e = await entry('tokenMode'); return e && e.text === 'Interface'; }, 5000, 200), 'and the entry says Interface', await entry('tokenMode'));
-    check(!!await tipIs(tipFor('Interface features', [], ALL_FEATURES)), 'and its hover says it adds nothing and leaves every feature out', await tip());
+    check(!!await tipIs(tipFor('Interface features', [], ALL_FEATURES)), 'and its hover says it adds nothing and lists every feature under Left out', await tip());
     await unhover();
     await clearToasts();
     await viaUi('agentPlus.chooseTokenMode', () => entryLoc('tokenMode').click());
     await pickRows();
     await pick('Essential features');
-    check(!!await until(async () => { const e = await entry('tokenMode'); return e && e.text === 'Essential'; }, 5000, 200), 'Essential features chosen the same way shows Essential', await entry('tokenMode'));
+    check(!!await until(async () => { const e = await entry('tokenMode'); return e && e.text === 'Essential'; }, 5000, 200), 'choosing Essential features the same way shows Essential', await entry('tokenMode'));
     check(!!await tipIs(tipFor('Essential features', ALL_FEATURES.slice(0, 2), ALL_FEATURES.slice(2))), 'with the work plan and the time-zone note only', await tip());
     await unhover();
     await setting('agentPlus.tokenMode', 'all');
@@ -1174,7 +1175,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
         return x && /^5 Settings Found$/.test(x.found) && x;
       }, 20000, 500);
       check(!!settings && settings.query === `@id:${CODEX_SWITCHES.join(',')}`,
-        'and opens the Settings editor on the five feature settings of the extension that uses Agent Plus', settings || await page.evaluate(() => !!document.querySelector('.settings-editor')));
+        'and opens the Settings editor on the stand-in extension\'s five feature settings', settings || await page.evaluate(() => !!document.querySelector('.settings-editor')));
       await look('token-mode-custom', { expect: 'The Settings editor in front, its search box holding @id: followed by five codexPlus setting ids, 5 Settings Found, and below it five settings of Codex Plus, each a ticked checkbox: Conversation Brief, Detached End Notices, Tell Codex Your Time Zone, Wake Ups and Work Plan.' });
       /* The Settings editor covers the whole window, and hovering the status bar does nothing until it closes. */
       await page.keyboard.press('Escape');
@@ -1212,11 +1213,11 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       page.locator('#workbench\\.parts\\.statusbar'));
     await setting('agentPlus.conversationsView', true);
     await showConversations();
-    check(!!await until(async () => !!await convRows() && !!await entry('conversations'), 10000, 300), 'turned back on, they are back');
+    check(!!await until(async () => !!await convRows() && !!await entry('conversations'), 10000, 300), 'turned back on, the Conversations view and its status bar entry are back');
     await sleep(2000);
     const missingCsp = walk(path.join(profile.user, 'logs')).filter((f) => /exthost\.log$/.test(f) && fs.statSync(f).mtimeMs > launchedAt)
       .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n')).filter((l) => /xnervwang\.agent-plus created a webview without a content security policy/.test(l));
-    check(!missingCsp.length, 'and the Answer view made again has its content security policy, as VS Code reports none missing', missingCsp);
+    check(!missingCsp.length, 'and VS Code reports no missing content security policy for the Answer view it builds again', missingCsp);
     await startWorking([conv('quiet', 'Nothing to see', 'idle', 'stopped')]);
   });
 
@@ -1237,7 +1238,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   });
   await shut();
 
-  /* ═══ restricted: the same in Restricted Mode ═══ */
+  /* ═══ restricted: the helper and the stand-in source in Restricted Mode ═══ */
   writeSettings({ 'security.workspace.trust.enabled': true, 'security.workspace.trust.startupPrompt': 'never' });
   QPLANS();
   await open('restricted', [SOURCE], { trust: true });

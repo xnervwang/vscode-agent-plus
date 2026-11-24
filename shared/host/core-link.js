@@ -30,9 +30,9 @@ async function findCore(vscode) {
 /** Whether the host offers an optional capability by name (protocol, "Adding to the protocol"). */
 const coreHas = (core, name) => !!(core && Array.isArray(core.features) && core.features.includes(name));
 /*
- * Whether Agent Plus tells the user, in this window, when one of the source's conversations starts to wait for them, so
- * that the agent's own notice of it can be left out (protocol, Notifications). False for a host without 'waitingFor',
- * which shows nothing while no window has the focus and would leave such a wait untold.
+ * Whether Agent Plus notifies the user in this window when one of the source's conversations starts waiting for them.
+ * While it does, the source can leave out its agent's own notice of the wait (protocol, Notifications). False for a host
+ * without 'waitingFor': such a host shows nothing while no window has the focus, so the user would not hear of the wait.
  */
 function announcesWaits(core) {
   if (!coreHas(core, 'waitingFor') || typeof core.announcesWaits !== 'function') return false;

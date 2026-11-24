@@ -4,8 +4,9 @@
 
 'use strict';
 /*
- * Opening a conversation through a source (src/views.js): a window whose source says it shows the conversation, through
- * `shows`, takes another window's request; when no window has it, a source with `openHere` is offered Open it here.
+ * Opening a conversation through a source (src/views.js): a window takes another window's request to open a
+ * conversation when its source's `shows` says the window shows it; when no window has the conversation, the message
+ * that says so has an Open it here button if the source lists `openHere` in its features.
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,7 +26,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (let i = 0; i < 100 && !here.length; i++) await wait(20);
     eq([revealed, b.control.state.said.filter((m) => /not open in any/.test(m.message)).map((m) => [m.message, m.buttons]), here],
       [[S], [['"Galaxy" is not open in any VS Code window on this machine.', ['Open it here']]], [[S, 'Galaxy']]],
-      'when no window has the conversation, a source with openHere is offered Open it here, and the pick opens it in this window');
+      'when no window has the conversation, the message offers Open it here for a source with openHere, and choosing it opens the conversation in this window');
     b.close();
   }
   {
@@ -41,7 +42,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       sessionId: S, title: 'Galaxy', cwd: '/w' }));
     for (let i = 0; i < 100 && !fs.existsSync(path.join(dir, id + '.done')); i++) await wait(20);
     eq([fs.existsSync(path.join(dir, id + '.done')), revealed], [true, [S]],
-      'a window whose source shows the conversation outside a tab takes another window\'s request to open it, and reveals it there');
+      'a window whose source shows the conversation outside a tab takes another window\'s request to open it, and reveals it in that window');
     b.close();
   }
 };

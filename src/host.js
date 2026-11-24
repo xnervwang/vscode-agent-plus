@@ -79,9 +79,9 @@ function start(context, log, opts = {}) {
   };
 
   /*
-   * Every conversation of every source, for a dependent that links to them (allConversations in docs/protocol.md). The
-   * views gather it on each pass of the Conversations tree, from the lists they already read for the notices, and only
-   * while something listens for its changes.
+   * Every conversation of every source, for a dependent extension that links to conversations (allConversations in
+   * docs/protocol.md). The views gather it from the lists they already read for the notifications, on each pass of the
+   * Conversations tree, but only while something listens for its changes.
    */
   const everyone = { list: [], listeners: 0, changes: sources.emitter() };
   host.everyone = {
@@ -274,8 +274,8 @@ function start(context, log, opts = {}) {
     },
     allConversations() { return everyone.list; },
     onDidChangeAllConversations: listenEveryone,
-    /* Whether this window tells the user, in its own notification, when a conversation starts to wait for them
-       (feature 'waitingFor'). */
+    /* Whether this window shows its own notification when a conversation starts waiting for the user (feature
+       'waitingFor'). */
     announcesWaits() {
       try { return !closing && !!views && typeof views.announcesWaits === 'function' && views.announcesWaits() === true; } catch (_) { return false; }
     },

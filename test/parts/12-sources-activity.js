@@ -34,5 +34,5 @@ module.exports = async ({ eq, root }) => {
   eq([c({ title: '多对话管家 \u{1F6CE}\uFE0F', steward: true }), c({ title: '\u{1F451} \u{1F451} Steward \u2709\uFE0F', steward: true }),
     c({ title: 'Plain \u2709\uFE0E' }), c({ title: '\u{1F451} Not one' }), c({ title: 'Old \u{1F6CE}', steward: 'yes' })].map((x) => [x.title, x.steward]),
   [['\u{1F451} 多对话管家', true], ['\u{1F451} Steward', true], ['Plain', false], ['Not one', false], ['Old', false]],
-  'a title loses every crown, envelope and old bell in it, and a steward\'s gets one crown first; steward is true only when given as true');
+  'every crown, envelope and old bell is taken out of a title, and a steward\'s title gets one crown in front; steward is true only when the source gives true');
 };

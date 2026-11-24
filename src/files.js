@@ -16,8 +16,8 @@ const path = require('path');
 
 /*
  * Windows refuses to rename over a file while another process has it open, and these files are read all the time: a
- * panel fetches its revision image every few seconds, and every window and hook reads the steward table. There a refused
- * rename is tried again a few times over about a fifth of a second, waiting in between, before the write fails.
+ * panel fetches its revision image every few seconds, and every window and hook reads the steward table. On Windows a
+ * refused rename is tried again up to five times, over about a fifth of a second, before the write fails.
  */
 const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY']);
 const RENAME_WAITS_MS = [10, 20, 40, 60, 80];

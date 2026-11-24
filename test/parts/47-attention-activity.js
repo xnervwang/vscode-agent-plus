@@ -43,7 +43,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     'one that starts to wait for the user is announced and counted');
 
   await w.step(conv('x', 'working'), conv('y', 'stopped', true, 'Write the docs'));
-  eq([w.shown.length, w.painted], [1, ['y:finished']], 'one that stops with a reply not seen is counted at once but not announced yet');
+  eq([w.shown.length, w.painted], [1, ['y:finished']], 'one that stops with an unread reply is counted at once but not announced yet');
   clock += 4999;
   await w.step(conv('x', 'working'), conv('y', 'stopped', true, 'Write the docs'));
   eq(w.shown.length, 1, 'not before the stable period is over');
@@ -55,7 +55,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq(w.shown.length, 2, 'staying stopped does not announce it again');
 
   await w.step(conv('x', 'stopped', true, 'Fix the build'), conv('y', 'working', true));
-  eq([w.shown.length, w.painted], [2, ['x:finished']], 'one that starts working again is not counted, even with its reply still not seen');
+  eq([w.shown.length, w.painted], [2, ['x:finished']], 'one that starts working again is not counted, even while its reply is still unread');
   clock += 2000;
   await w.step(conv('x', 'working', true), conv('y', 'working', true));
   clock += 10000;
@@ -78,7 +78,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([quiet.shown.length, quiet.painted], [0, ['q:finished']],
     'a reply not seen turning up on a conversation that had already stopped is not announced, and is counted');
 
-  /* A turn that started and ended between two reads is never seen working; a lastActiveAt newer than anything read
+  /* When a turn starts and ends between two reads, no read shows it working; a lastActiveAt newer than anything read
      before shows that it ran. */
   const short = win(path.join(tmp('short-turn'), 'attention'), 'h');
   const quick = (active, unseen = true) => Object.assign(conv('r', 'stopped', unseen, 'Quick one'), { lastActiveAt: active });
@@ -105,7 +105,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock += 6000;
   await short.step(conv('p', 'working'), before, quick(second));
   eq(short.texts().slice(1), ['"Quick one" finished.'], 'a second short turn, with a newer lastActiveAt, is announced');
-  /* A rename makes the conversation active without a reply; with lastReplyAt the source says which. */
+  /* A rename makes the conversation active without a reply; lastReplyAt lets the source say whether a reply came. */
   await short.step(conv('p', 'working'), before);
   clock += 1000;
   const renamed = Object.assign(quick(clock), { lastReplyAt: second });
@@ -113,7 +113,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock += 6000;
   await short.step(conv('p', 'working'), before, Object.assign(quick(clock - 6000), { lastReplyAt: second }));
   eq(short.shown.length, 2, 'renamed and marked unread, a conversation whose lastReplyAt has not moved is not announced');
-  /* Read as it stops, a conversation is no longer written to the shared file, so its last active time comes from the list. */
+  /* A conversation read as it stops is left out of the shared file, so its last active time comes from the list. */
   const watched = (activity, unseen, active) => Object.assign(conv('w', activity, unseen, 'Watched'), { lastActiveAt: active });
   await short.step(conv('p', 'working'), before, watched('working', false, clock));
   clock += 1000;
@@ -123,7 +123,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   await short.step(conv('p', 'working'), before, watched('stopped', true, ended));
   clock += 6000;
   await short.step(conv('p', 'working'), before, watched('stopped', true, ended));
-  eq(short.shown.length, 2, 'a turn watched to its end and read as it stopped, marked unread later, is not announced');
+  eq(short.shown.length, 2, 'a turn this window saw end with nothing unseen, marked unread later, is not announced');
   short.att.dispose();
 
   settings.finished = false;
@@ -191,7 +191,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const items = files.length === 1 ? JSON.parse(fs.readFileSync(path.join(b.home, 'attention', files[0]), 'utf8')).items : [];
     eq(items.map((it) => [it.sessionId, it.activity]), [['q', 'waiting'], ['o', 'working'], ['w', 'working']],
       'a window reads the plans of the conversations it reports, wherever they are, so a new question counts as waiting in every window '
-      + 'once the turn that put it has ended, and not while it still runs');
+      + 'once the turn that put it has ended');
     b.close();
   }
 };

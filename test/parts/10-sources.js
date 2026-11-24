@@ -50,7 +50,7 @@ module.exports = async ({ ok, bad, eq, root }) => {
     why({ kind: 'question', tool: 'AskUserQuestion' }), why({ kind: 'planQuestion' }), why({ kind: 'nap' }), why('permission'),
     why({ kind: 'plan' }, 'working'), why(Object.defineProperty({}, 'kind', { get() { throw new Error('no'); } }))],
   [{ kind: 'permission', tool: 'Bash' }, 80, { kind: 'permission' }, { kind: 'question' }, { kind: 'planQuestion' }, null, null, null, null],
-  'waitingFor is read for a waiting conversation only: a known kind, a tool only for a permission, cut to 80 characters; anything else is no reason');
+  'waitingFor is read only for a waiting conversation: it keeps a known kind, and a tool only for a permission, cut to 80 characters; anything else counts as no reason');
   eq([c.state, c.running, c.lastActiveAt, c.hasPlan, needs.state, needs.running, needs.lastActiveAt],
     ['idle', true, Date.UTC(2026, 10, 7, 12), false, 'idle', false, 0], 'and reads unknown states as idle, running by default');
   eq([src.conversation({ title: 'no id' }), src.conversation(null), src.STATES.every((st) => src.conversation({ sessionId: 'x', state: st }).state === st)],

@@ -266,7 +266,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       eq([backOnThree, unchanged, afterRefresh, afterWrite, halfWritten, titleNow()],
         ['first', [0, 'first'], [1, 'first'], [2, 'third'], 'third', 'error'],
         'a plan file that has not changed is not read again, the refresh command reads it anyway, and one being written keeps the last plan that parsed until it is no longer fresh');
-      eq(leftThere, 'error', 'a plan file left half-written is shown as one that could not be read once it is no longer fresh, with no further change to it');
+      eq(leftThere, 'error', 'a plan file left half-written shows as unreadable once it is no longer fresh, even with no further change to the file');
     } finally { fs.readFileSync = reallyRead; }
     b.close();
   }

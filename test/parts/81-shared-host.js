@@ -98,7 +98,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     } finally { fs.renameSync = real; }
   }
 
-  /* Windows refuses a rename over a file another process has open; there the rename is tried again, elsewhere not. */
+  /* Windows refuses a rename over a file another process has open, so on Windows writeAtomic tries again; on other
+     platforms it does not. */
   {
     const { writeAtomic } = mod('files.js');
     const dir = tmp('atomic-busy');
@@ -115,7 +116,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       refuse = 3; calls = 0;
       writeAtomic(file, 'new');
       eq([fs.readFileSync(file, 'utf8'), calls, fs.readdirSync(dir)], ['new', 4, ['f.txt']],
-        'on Windows a rename refused three times while another process has the file open is tried again until it goes through');
+        'on Windows, while another process holds the file open, a rename refused three times is tried again until it goes through');
       refuse = 99; calls = 0;
       let threw = null;
       try { writeAtomic(file, 'never'); } catch (e) { threw = e.code; }
@@ -243,7 +244,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const write = publisher(plan, () => ({ name: 'ws one', folders: ['/w'], sessions: shows }), { pid: 4242 });
     eq([write(t0), write(t0 + 1000)], [true, false], 'a window writes its entry once, and not again while nothing changed');
     shows = [A, B];
-    eq(write(t0 + 2000), true, 'what it shows changing writes the entry again');
+    eq(write(t0 + 2000), true, 'a change in what it shows writes the entry again');
     eq(write(t0 + 2000 + STALE_MS / 2), true, 'and so does half the stale time passing with nothing changed');
     const alive = (pid) => pid === 4242;
     const seen = shownElsewhere(plan, { self: 1, now: t0 + 2000 + STALE_MS / 2, alive });
@@ -256,6 +257,6 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     eq(others(plan, { self: 1, now: t0 + 2000, alive: () => true }).map((w) => w.pid), [4242],
       'a half-written entry and a file not named by a pid are skipped');
     withdraw(plan, 4242);
-    eq(others(plan, { self: 1, now: t0 + 2000, alive: () => true }).length, 0, 'a window withdrawing its entry takes it away');
+    eq(others(plan, { self: 1, now: t0 + 2000, alive: () => true }).length, 0, 'an entry its window withdraws is gone for the other windows');
   }
 };

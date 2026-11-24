@@ -5,9 +5,9 @@
 'use strict';
 /*
  * What a waiting conversation waits for (src/wait-reason.js), named in the notices; no notice for a conversation the
- * focused window shows anywhere; a notice for each conversation, also of several from more than one source; what was kept
- * while no window had the focus, shown once when one gets it, one notice for each conversation; and the
- * question a source asks before it leaves its agent's own notice to these (announcesWaits).
+ * focused window shows anywhere; a notice for each conversation, also when they come from different sources; what was
+ * kept while no window had the focus, shown once when a window gets it; and announcesWaits(), which a source calls
+ * before it leaves out its agent's own notice of a wait.
  */
 const path = require('path');
 const { boot } = require('../boot');
@@ -44,7 +44,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   ['"Fix the build" is waiting for you to approve Bash.', '"Fix the build" is waiting for your approval.', '"Fix the build" has a question for you.',
     '"Fix the build" has a plan for you to review.', '"Fix the build" is waiting for you to choose.', '"Fix the build" has a question for you in its plan.',
     '"Fix the build" is waiting for you.', '"Fix the build" is waiting for you.'],
-  'a notice says what the conversation waits for, and without a reason says it is waiting as before');
+  'a notice says what the conversation waits for, and without a reason says only that it is waiting');
   eq([at.message({ kind: 'waiting', title: 'A', source: 'Claude Code', waitingFor: { kind: 'permission', tool: 'Edit' } }, { several: true }),
     at.message({ kind: 'finished', title: 'C', source: 'Codex' }, { several: true })],
   ['Claude Code: "A" is waiting for you to approve Edit.', 'Codex: "C" finished.'],
@@ -59,7 +59,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     planned(src.conversation(waiting('c', 'C', { kind: 'permission', tool: 'Bash' }))),
     conversations.withPlan(src.conversation(waiting('d', 'D', { kind: 'question' })), null).waitingFor],
   [['working', null], ['waiting', { kind: 'planQuestion' }], ['waiting', { kind: 'permission', tool: 'Bash' }], { kind: 'question' }],
-  'a plan\'s question gives planQuestion; a conversation its agent holds waiting keeps the agent\'s reason');
+  'a question in the plan gives planQuestion, and a conversation already waiting on its agent keeps the agent\'s reason');
 
   /* Two windows report one conversation: the window whose panel shows the prompt knows the tool. */
   {
@@ -87,12 +87,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await round(a, f);
     eq([f.shown.map((n) => n.id).sort(), fresh(f).sort()], [['c1', 'c2', 'x1'],
       ['Claude Code: "Claude one" is waiting for you to approve Edit.', 'Claude Code: "Claude two" is waiting for you.', 'Codex: "Codex one" has a question for you.']],
-    'conversations of two sources that start to wait together get a notice each, each with its own source\'s name');
+    'conversations of two sources that start to wait together get a notice each, with its own source\'s name');
     for (const w of [a, f]) w.att.dispose();
   }
 
-  /* The window that reads a machine-wide list hears of a permission prompt first, without the tool; the window whose panel
-     shows it names the tool a moment later, and the notice waits for that. One nobody names is shown once the wait is over. */
+  /* The window that reads a machine-wide list hears of a permission prompt first, without the tool; the window whose
+     panel shows it names the tool a moment later, and the notice is held until then. A notice whose tool no window
+     names is shown once that wait is over. */
   {
     const dir = path.join(tmp('precise'), 'attention');
     const mk = (name, focused) => {
@@ -114,7 +115,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     clock += 1000;
     await round(list, panel);
     eq([early, named, list.shown.splice(0)], [[], ['"Named later" is waiting for you to approve Bash.'], ['"Never named" is waiting for your approval.']],
-      'a permission prompt the first report does not name the tool of is shown once a window names it, with the tool; one nobody names is shown once that wait is over');
+      'when the first report of a permission prompt does not name the tool, the notice waits for a window that names it and then shows the tool; one that no window names is shown once that wait is over');
     for (const w of [list, panel]) w.att.dispose();
   }
 
@@ -132,7 +133,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await round(src1, f);
     eq([fresh(f), f.painted], [['"Other" has a question for you.', '"Third" has a plan for you to review.'],
       ['done:finished', 'mine:waiting', 'other:waiting', 'third:waiting']],
-    'of three that start to wait together, the two the focused window does not show get a notice each, and the one it shows behind other tabs or in its side bar gets none, waiting or finished, and is still counted');
+    'of three that start to wait together, the two the focused window does not show get a notice each; the one it shows behind other tabs or in its side bar gets none, whether waiting or finished, and is still counted');
     for (const w of [src1, f]) w.att.dispose();
   }
 
@@ -154,7 +155,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.focused = true;
     await round(a, b);
     eq([b.shown.map((n) => n.id), fresh(b)], [['x', 'inA'], ['"Release notes" is waiting for you to approve Bash.', '"Shown in A" has a question for you.']],
-      'the window that gets the focus shows, once, a notice for each conversation that still waits, less what was answered meanwhile');
+      'the window that gets the focus shows one notice for each conversation that still waits, leaving out what was answered meanwhile');
     await round(a, b);
     eq(fresh(b), [], 'and does not show it again on its next refresh');
     b.focused = false;
@@ -175,7 +176,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(fresh(a), ['"Only one" has a question for you.'], 'one kept conversation comes back as a notice of its own, and not one the window shows itself');
     for (const w of [a, b]) w.att.dispose();
   }
-  /* A window with the focus told the user; a window without it kept the same; given the focus later, it shows nothing. */
+  /* A window with the focus told the user; a window without the focus kept the same conversation, and given the focus
+     later it shows nothing. */
   {
     const dir = path.join(tmp('told'), 'attention');
     const a = make(dir, 'ta'), f = make(dir, 'tf', { focused: true });
@@ -183,13 +185,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await round(a, f);
     a.att.publish(lists(waiting('x', 'Told', { kind: 'permission', tool: 'Read' })));
     await round(a, f);
-    eq(fresh(f), ['"Told" is waiting for you to approve Read.'], 'the focused window tells of it');
+    eq(fresh(f), ['"Told" is waiting for you to approve Read.'], 'the focused window shows a notice for it');
     f.focused = false;
     await round(a, f);
     clock += 5000;
     a.focused = true;
     await round(a, f);
-    eq(fresh(a), [], 'and the window that kept it meanwhile does not tell of it again');
+    eq(fresh(a), [], 'and the window that kept it meanwhile does not show it again');
     for (const w of [a, f]) w.att.dispose();
   }
 
@@ -219,7 +221,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     changed.fire();
     for (let i = 0; i < 40 && !/In a tab behind/.test(tip()); i++) await wait(50);
     await wait(200);
-    eq([said(), /In a tab behind/.test(tip())], [[], true], 'a source that says this window shows the conversation (shows) gets no notice for it, and it is counted');
+    eq([said(), /In a tab behind/.test(tip())], [[], true], 'a conversation the source\'s shows() says this window shows gets no notice, and it is counted');
     eq(b.api.announcesWaits(), true, 'announcesWaits() is true with the notifications and waiting notices on');
     control.state.config['agentPlus.notifications.waiting'] = false;
     const off = b.api.announcesWaits();
@@ -234,7 +236,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(r.api.announcesWaits(), false, 'and false in Restricted Mode, where the window writes nothing for the others');
     r.close();
 
-    /* The focus a window test reports counts only when the window was started for it. */
+    /* The focus a window test sets counts only when the window was started with AGENT_PLUS_TEST_FOCUS=1. */
     globalThis.__agentPlusTestFocused = false;
     const plain = boot(root, tmp, { viewOptions: { attentionMs: 20, attentionWarmupMs: 0, attentionBatchMs: 10, refreshMs: 1e9 } });
     plain.vscode.window.state = { focused: true };
@@ -251,13 +253,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     globalThis.__agentPlusTestFocused = true;
     for (let i = 0; i < 60 && !tested.control.state.said.length; i++) await wait(50);
     eq([plainSaid, quiet, tested.control.state.said.map((m) => m.message)], [1, 0, ['"T" is waiting for you.']],
-      'a test\'s own word on the focus is read only with AGENT_PLUS_TEST_FOCUS=1, and a wait kept while it says unfocused is shown once it says focused');
+      'the focus a window test sets is read only with AGENT_PLUS_TEST_FOCUS=1, and a wait kept while it is false is shown once it is true');
     tested.close();
     delete globalThis.__agentPlusTestFocused;
     if (prev === undefined) delete process.env.AGENT_PLUS_TEST_FOCUS; else process.env.AGENT_PLUS_TEST_FOCUS = prev;
   }
 
-  /* What a source calls before it leaves its agent's notice out. */
+  /* announcesWaits() in shared/host/core-link.js, for each kind of host. */
   {
     const link = require(path.join(root, 'shared', 'host', 'core-link.js'));
     eq([link.announcesWaits({ features: ['waitingFor'], announcesWaits: () => true }), link.announcesWaits({ features: [], announcesWaits: () => true }),

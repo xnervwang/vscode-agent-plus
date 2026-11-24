@@ -5,10 +5,10 @@
 'use strict';
 /*
  * Conversations that need the user, across windows (src/attention.js): each window writes what its sources report, only
- * the window with the focus shows notifications, changes close together are shown together with one notification for
- * each conversation, and a window that reloads does not show again what it showed before. The conversations here carry only `state`, which gives their activity;
- * 47-attention-activity.js has the activity rules themselves. In a running window each notification is a plain message
- * whose Open button opens its conversation.
+ * the window with the focus shows notifications, changes that come close together are shown at once with one
+ * notification for each conversation, and a window that reloads does not repeat what it already showed. The
+ * conversations here carry only `state`, which gives their activity; 47-attention-activity.js has the activity rules
+ * themselves.
  */
 const fs = require('fs');
 const path = require('path');
@@ -61,7 +61,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   a.att.publish(lists(conv('x', 'idle'), conv('y', 'unread', 'Write the docs')));
   a.att.refresh(); b.att.refresh();
   await settle();
-  eq([fresh(b), b.painted], [[], ['y:finished']], 'once one of them is read, nothing is shown again, and the count is the other alone');
+  eq([fresh(b), b.painted], [[], ['y:finished']], 'once one of them is read, nothing new is shown, and the count holds only the other one');
 
   b.focused = false;
   a.att.publish(lists(conv('x', 'prompt', 'Fix the build'), conv('y', 'unread', 'Write the docs')));
@@ -198,7 +198,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (let i = 0; i < 100 && !(saidTwo().length >= 2 && openedTwo.length >= 2); i++) await wait(50);
     await wait(200);
     eq([saidTwo(), openedTwo.slice().sort()], [[['"One" is waiting for you.', ['Open', 'Dismiss']], ['"Two" is waiting for you.', ['Open', 'Dismiss']]], ['p', 'q']],
-      'two that start to wait together get a notification each, each with Open and Dismiss, and Open on each opens its own conversation');
+      'two that start to wait together get one notification each with Open and Dismiss, and each Open opens its own conversation');
     two.close();
   }
 
@@ -211,7 +211,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     item('s', 'Steward \u{1F6CE}\uFE0F', { steward: true }), item('o', '\u{1F451} Old steward'), item('p', 'Plain \u2709\uFE0F', { steward: false })] }));
   eq([...at.readAll(tdir, clock).merged.values()].map((it) => [it.sessionId, it.title]),
     [['s', '\u{1F451} Steward'], ['o', '\u{1F451} Old steward'], ['p', 'Plain']],
-    'a title read from a window\'s file is drawn again: a steward\'s with one crown first, and an older window\'s title with a crown first counts as a steward\'s');
+    'a title read from a window\'s file is drawn again, a steward\'s with one crown in front; a title from an older window that starts with a crown is taken as a steward\'s');
   eq(at.itemsOf([{ sourceId: 'claude-code', label: 'Claude Code', conversations: [require(path.join(root, 'src', 'sources.js'))
     .conversation({ sessionId: 'm', title: 'Manager \u{1F6CE}', state: 'prompt', steward: true })] }]).map((it) => [it.title, it.steward]),
   [['\u{1F451} Manager', true]], 'and a window writes the drawn title with steward beside it');
@@ -241,7 +241,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await turn(true);
     seen.push(bell());
     eq(seen, ['$(bell-dot) 1', '', '$(bell-dot) 1', '', '$(bell-dot) 2'],
-      'the bell goes with the notifications turned off, and comes back as soon as they are turned on again, also after a conversation changed meanwhile');
+      'the bell goes when the notifications are turned off and comes back as soon as they are turned on again, even if a conversation changed while they were off');
     b.close();
   }
 };

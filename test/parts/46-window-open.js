@@ -34,8 +34,8 @@ module.exports = async ({ eq, tmp, root }) => {
   eq([await b.o.take(), fs.readdirSync(dir).filter((n) => n.endsWith('.json'))], [0, []],
     'and its request is withdrawn, so no window takes it afterwards');
 
-  /* Where VS Code keeps its command line beside appRoot in each kind of install, as the desktop builds of 1.147 and the
-     remote server lay them out. */
+  /* Where the command line sits relative to appRoot in each kind of install, as found in the desktop builds of VS Code
+     1.147 and in the remote server. */
   const cp = require('child_process');
   const name = process.platform === 'win32' ? 'code.cmd' : 'code';
   const layout = (label, appRoot, cli) => {
@@ -58,7 +58,7 @@ module.exports = async ({ eq, tmp, root }) => {
       const folder = { uri: { scheme: 'file', fsPath: path.join(at.appRoot, 'ws') } };
       const shown = wo.bringToFront({ env: { appRoot: at.appRoot }, workspace: { workspaceFolders: [folder] } }, (m) => said.push(m));
       eq([shown, runs.map((r) => [r[0], r[1]])], [true, [[at.cli, [folder.uri.fsPath]]]],
-        `a window of the ${label} layout is brought to the front through the command line beside its install`);
+        `for the ${label} layout, the command line in that install brings the window to the front`);
     }
   } finally { cp.execFile = real; }
 };

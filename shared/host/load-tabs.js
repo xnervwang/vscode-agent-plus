@@ -10,12 +10,13 @@
  * conversation in a background tab stays blank, and unknown to its agent, until it is clicked. Bringing each background
  * tab of the agent to the front once builds its page, and the agent keeps the page when the tab goes back.
  *
- * VS Code has no call that brings a tab to the front, so each editor group is focused with its focus command and its
- * tabs are shown by position with workbench.action.openEditorAtIndex. Afterwards each group shows the tab it showed
- * before, and the group that had the focus has it again.
+ * VS Code has no call that brings a tab to the front, so each editor group is focused by its own command
+ * (workbench.action.focusFirstEditorGroup and the rest) and its tabs are shown by position with
+ * workbench.action.openEditorAtIndex. Afterwards each group shows the tab it showed before, and the focus goes back to
+ * the group that had it.
  */
 
-/* How long each tab stays in front, so VS Code has created its page before the next one is shown. */
+/* Time for VS Code to build a tab's page before the next tab is brought to the front. */
 const STEP_MS = 400;
 const FOCUS_GROUP = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth']
   .map((n) => `workbench.action.focus${n}EditorGroup`);

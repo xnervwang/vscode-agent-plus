@@ -39,8 +39,9 @@ function openCount(nodes) {
   return (nodes || []).reduce((n, x) => n + (OPEN_STATES.includes(x.state) ? 1 : 0) + openCount(x.children), 0);
 }
 
-/* `questions` are the plan's, each with `since`, when it was asked. A question with no time is not taken to be new. A
-   question reaches the user in the reply its turn ends with, so a turn still running is not waiting on it. */
+/* `questions` are the plan's, each with `since`, when it was asked. A question with no time does not count as new. A
+   question reaches the user only in the reply that ends its turn, so while the turn runs the conversation does not
+   wait on it. */
 function activityOf(c, questions) {
   const own = c.running === false ? 'stopped' : ACTIVITIES.includes(c.activity) ? c.activity : activityOfState(c.state);
   const after = c.lastUserAt > 0 ? c.lastUserAt : 0;

@@ -112,7 +112,8 @@ function create(host, opts = {}) {
     else plans.delete(file);
     return { file, plan };
   };
-  /* A half-written file shows its last good parse for a moment; no file event may follow, so it is read again then. */
+  /* A half-written file shows its last good parse for a moment; since no file event may follow, the file is read again
+     once that moment is over. */
   let rereadTimer = 0;
   const rereadAfter = (ms) => {
     if (rereadTimer || closing) return;
@@ -189,9 +190,9 @@ function create(host, opts = {}) {
       .then((pick) => (pick === 'Open' ? commands.openAttention(it.sourceId, it.sessionId) : undefined))
       .catch((e) => say('attention: ' + ((e && e.message) || e)));
   };
-  /* Under a display with no window manager every window VS Code has once focused says it is focused for good, so a
-     window test can say instead, through a global of this process, whether this window has the focus. Only when the
-     window was started with AGENT_PLUS_TEST_FOCUS=1. */
+  /* Under a display with no window manager, VS Code reports every window it has focused once as focused from then on.
+     A window test therefore sets a global of this process to say whether this window has the focus; it is read only
+     when the window was started with AGENT_PLUS_TEST_FOCUS=1. */
   const testFocus = process.env.AGENT_PLUS_TEST_FOCUS === '1';
   const windowFocused = () => {
     if (testFocus && typeof globalThis.__agentPlusTestFocused === 'boolean') return globalThis.__agentPlusTestFocused;
@@ -252,8 +253,9 @@ function create(host, opts = {}) {
      running conversation whose source gives lastUserAt is read here, whichever folder it is in. */
   const withQuestions = (sourceId, list) => list.map((c) => (c.running && c.lastUserAt > 0
     ? conversations.withPlan(c, planOf(sourceId, c.sessionId).plan) : c));
-  /* What a dependent that links to conversations is given (src/host.js): each source's machine-wide list and this
-     window's, once each. Told as a change only when a conversation comes, goes, or changes its title or folder. */
+  /* The list given to a dependent extension that links to conversations (src/host.js): each source's machine-wide list
+     and this window's, each conversation once. Listeners hear of a change only when a conversation comes, goes, or
+     changes its title or folder. */
   const everyone = host.everyone || { wanted: () => false, set() {} };
   let everyoneKey = JSON.stringify([]);
   const publishEveryone = (gathered) => {
@@ -288,7 +290,7 @@ function create(host, opts = {}) {
     opener.take().catch((e) => say('open: ' + ((e && e.message) || e)));
   }, Number.isFinite(opts.attentionMs) ? opts.attentionMs : 1000);
   keep({ dispose: () => clearInterval(attentionTick) });
-  /* What was kept while no window had the focus is shown the moment this one gets it, not at the next tick. */
+  /* What was kept while no window had the focus is shown the moment this window gets it. */
   if (typeof vscode.window.onDidChangeWindowState === 'function') {
     keep(vscode.window.onDidChangeWindowState(() => { try { needs.refresh(); } catch (e) { say('attention: ' + ((e && e.message) || e)); } }));
   }
@@ -796,10 +798,10 @@ function create(host, opts = {}) {
     detach,
     commands,
     setActive(on) { active = !!on; paintConversations(); },
-    /* A dependent started listening for every conversation: a pass now, rather than at the next tick. */
+    /* A dependent started listening for every conversation, so a pass runs at once. */
     listSoon() { askAll(); convSoon(); },
-    /* Whether this window tells the user when a conversation starts to wait, so that a source can leave its agent's own
-       notice of it to this. */
+    /* Whether this window tells the user when a conversation starts to wait. While it does, a source can leave out its
+       agent's own notice of the wait. */
     announcesWaits() { const s = notifySettings(); return !closing && !!active && trusted() && s.enabled && s.waiting; },
     /* For tests. */
     _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, attentionEntry, needs, opener, answerView, focus, courier: () => courier,

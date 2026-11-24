@@ -4,8 +4,8 @@
 
 'use strict';
 /*
- * One VS Code window of the downloaded build, started with the profile that run.js created. It is driven two ways:
- * Playwright over the DevTools protocol for the page itself, and helper/ for the vscode API (see helper/extension.js).
+ * One VS Code window of the downloaded build, started with the profile that run.js created. Playwright drives the page
+ * over the DevTools protocol, and helper/ reaches the vscode API (see helper/extension.js).
  * `dev` lists the development extensions to load besides the helper.
  *
  * The DevTools port is 0, so two runs on one machine do not collide; Chromium writes the port it took to
@@ -33,7 +33,8 @@ async function until(test, ms, every = 250) {
   }
 }
 
-/* `profile` is { exts, user, folder, control } from run.js. `trust` leaves workspace trust to the window's settings. */
+/* `profile` comes from run.js as { exts, user, folder, control }; with `trust` the window's settings decide workspace
+   trust. */
 async function open({ exe, profile, env, playwright, log, dev = [], trust = false, args: more = [] }) {
   fs.mkdirSync(profile.control, { recursive: true });
   for (const n of fs.readdirSync(profile.control)) if (/^host-\d+\.json$/.test(n)) fs.rmSync(path.join(profile.control, n), { force: true });
@@ -82,8 +83,8 @@ async function open({ exe, profile, env, playwright, log, dev = [], trust = fals
     if (!r.ok) throw new Error(`in the extension host: ${r.error}`);
     return r.value;
   };
-  /* Quits through VS Code first, so the profile's state is saved as on a normal exit; a signal only if that does not
-     end it. */
+  /* Quits through VS Code first, which saves the profile's state as a normal exit does, and sends a signal only if
+     that does not end it. */
   const close = async () => {
     try { await call('setTimeout(() => vscode.commands.executeCommand("workbench.action.quit"), 100); return true;', undefined, 10000); } catch (_) { /* gone */ }
     await until(() => exited !== null, 20000);

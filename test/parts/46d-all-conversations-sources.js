@@ -4,9 +4,9 @@
 
 'use strict';
 /*
- * allConversations() as sources come and go and fail (src/host.js, src/views.js): a source unregistered leaves the list
- * and that is told as a change; a source whose machine-wide list fails still gives this window's; every listener is
- * told, and the lists are read while any of them listens.
+ * allConversations() as sources come and go and fail (src/host.js, src/views.js): an unregistered source leaves the
+ * list, and listeners hear of it as a change; a source whose machine-wide list fails still gives the conversations this
+ * window lists; every listener is told, and the lists are read while any of them listens.
  */
 const fake = require('../fake-vscode');
 const { boot } = require('../boot');
@@ -28,11 +28,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const subB = b.api.onDidChangeAllConversations(() => toldB.push(ids()));
   await until(() => toldA.length && toldB.length);
   eq([toldA, toldB, asked > 0], [[['claude-code:aaaa', 'codex:bbbb']], [['claude-code:aaaa', 'codex:bbbb']], true],
-    'a source whose machine-wide list fails still gives the conversations this window lists, and every listener is told');
+    'a source whose machine-wide list fails still gives the conversations this window lists, and both listeners get the list');
 
   second.registration.dispose();
   await until(() => toldA.length > 1);
-  eq([toldA.length, ids()], [2, ['claude-code:aaaa']], 'a source unregistered leaves the list, and that is told as a change');
+  eq([toldA.length, ids()], [2, ['claude-code:aaaa']], 'an unregistered source leaves the list, and that fires a change');
 
   subA.dispose();
   const before = asked;

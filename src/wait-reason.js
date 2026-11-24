@@ -5,7 +5,8 @@
 'use strict';
 /*
  * What a waiting conversation waits for, as a source reports it with the conversation (`waitingFor`, docs/protocol.md),
- * and the words the notices, the status bar's count and the list of conversations that need the user say it in.
+ * and how that is worded in the notices, in the hover of the status bar's count, and in the list of conversations that
+ * need the user.
  *
  *   permission     approval of a tool call; `tool` names the tool when the source knows it
  *   question       an answer to a question the agent asked in the conversation
@@ -13,7 +14,7 @@
  *   choice         a choice in a box the agent's interface shows, other than the above
  *   planQuestion   a question in the conversation's work plan, put after the user's last message
  *
- * Anything else reads as no reason, which the notices word as they did before there were reasons.
+ * Anything else reads as no reason, and the conversation is then only said to be waiting for the user.
  *
  * No editor API here: the tests load this file directly.
  */
@@ -52,7 +53,7 @@ function predicate(r) {
   }
 }
 
-/* The same without the verb's subject form, after a conversation's name in a list: "waiting for you to approve Bash". */
+/* The same without its leading "is", for after a conversation's name in a list: "waiting for you to approve Bash". */
 const description = (r) => predicate(r).replace(/^is /, '');
 
 /* A few words for a list that names several conversations: "approve Bash", "a question"; '' without a reason. */

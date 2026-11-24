@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const AGENTS = ['claude', 'codex'];
-/* Hooks that only one agent's part ships, by file name. */
+/* Hooks not every agent's part ships: file name -> the agents whose part has it. */
 const ONLY = {};
 
 module.exports = async ({ ok, bad, eq, note, tmp, root }) => {

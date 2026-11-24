@@ -11,16 +11,17 @@
  * No editor API here: the tests load this file directly.
  */
 
-/* The protocol major this build implements, the source majors it accepts, and the optional host capabilities it offers.
-   package.json repeats the first two under "agentPlus" so they can be read without running this code; the tests hold the
-   two together. The extension's marketplace major is PROTOCOL. */
 const titleMarks = require('./title-marks');
 const waitReason = require('./wait-reason');
 
+/* The protocol major this build implements, the source majors it accepts, and the optional host capabilities it offers.
+   package.json repeats the first two under "agentPlus" so they can be read without running this code; the tests hold the
+   two together. The extension's marketplace major is PROTOCOL. */
 const PROTOCOL = 1;
 const ACCEPTS = [1];
-/* 'allConversations': the interface's allConversations() and onDidChangeAllConversations (docs/protocol.md).
-   'waitingFor': conversations' waitingFor is read and named in the notices, and a source can ask announcesWaits(). */
+/* With 'allConversations' the interface has allConversations() and onDidChangeAllConversations (docs/protocol.md). With
+   'waitingFor' a conversation's waitingFor is read and named in the notifications, and a source can call
+   announcesWaits(). */
 const FEATURES = ['allConversations', 'waitingFor'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];

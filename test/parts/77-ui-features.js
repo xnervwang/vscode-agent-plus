@@ -6,12 +6,12 @@
 /*
  * The feature list of the window test (test/vscode/ui-features.json) against the steps of test/vscode/ui.js and this
  * extension's package.json: no setting, command or view is left out of the list, a feature with no step says why the
- * window cannot show it, and a feature's steps really do what it claims.
+ * window cannot show it, and the steps of a feature change each setting, run each command and read each view it lists.
  *
  * The steps are read from the source, since loading ui.js needs Playwright. A step runs from its step('<name>', ...)
  * call to the next one. In those bodies:
  *   setting('<key>', ...)       changes a setting's value through the configuration API
- *   exec('<command>', ...)      runs a command
+ *   exec('<command>', ...)      runs a command through the API
  *   viaUi('<command>', ...)     a click in the window, named after the command it runs
  *   '<view id>'                 a step that reads that view
  *   look('<name>', ...)         a screenshot

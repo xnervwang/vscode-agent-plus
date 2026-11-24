@@ -20,19 +20,18 @@
  *
  * Only the window that has the focus shows notifications, so each conversation gets one on the screen however many
  * windows are open. Changes that come within BATCH_MS of each other are shown together, one notification for each
- * conversation. A notification says what a waiting conversation waits for when its source reports it
- * (src/wait-reason.js); a window whose panel shows the prompt knows more than one that read a machine-wide list, so the
- * most precise of the reasons the windows report is kept.
+ * conversation. When a source reports why a conversation is waiting, the notification says so (src/wait-reason.js); a
+ * window whose panel shows the prompt knows more than one that read a machine-wide list, so the most precise of the
+ * reasons the windows report is kept.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
- * in any window. A conversation the focused window shows anywhere else, in a tab behind others or a side bar, gets no
- * notification either: its tab's dot and the count tell of it, and the user is in the window where it is answered.
+ * in any window. One that window shows anywhere else, in a tab behind others or a side bar, gets no notification
+ * either: the user is already in the window where it is answered, and its tab's dot and the count show it.
  *
- * A window without the focus keeps what it would have shown, and once it gets the focus shows what of that still needs
- * the user, once, one notification for each conversation. Every window notes in its file each conversation it has told the user of, or
- * found the user already had in front of them, with the time; a window drops what it kept when another window noted the
- * same conversation after it kept it, so what one window has shown is not shown again by the next window the user goes
- * to.
+ * A window without the focus keeps what it would have shown, and once it gets the focus shows, once, what of that still
+ * needs the user. Every window notes in its file, with the time, each conversation it has told the user about or found
+ * already in front of them. A window drops what it kept once another window has noted the same conversation since, so
+ * the next window the user goes to does not show it again.
  *
  * A window of an older version writes `state` alone, and only `prompt` and `unread`, read here as waiting and as
  * stopped with an unread reply. Such a window never reports a turn running, so its unread reply is announced on
@@ -52,8 +51,8 @@ const FORMAT = 1;
 const BEAT_MS = 20000;
 const STALE_MS = 60000;
 const BATCH_MS = 2000;
-/* How long a notice of a permission prompt whose tool no window has named yet waits for the window whose panel shows the
-   prompt to name it: a window that reads a machine-wide list can hear of the wait first. */
+/* A window that reads a machine-wide list can hear of a permission prompt before the window whose panel shows it, and
+   without the tool's name. A notification of such a prompt waits this long for that window to name the tool. */
 const PRECISE_MS = 3000;
 const STABLE_MS = 5000;
 /* What a window reads in its first seconds was there before it started. */
@@ -62,8 +61,8 @@ const REMEMBER_MS = 120000;
 const MAX_ITEMS = 200;
 const MAX_SEEN = 2000;
 const MAX_TITLE = 120;
-/* How long a window's note that it told the user of a conversation is kept: as long as another window may still hold
-   a notice of it from a time no window had the focus. */
+/* A window keeps its note that it told the user about a conversation this long: as long as another window may still
+   hold a notification of it, kept while no window had the focus. */
 const SETTLED_MS = 24 * 3600 * 1000;
 /* When two windows report one conversation differently, the report that needs the user most wins. */
 const RANK = { waiting: 0, working: 1, background: 2, stopped: 3 };
@@ -110,9 +109,9 @@ function itemsOf(lists) {
 }
 
 /*
- * Every live window's items, by key, each with `from`, the windows that reported it, `kind` and `waitingFor`. `live` is
+ * Every live window's items, by key, each with `from` (the windows that reported it), `kind` and `waitingFor`. `live` is
  * the set of windows whose file is fresh; `front` maps each of them to the keys it shows in front while it has the focus;
- * `settled` maps each of them to its notes of conversations it told the user of, key -> time.
+ * `settled` maps each of them to the conversations it told the user about, key -> time.
  */
 function readAll(dir, now) {
   const merged = new Map(), live = new Set(), front = new Map(), settled = new Map();
@@ -168,8 +167,8 @@ function message(it, { several }) {
 
 /*
  * `lookedAt(item)` answers whether this window shows that conversation in front now, and `shownHere(item)` whether it
- * shows it anywhere, in front or not; `canWrite()` is false in Restricted Mode, where this window writes nothing;
- * `show(text, item)` shows a notification about the conversation `item`.
+ * shows it in any tab or a side bar; `canWrite()` is false in Restricted Mode, where this window writes nothing;
+ * `show(text, item)` puts up the notification for that conversation.
  */
 function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowId, now = Date.now, focused, lookedAt = () => false,
   shownHere = () => false, settings, canWrite = () => true, show, paint = () => {}, several = () => false, log = () => {},
@@ -180,9 +179,9 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   let written = '', writtenAt = 0, union = null, timer = null, closed = false, hadFocus = false;
   /* key -> { kind, queuedAt }: what this window would have shown while it did not have the focus. */
   const missed = new Map();
-  /* [sourceId, sessionId, at]: the conversations this window told the user of, newest last. */
+  /* [sourceId, sessionId, at]: the conversations this window told the user about, newest last. */
   let told = [];
-  /* key -> the latest time another live window told the user of that conversation, as of the last refresh. */
+  /* key -> the latest time another live window told the user about that conversation, as of the last refresh. */
   let toldElsewhere = new Map();
   /* What this window last reported, and the keys it shows in front, sorted. */
   let ownItems = [], ownFront = [];
@@ -221,8 +220,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
 
   function publish(lists) {
     if (closed) return;
-    /* A conversation read as it stopped is no longer written, so the reply it stopped with is taken from the list here;
-       marked unread later, it would otherwise pass for a turn that ran between two reads. */
+    /* A stopped conversation with nothing unseen is left out of this window's file, so its reply time is noted here from
+       the list: marked unread later, it would otherwise look like a turn that ran between two reads. */
     for (const { sourceId, conversations } of lists || []) {
       for (const c of conversations || []) {
         if (!c || c.running === false || !c.sessionId) continue;
@@ -238,7 +237,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   const inFront = (it) => { try { return lookedAt(it) === true; } catch (_) { return false; } };
   const here = (it) => { try { return shownHere(it) === true; } catch (_) { return false; } };
 
-  /* Notes that the user has been told of `items`, or had them in front of them, in this window's file. */
+  /* Notes in this window's file that the user has been told about `items`, or already had them in front of them. */
   function settle(items) {
     if (!items.length) return;
     const t = now(), keys = new Set(items.map((it) => it.key));
@@ -247,8 +246,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     write();
   }
 
-  /* Shows a notification for each of `items` the user does not have in front of them in this window; all of them count
-     as told. */
+  /* Shows a notification for each of `items` that this window does not show and no focused window has in front; all of
+     them count as told. */
   function tell(items) {
     settle(items);
     const fresh = items.filter((it) => !looking.has(it.key) && !inFront(it) && !here(it));
@@ -259,7 +258,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     }
   }
 
-  /* What is shown is each conversation as the windows report it now, not as it was when it was first seen. */
+  /* A notification uses what the windows report when it is shown, which can name a tool no window knew of when the
+     change was first seen. */
   function flush() {
     timer = null;
     if (closed) return;
@@ -284,9 +284,9 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     }
   }
 
-  /* On getting the focus: what this window kept while it had none, less what moved on since and what another window
-     told the user of after it was kept. Windows read the shared files at their own moments, so a window that told of a
-     change can have done so up to a batch before this one saw it. */
+  /* On getting the focus, shows what this window kept while it had no focus, leaving out conversations that moved on
+     since and those another window told the user about after they were kept. Each window reads the shared files on its own timer, so a window that told
+     the user of a change can have done so up to a batch before this one saw it. */
   function replay() {
     if (!missed.size) return;
     const s = settings(), kept = [...missed.entries()];

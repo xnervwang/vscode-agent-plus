@@ -8,9 +8,9 @@
  * Plus's extension id and declares Codex Plus's five feature settings, because Agent Plus's token mode reads those
  * settings only from extensions it knows.
  *
- * Each conversation is a webview tab of its own. Opening a conversation's tab
- * marks its reply as seen, as Claude Code and Codex do. ui.js changes the conversations through the object activate()
- * returns, from the extension host, by way of the helper extension's control folder.
+ * Each conversation is a webview tab of its own. Opening a conversation's tab marks its reply as seen, as Claude Code
+ * and Codex do. ui.js changes the conversations by calling the object activate() returns, through the helper
+ * extension's control folder.
  *
  * The plans are read from AGENT_PLUS_UI_PLANS, one <session id>.json each, which ui.js writes.
  */
@@ -30,7 +30,7 @@ function activate(context) {
   const noticeChanged = new vscode.EventEmitter();
   context.subscriptions.push(changed, focused, noticeChanged);
 
-  /* sessionId -> conversation as listed; the order is the order they were added. */
+  /* sessionId -> conversation as listed, in the order they were added. */
   const list = new Map();
   /* sessionId -> its tab's panel; '' -> a tab with no conversation yet. */
   const panels = new Map();
@@ -107,7 +107,7 @@ function activate(context) {
   if (result.registration) context.subscriptions.push(result.registration);
   context.subscriptions.push(vscode.commands.registerCommand('agentPlusTest.installPlugin', () => { state.ran.push('installPlugin'); }));
 
-  /* A second source, for the rows Agent Plus draws with each agent's logo once more than one is registered. */
+  /* A second source: once two are registered, Agent Plus draws each row with its agent's logo. */
   let other = null;
   const otherList = new Map();
   const otherChanged = new vscode.EventEmitter();

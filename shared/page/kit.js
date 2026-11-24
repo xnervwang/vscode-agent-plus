@@ -161,18 +161,19 @@ var agentPlusKit = (function () {
 
   /*
    * Other conversations named in an agent's reply. mentionIndex() is built from the conversations the page knows of,
-   * once each time that list changes; mentions() finds them in one string; linkMentions() and linkMentionsTree() put
-   * the element make() returns in place of each, in a DOM subtree or in a HAST tree (the tree react-markdown renders).
+   * once each time that list changes. mentions() finds the conversations named in one string, and linkMentions() and
+   * linkMentionsTree() put the element make() returns in place of each, in a DOM subtree or in a HAST tree (the tree
+   * react-markdown renders).
    *
    * A conversation is named by its title inside the corner brackets U+300C and U+300D, by its title standing on its
    * own, by its whole session id, or by the first 8 characters of that id when no other conversation's id starts with
    * them. Titles are compared as they are shown, without the marks the extensions draw with them (src/title-marks.js).
    * The minimum lengths keep short titles from matching common words: a title in brackets needs 4 characters or 2 CJK
-   * characters, and one standing on its own a width of 10, a CJK character counting 2, and no letter or digit touching
-   * either end. An id that is part of a path, next to a slash or followed by a file extension, names a folder or a
-   * file rather than the conversation, and is left alone. Where two matches overlap the longer one is kept. Of several
-   * conversations with one title the most recently active is linked and the others are listed with it. The
-   * conversation the text belongs to is never linked, nor any other with its title.
+   * characters, and a title standing on its own needs a width of 10, in which a CJK character counts 2, with no letter
+   * or digit right before or after it. An id that is part of a path, next to a slash or followed by a file extension,
+   * names a folder or a file rather than the conversation, and is left alone. Where two matches overlap the longer one
+   * is kept. Of several conversations with one title the most recently active is linked and the others are listed with
+   * it. The conversation the text belongs to is never linked, nor any other with its title.
    */
   var LQ = '\u300C', RQ = '\u300D';
   var MARKS = /(?:\uD83D\uDC51|\uD83D\uDECE|\u2709)[\uFE0E\uFE0F]?/g;
@@ -181,8 +182,8 @@ var agentPlusKit = (function () {
   var SHORT = /[0-9a-fA-F]{8}/g;
   var ID_CHAR = /[0-9A-Za-z_\-\/\\]/;
   var EXTENSION = /^\.[0-9A-Za-z*]/;
-  /* The letters and digits an unbracketed title may not touch. CJK text is written without spaces, so a CJK character
-     next to the title does not stop it. */
+  /* Letters and digits, which may not stand right before or after an unbracketed title. CJK text is written without
+     spaces, so a CJK character next to the title does not stop a match. */
   var WORD_CHAR = /[0-9A-Za-z_\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF]/;
   var CJK = /^(?:[\u3041-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3\uF900-\uFAFF]|[\uD840-\uD87F][\uDC00-\uDFFF])$/;
   var WIDE = /^[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]$/;
@@ -203,7 +204,8 @@ var agentPlusKit = (function () {
   }
   var titleKey = function (t) { return withoutMarks(t).replace(/\s+/g, ' ').trim(); };
 
-  /* Its characters, a surrogate pair counting once; how many of them are CJK; and its width, a wide one counting 2. */
+  /* Counts its characters (a surrogate pair as one), how many of them are CJK, and its width, in which a wide character
+     counts 2. */
   function measure(s) {
     var out = { chars: 0, cjk: 0, width: 0 };
     for (var i = 0; i < s.length; i++) {
@@ -218,8 +220,8 @@ var agentPlusKit = (function () {
   }
 
   /*
-   * `known` is [{ sourceId, sessionId, title, lastActiveAt, label, cwd }], `label` naming the agent. `self` is the
-   * { sourceId, sessionId, title } of the conversation the text belongs to.
+   * `known` is [{ sourceId, sessionId, title, lastActiveAt, label, cwd }], where `label` is the agent's name. `self` is
+   * the { sourceId, sessionId, title } of the conversation the text belongs to.
    */
   function mentionIndex(known, self) {
     var me = self || {}, list = Array.isArray(known) ? known : [];
@@ -263,8 +265,8 @@ var agentPlusKit = (function () {
 
   /*
    * The non-overlapping ranges of `text` that name a conversation in `ix`, in order: { start, end, kind, sourceId,
-   * sessionId, title, label, cwd, lastActiveAt, others }, `kind` being 'id', 'short', 'quoted' or 'title' and `others`
-   * the conversations with the same title. With `opts.idsOnly` only ids are looked for, as in inline code.
+   * sessionId, title, label, cwd, lastActiveAt, others }. `kind` is 'id', 'short', 'quoted' or 'title', and `others`
+   * holds the conversations with the same title. With `opts.idsOnly` only ids are looked for, as in inline code.
    */
   function mentions(text, ix, opts) {
     var s = typeof text === 'string' ? text : '', o = opts || {}, found = [], m, c;
@@ -378,7 +380,7 @@ var agentPlusKit = (function () {
   };
 
   /* Skips code blocks (pre), links, form fields, editable text and what it made itself, so it can run again over the
-     same nodes. In inline code only ids are linked. Returns how many links it made. */
+     same nodes. Returns how many links it made. */
   function linkWith(tree, root, ix, make) {
     if (!root || !ix || !ix.size || typeof make !== 'function') return 0;
     var made = 0;

@@ -4,8 +4,8 @@
 
 'use strict';
 /*
- * Mentions of other conversations (shared/page/kit.js): which text names a conversation, and how the two walkers put a
- * link in its place, in a DOM subtree and in a HAST tree.
+ * The mention matcher of shared/page/kit.js: which text names another conversation, and how the two walkers put a link
+ * in its place, in a DOM subtree and in a HAST tree.
  */
 const path = require('path');
 
@@ -23,7 +23,7 @@ module.exports = async ({ eq, root }) => {
 
   {
     const inputs = ['\u{1F451} Steward', 'Plain ✉️', 'a \u{1F6CE}️ b  c', 'none', ' ✉︎ ', ''];
-    eq(inputs.map((t) => kit.withoutMarks(t)), inputs.map((t) => marks.withoutMarks(t)), 'marks come off a title as src/title-marks.js takes them off');
+    eq(inputs.map((t) => kit.withoutMarks(t)), inputs.map((t) => marks.withoutMarks(t)), 'marks are taken off a title the same way src/title-marks.js does');
   }
 
   eq([find(`${LQ}Docs${RQ} and ${LQ}Doc${RQ}`, [conv(1, 'Docs'), conv(2, 'Doc')]),
@@ -37,7 +37,7 @@ module.exports = async ({ eq, root }) => {
   eq([find(`看一下${BLACK}的进度`, [conv(6, BLACK)]), find('黑盒测试报告', [conv(7, '黑盒测试报')]),
     find('黑盒测试', [conv(8, '黑盒测试')])],
   [[[BLACK, 'title', '00000006']], [['黑盒测试报', 'title', '00000007']], []],
-  'a CJK character counts 2 towards that width, and CJK text around a title does not stop it, as CJK is written without spaces');
+  'a CJK character counts 2 towards that width, and CJK text right next to a title does not stop the match');
   eq([find('xFix redirect', [conv(5, 'Fix redirect')]), find('Fix redirects', [conv(5, 'Fix redirect')]), find('Fix redirect2', [conv(5, 'Fix redirect')]),
     find('(Fix redirect).', [conv(5, 'Fix redirect')]), find('caféFix redirect', [conv(5, 'Fix redirect')])],
   [[], [], [], [['Fix redirect', 'title', '00000005']], []],
@@ -62,7 +62,7 @@ module.exports = async ({ eq, root }) => {
 
   eq(find(`${LQ}Fix the login redirect${RQ}, Fix the login redirect page`, [conv(1, 'Fix the login'), conv(2, 'Fix the login redirect'), conv(3, 'login redirect page')]),
     [['Fix the login redirect', 'quoted', '00000002'], ['Fix the login redirect', 'title', '00000002']],
-    'where two titles overlap the longer one wins, and the one it covers does not match inside it');
+    'where two titles overlap, only the longer one matches');
 
   {
     const known = [conv(1, 'My own title here'), conv(2, 'My own title here'), conv(3, 'Somebody else'), Object.assign(conv(99, 'My own title here'))];
@@ -109,8 +109,8 @@ module.exports = async ({ eq, root }) => {
       '<pre><code>Fix the login redirect</code></pre>',
       `<p><a https://x>Fix the login redirect</a><strong>${LQ}<a open:00000002 *>Second one here</a>${RQ}</strong></p>`]],
     'in a HAST tree: a code block and a link are left alone, inline code gets only its id linked, and each link made is marked');
-    eq(kit.linkMentionsTree(tree, ix, make), 0, 'run again over the same tree it makes nothing more');
-    eq(kit.linkMentionsTree(el('pre', [t('Fix the login redirect')]), ix, make), 0, 'given a code block itself, it makes nothing');
+    eq(kit.linkMentionsTree(tree, ix, make), 0, 'run again over the same tree it adds no more links');
+    eq(kit.linkMentionsTree(el('pre', [t('Fix the login redirect')]), ix, make), 0, 'given a code block itself, it adds no link');
   }
 
   /* The DOM walker, over a stand-in document. */
@@ -156,7 +156,7 @@ module.exports = async ({ eq, root }) => {
       '<div>Fix the login redirect</div>', '<div><a open:00000002 *>Second one here</a></div>']],
     'in the DOM: a code block, a text field and editable text are left alone, inline code gets only its id linked');
     eq([kit.linkMentions(body, ix, make), kit.linkMentions(body.childNodes[0].childNodes[0], ix, make), kit.linkMentions(body.childNodes[1], ix, make)], [0, 0, 0],
-      'called again, on the same subtree, on a link it made or on a code block, it makes nothing');
+      'called again, on the same subtree, on a link it made or on a code block, it adds no link');
     const p = h('p', [h('code', [`${id(2)} and Second one here`])]);
     h('div', [p]);
     eq([kit.linkMentions(p.childNodes[0], ix, make), html(p)], [1, `<p><code><a open:00000002 *>${id(2)}</a> and Second one here</code></p>`],
