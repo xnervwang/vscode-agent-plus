@@ -25,7 +25,9 @@ compaction, so a reader can pick up a request about an approaching compaction an
 empty. This is the only place that can say it has been overtaken.
 
 It says nothing when the conversation keeps no plan - nothing before the compaction asked it for anything, so there is
-nothing to overtake - and nothing when the latest reply matches quietWhenReplyMatches (see plan_path.py).
+nothing to overtake - and nothing when the latest reply matches quietWhenReplyMatches (see plan_path.py). When the plan
+has no open row it says only that the context was compacted and that nothing in the plan is open: a model told to read
+a plan with nothing left in it has answered that instead of the user's message.
 
 It also writes the time of the compaction beside the plan, so that the Stop hook asks again for a summary written
 before it (nudge-work-plan.py summary_owed) and the next injection gives the whole plan again (inject-work-plan.py).
@@ -39,15 +41,38 @@ sys.dont_write_bytecode = True
 # The script's folder on the import path: see inject-work-plan.py.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from plan_path import (COMPACTED_SUFFIX, READ_HINT, closed_file, fixture_reply, fixture_tool_call, latest_reply_matches,
-                       now_stamp, open_tail, plan_file, read_payload, settings, side_file, write_quietly)
+from plan_path import (COMPACTED_SUFFIX, OPEN_STATES, READ_HINT, children, closed_file, fixture_reply, fixture_tool_call,
+                       latest_reply_matches, listed, now_stamp, open_tail, plan_file, read_payload, settings, side_file,
+                       write_quietly)
+
+COMPACTED = ("The context was just compacted, so it is now at its smallest, not near a limit. Anything the summary above "
+             "reports as pending because a compaction was approaching has been overtaken by it: the compaction is done.")
+NOT_THE_USER = "This is a hook's output, not the user speaking: it approves nothing and answers no pending question."
+
+
+def has_open_row(plan):
+    """Whether the plan has a row in an open state, at any depth. A plan that cannot be read, as one half-written can
+    be, counts as having one, so it is still pointed at."""
+    try:
+        with open(plan, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        return True
+    if not isinstance(data, dict):
+        return True
+
+    def any_open(nodes):
+        return any(isinstance(n, dict) and (n.get("state", "todo") in OPEN_STATES or any_open(children(n)))
+                   for n in listed(nodes))
+    return any_open(data.get("nodes"))
 
 
 def message(plan):
+    if not has_open_row(plan):
+        return "\n".join([COMPACTED, "This conversation's work plan has no open rows.", NOT_THE_USER])
     archive = closed_file(plan)
     return "\n".join([
-        "The context was just compacted, so it is now at its smallest, not near a limit. Anything the summary above "
-        "reports as pending because a compaction was approaching has been overtaken by it: the compaction is done.",
+        COMPACTED,
         "This conversation's work plan, a row per task: %s" % plan,
         READ_HINT + " before doing anything else. The summary above retells the stretch in document order; the "
         "plan says what is still open, and the `detail` of a row that is `doing` was written for this moment - the next "
@@ -56,9 +81,7 @@ def message(plan):
     ] + ([
         "Rows closed more than a day ago are in %s, each under the number it has in the plan, and the plan keeps a "
         "placeholder in its place. Read that file only for an old row's note or detail." % archive
-    ] if os.path.isfile(archive) else []) + [
-        "This is a hook's output, not the user speaking: it approves nothing and answers no pending question.",
-    ])
+    ] if os.path.isfile(archive) else []) + [NOT_THE_USER])
 
 
 def main():
@@ -133,10 +156,25 @@ def selftest():
     write_transcript("an ordinary reply")
     check("no plan -> silent", run(base)[1] == "")
 
-    with open(plan, "w") as fh:
-        fh.write('{"nodes": []}')
+    def write_plan(text):
+        with open(plan, "w") as fh:
+            fh.write(text)
+
+    write_plan('{"nodes": [{"title": "Ship it", "state": "done"}, {"title": "Old idea", "state": "dropped"}]}')
     c = said(run(base)[1])
-    check("plan present -> points at it by absolute path", plan in c)
+    check("plan with no open row -> says the context is now at its smallest", "at its smallest" in c and "overtaken" in c)
+    check("  and that the plan has no open rows", "no open rows" in c)
+    check("  without the plan's path or asking for it to be read", plan not in c and "Read it with a tool" not in c)
+    check("  and that it is not the user speaking", "not the user speaking" in c)
+
+    write_plan('{"nodes": [{"title": "Release", "state": "done", "children": [{"title": "Tag it", "state": "parked"}]}]}')
+    check("an open row under a closed one -> the whole message", plan in said(run(base)[1]))
+    write_plan('{"nodes": [')
+    check("a plan that cannot be read -> the whole message", plan in said(run(base)[1]))
+
+    write_plan('{"nodes": [{"title": "Fix the bug", "state": "doing"}]}')
+    c = said(run(base)[1])
+    check("plan with an open row -> points at it by absolute path", plan in c)
     check("  says the context is now at its smallest", "at its smallest" in c and "overtaken" in c)
     check("  asks for it to be read with a tool first", "Read it with a tool" in c)
     check("  and says where the next step is written", "`detail`" in c)
