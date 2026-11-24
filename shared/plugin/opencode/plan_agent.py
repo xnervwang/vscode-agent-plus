@@ -34,8 +34,8 @@ FALLBACK = os.path.join(os.environ.get("OPENCODE_PLUS_HOME") or os.path.join(os.
 
 EXTRA_DEFAULTS = {}
 
-# An OpenCode session id: "ses_" and 26 letters and digits, on OpenCode 1 and 2 alike. Nothing else the hooks keep in
-# the plans folder starts with "ses_".
+# An OpenCode session id: "ses_" and letters and digits, 26 of them on OpenCode 1 and 2 alike; the range leaves room for
+# another length. Nothing else the hooks keep in the plans folder starts with "ses_".
 SESSION_ID = r"ses_[0-9A-Za-z]{8,64}"
 
 # The field of a hook's input that names the turn: the id of the user message that began it.
