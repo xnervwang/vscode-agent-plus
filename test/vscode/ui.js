@@ -850,8 +850,6 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     QPLANS();
   });
 
-  /* What an extension that draws a plan bar above its agent's input box gets: the summary, its change event, and the two
-     commands the bar's clicks run. */
   await step('plan-summary', async () => {
     needs('plan-follows-tab');
     QPLANS();

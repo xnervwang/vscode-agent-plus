@@ -5,8 +5,8 @@
 'use strict';
 /*
  * The interface's planSummary() and onDidChangePlanSummary (src/plan-summary.js, src/views.js, src/host.js), for the
- * plan bar a feature extension draws above its agent's input box, and the two commands the bar's clicks run:
- * agentPlus.showWorkPlanOf and agentPlus.answerQuestionOf.
+ * plan bar a feature extension draws above its agent's input box, and agentPlus.showWorkPlanOf and
+ * agentPlus.answerQuestionOf, which run when the bar is clicked.
  */
 const fs = require('fs');
 const path = require('path');
@@ -68,7 +68,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([s.total, s.done, s.allDone, s.current], [0, 0, true, null], 'a plan whose rows were all dropped has none open: all done, with nothing counted');
   }
 
-  /* A plan keeps its closed rows; those archived beside it are left out of every figure. */
+  /* Archived rows, read back from closed/ or left as placeholders. */
   {
     const dir = tmp('archived'), file = path.join(dir, 'long.json');
     const archived = Array.from({ length: 462 }, (_, i) => ({ title: 'Closed long ago ' + (i + 1), state: i % 10 ? 'done' : 'dropped', archived: true }));
@@ -167,7 +167,6 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   try { b.api.onDidChangePlanSummary(null); } catch (_) { threw = true; }
   eq(threw, true, 'a listener that is not a function is refused');
 
-  /* The two commands a bar's clicks run. */
   write(claudeDir, C, { nodes: [row('Export', 'doing'), row('Which month', 'waiting', { waitingOn: 'user', question: 'This month or last month?' }),
     row('Which format', 'discussing', { waitingOn: 'user', question: 'CSV or JSON?' })] });
   write(codexDir, X, { nodes: [row('Refunds', 'waiting', { waitingOn: 'user', question: 'Skip negative amounts?' })] });

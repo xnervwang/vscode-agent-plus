@@ -135,7 +135,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
       row(p, 'set', '6', '--note', 'touched');
       const after = readPlanAt(p.file, SID);
       before.nodes[5].note = 'touched';
-      /* Rows read back from the archive say so (`archived`), for the plan bar's figures; everything else is as before. */
+      /* Rows read back from the archive carry `archived`, for the plan bar's figures; apart from that flag they match
+         the rows read before the move. */
       const marked = [];
       const unmark = (nodes, prefix = '') => nodes.map((n, i) => {
         if (n.archived) marked.push(prefix + (i + 1));

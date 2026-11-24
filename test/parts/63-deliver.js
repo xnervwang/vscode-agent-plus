@@ -6,8 +6,7 @@
 /*
  * deliver() and planPathOf() on the interface (src/host.js, src/views.js, src/answers.js): a dependent extension's
  * message goes through the answers folder to whichever window can type it into the conversation, and its outcome comes
- * back to the caller rather than to the Answer view or the clipboard. Also the plan file of another source's
- * conversation, as that source in this window gives it.
+ * back to the caller.
  */
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +16,6 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const answers = require(path.join(root, 'src', 'answers.js'));
   const viewOptions = { listWaitMs: 40, slowMs: 1e9, refreshMs: 1e9, answerPollMs: 25 };
   const until = async (fn) => { for (let i = 0; i < 150 && !fn(); i++) await wait(20); };
-  /* A call that never settles fails its check rather than holding up the whole suite. */
   const within = (p, ms = 5000) => Promise.race([p, wait(ms).then(() => 'still waiting')]);
   const files = (dir) => { try { return fs.readdirSync(dir).filter((n) => !n.endsWith('.tmp')).sort(); } catch (_) { return []; } };
   const start = (over = {}) => {
@@ -62,7 +60,6 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([twice.map((x) => x.outcome), got.slice(-2).map((g) => g[1]), got[got.length - 1][2] !== got[got.length - 2][2]],
       [['notReceived', 'notReceived'], ['same', 'same'], true], 'the same text sent twice is two messages, each with its own delivery id');
 
-    /* ── Arguments ── */
     const before = got.length;
     const thrower = { get sourceId() { throw new Error('no'); }, sessionId: 'ses_A', text: 'x' };
     const bad = await within(Promise.all([
@@ -141,8 +138,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     } finally { fs.watch = watch; }
   }
 
-  /* An answer typed in the Answer view and still on its way when the window closes is now reported to finish() too;
-     the view hears nothing of it and the clipboard is left alone, as before. */
+  /* An answer typed in the Answer view and still on its way when the window closes is reported to finish() as well. */
   {
     const b = start();
     const ws = tmp('ws');

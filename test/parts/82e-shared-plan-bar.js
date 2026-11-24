@@ -4,9 +4,8 @@
 
 'use strict';
 /*
- * shared/page/plan-bar.js, the plan bar Claude Code Plus and Codex Plus draw above their agent's input box: what it
- * draws for each state of a plan, its compact form below the width both extensions use, the list of open rows on hover,
- * and the two clicks. Run under Node, where it is also a module, against a stand-in document.
+ * shared/page/plan-bar.js, the plan bar Claude Code Plus and Codex Plus draw above their agent's input box, run under
+ * Node, where it is also a module, against a stand-in document.
  */
 const fs = require('fs');
 const path = require('path');
@@ -112,7 +111,6 @@ module.exports = async ({ eq, root, wait }) => {
     'the layout does not change with the plan: a track of one width whose segments are at least 2 px, a count in figures of one width, one line of one height, and a title that ends in an ellipsis');
   }
 
-  /* Drawn into a document. */
   const doc = stand();
   const clicks = [];
   const b = bar.create(doc, { onOpen: () => clicks.push('open'), onAnswer: () => clicks.push('answer'), css: 'margin:0 0 8px' });

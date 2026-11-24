@@ -16,7 +16,7 @@ const path = require('path');
 const AGENTS = ['claude', 'codex', 'opencode'];
 /* Hooks not every agent's part ships: file name -> the agents whose part has it. */
 const ONLY = {};
-/* A session id of each agent's own shape. */
+/* A session id in each agent's format. */
 const SIDS = { claude: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', codex: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
   opencode: 'ses_df3c28ab2ffe0TYFbXAnoBpqy6' };
 
@@ -84,8 +84,6 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
       else bad(`${hook} --selftest with ${agent}: ${(r.stdout + r.stderr).split('\n').filter((l) => /FAIL|Error/.test(l)).slice(0, 3).join(' | ') || r.status}`);
     }
   }
-  /* Every agent keeps a folder of a conversation's own, so the image self-test tells the model and checks the folder
-     it names for each of them, rather than only that nothing is said. */
   for (const agent of AGENTS) {
     const lines = imageTests[agent] || [];
     eq(['PASS with the setting on, in the panel, the first message is told', "PASS   naming the conversation's own folder"]
@@ -93,8 +91,8 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
     `with ${agent}'s plan_agent.py the image note is said in the panel and names the conversation's own folder`);
   }
 
-  /* OpenCode's folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>, and none for an id not of
-     OpenCode's shape, so that a name cannot lead out of it. */
+  /* OpenCode's folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>, and none for an id of another
+     shape, such as one with ../ in it. */
   {
     const probe = `
 import json, sys
@@ -148,8 +146,7 @@ print(json.dumps([A.scratch_dir({"session_id": s} if s is not None else {}) for 
     `with ${agent}'s inputs the plan is injected, the reminder speaks, and the Stop hook answers in ${agent}'s shape`);
   }
 
-  /* The shape of a session id is the agent's (plan_agent.SESSION_ID): an agent whose ids are not hex, as OpenCode's
-     ses_ ids are, gives its own, and it stays narrow enough that the other files in the data directory are not plans. */
+  /* plan_agent.SESSION_ID has to stay narrow enough that no other file in the data directory passes for a plan. */
   {
     const probe = `
 import json, sys
