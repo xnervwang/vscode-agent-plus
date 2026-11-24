@@ -117,9 +117,8 @@ function readAll(dir, now, kept = null) {
   const merged = new Map(), live = new Set(), front = new Map(), settled = new Map();
   let names = [];
   try { names = fs.readdirSync(dir); } catch (_) { return { merged, live, front, settled }; }
-  /* `kept` holds each window's file as last read whole. A read that fails, as one can on Windows while that window
-     renames its new copy into place, uses it instead, so the window's conversations do not drop out of the union for
-     that one read; how old it is is still judged by the time the window wrote into it. */
+  /* On Windows a read can fail while that window renames its new copy into place; that read uses the kept copy
+     instead, so the window's conversations stay in the union. */
   if (kept) for (const n of [...kept.keys()]) if (!names.includes(n)) kept.delete(n);
   for (const n of names) {
     if (!WINDOW.test(n)) continue;
@@ -182,7 +181,6 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   const own = path.join(dir, ownName);
   const startedAt = now();
   let written = '', writtenAt = 0, union = null, timer = null, closed = false, hadFocus = false;
-  /* file name -> that window's file as last read whole (readAll). */
   const lastRead = new Map();
   /* key -> { kind, queuedAt }: what this window would have shown while it did not have the focus. */
   const missed = new Map();
