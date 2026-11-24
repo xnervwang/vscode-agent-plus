@@ -8,10 +8,10 @@
  * The marks Claude Code Plus and Codex Plus show with a conversation's title, after it: the steward crown (Claude Code
  * Plus only), then the envelope for a reply not read yet, and the bell older builds put after a steward's title. They are drawn, never stored: a title
  * typed in a rename box, written by an older build, or set by Claude Code is stripped of every one of them wherever it
- * stands, and then shown with exactly one crown after the title for a steward and exactly one envelope last while a reply
- * is unread. No dependency on Claude Code or VS Code; withoutEnvelope() and withEnvelope() serve an agent that has no
- * steward. The envelope drawn is 📩 (src/envelope.js); the plain envelope ✉ that earlier builds drew, in its colour and
- * text forms, is taken off as well, since titles saved then still carry it. The one to draw is passed in.
+ * stands, and then shown with exactly one crown after the title for a steward and exactly one envelope last while a
+ * reply is unread. No dependency on Claude Code or VS Code; withoutEnvelope() and withEnvelope() serve an agent that
+ * has no steward. The envelope to draw is passed in (src/envelope.js). The plain envelope that earlier builds drew is
+ * taken off in both its forms as well, since titles saved then still carry it.
  */
 
 const CROWN = '\u{1F451}';
@@ -45,7 +45,6 @@ function withEnvelope(title, unseen, envelope = ENVELOPE) {
   return unseen ? (t ? t + ' ' + envelope : envelope) : t;
 }
 
-/** `title`, stripped of every mark, with one crown after it for a steward and one envelope last when `unseen`. */
 function withMarks(title, { steward = false, unseen = false, envelope = ENVELOPE } = {}) {
   const t = withoutMarks(title);
   return withEnvelope(steward ? (t ? t + ' ' + CROWN : CROWN) : t, unseen, envelope);

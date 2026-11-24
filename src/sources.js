@@ -21,9 +21,9 @@ const PROTOCOL = 1;
 const ACCEPTS = [1];
 /* With 'allConversations' the interface has allConversations() and onDidChangeAllConversations (docs/protocol.md). With
    'waitingFor' a conversation's waitingFor is read and named in the notifications, and a source can call
-   announcesWaits(). With 'planSummary' it has planSummary() and onDidChangePlanSummary, and the commands
-   agentPlus.showWorkPlanOf and agentPlus.answerQuestionOf, for the plan bar a feature extension draws. With 'deliver'
-   it has deliver(), and with 'planPathOf' it has planPathOf(). */
+   announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
+   and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
+   methods of those names. */
 const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];

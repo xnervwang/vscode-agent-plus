@@ -4,28 +4,26 @@
 
 'use strict';
 /*
- * A conversation's plan in the few figures a plan bar draws above an agent's input box (planSummary in
- * docs/protocol.md, shared/page/plan-bar.js): how many rows are done of how many, the count in each state, the row to
- * show as the current one, how many questions wait for the user, and the rows still open.
+ * The figures a plan bar draws above an agent's input box, from one conversation's plan (planSummary in
+ * docs/protocol.md, shared/page/plan-bar.js).
  *
  * It reads a plan as src/workplan.js parsed it and numbers rows as the work plan view does: by their place in the file,
- * 1, 2.1.1. A plan keeps every row it ever had, so a long conversation's plan holds hundreds of closed rows; counted
- * against those, a bar would stay all but full whatever the conversation does now. So the rows moved out to the archive
- * beside the plan, closed more than a day ago (`archived` in src/workplan.js), are left out with everything under them,
- * and the figures are those of the rows still open and the ones closed since. No editor API here: the tests load it
- * directly.
+ * 1, 2.1.1. A plan keeps a row or a placeholder for everything it was ever given, so a long conversation's plan holds
+ * hundreds of closed rows; counted against those, a bar would stay all but full whatever the conversation does now. So
+ * the rows archived beside the plan, closed more than a day ago (`archived` in src/workplan.js), are left out with
+ * everything under them. No editor API here: the tests load it directly.
  */
 const { planQuestions } = require('./folders');
 
-/* The states a bar counts, in the order it draws their segments. `dropped` is not counted, and neither is a state this
-   build does not know (docs/protocol.md, Plan files). */
+/* The states a bar counts. `dropped` is not counted, and neither is a state this build does not know (docs/protocol.md,
+   Plan files). */
 const COUNTED = ['done', 'doing', 'waiting', 'discussing', 'todo', 'parked'];
 /* How many open rows the summary lists, for the bar's hover. */
 const MAX_OPEN = 30;
 const MAX_TITLE = 200;
 
-/* Every row in file order that is not archived, with its number and its depth: 1 for a row at the top, 2 for its
-   children, and so on. An archived row's place still counts for the numbers after it. */
+/* Every row in file order that is neither archived nor under an archived row, with its number and its depth (1 at the
+   top). An archived row's place still counts for the numbers after it. */
 function walk(nodes, prefix = '', depth = 1, out = []) {
   (nodes || []).forEach((n, i) => {
     const number = (prefix ? prefix + '.' : '') + (i + 1);
@@ -39,14 +37,12 @@ function walk(nodes, prefix = '', depth = 1, out = []) {
 const row = (r, dim) => ({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), state: r.n.state, dim: !!dim });
 
 /*
- * The summary of `plan` (readPlanAt() in src/workplan.js), or null when there is nothing for a bar to draw: no plan, a
- * plan that does not parse or has no rows, or one whose rows left after the archived ones are neither counted nor done
- * (in a state this version does not know).
+ * The summary of `plan`, or null when there is nothing for a bar to draw, such as no plan or a plan that does not parse
+ * or has no rows.
  *
- * The current row is the deepest `doing` row, the earlier in the file at equal depth; without one, the first `waiting`
- * row, then the first `discussing` and then the first `todo`. With only parked rows left it is the first parked row,
- * marked `dim`. With no row open there is none, and `allDone` is true, even when every row is archived or dropped and
- * `total` is 0.
+ * The current row is the deepest `doing` row, the earlier in the file at equal depth; without one, the first row in
+ * `waiting`, `discussing` or `todo`, tried in that order. With only parked rows left it is the first of them, marked
+ * `dim`.
  */
 function summarize(plan) {
   if (!plan || plan.error || !Array.isArray(plan.nodes) || !plan.nodes.length) return null;

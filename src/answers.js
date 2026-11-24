@@ -46,7 +46,6 @@ const KEEP_MS = 3600e3;
 const LATE_MS = 5000;
 const NAME = /^[0-9a-z]+-[0-9a-f]{8}$/;
 const MAX_REASON = 200;
-/* The longest message deliver() sends: the record sits in a folder every window reads. */
 const MAX_MESSAGE = 20000;
 
 const file = (dir, id, ext) => path.join(dir, id + ext);
@@ -243,10 +242,9 @@ class Courier {
     for (const t of this.checks) this.cancel(t);
     this.handing.clear();
     this.checks.clear();
-    /* A window closing takes back the answers it sent that no window has taken: nobody is left to hear the outcome, so
-       one delivered after this would arrive with nothing on screen to say it had. One already taken is left alone, the
-       window that took it is still working on it. Each is reported with `closing`, so a caller waiting on deliver()
-       hears an outcome; a view has nothing left to show it in. */
+    /* A window closing takes back the answers it sent that no window has taken: the Answer view is going, so one
+       delivered after this would arrive with nothing on screen to say it had. One already taken is left alone, the
+       window that took it is still working on it. Each is still reported, with `closing` set. */
     for (const [id, o] of [...this.outgoing]) {
       this.outgoing.delete(id);
       const back = !taken(this.dir, id) && withdraw(this.dir, id);
@@ -276,8 +274,8 @@ function throughSources(find) {
 }
 
 /*
- * The outcome of a deliver() message as its caller gets it: both notReceived and uncertain say why. A taker's result
- * file keeps no reason for uncertain (normalize), so that one is said here.
+ * A taker's result file keeps no reason for uncertain (normalize), so this function supplies one when the record has
+ * none.
  */
 function deliveryOutcome(r) {
   const n = normalize(r), raw = sources.get(r, 'reason');

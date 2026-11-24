@@ -49,8 +49,7 @@ const WRITING_MS = 2000;
 const LIST_WAIT_MS = 3000;
 const SLOW_MS = 20000;
 const ZONE_KEY = 'agentPlus.timeZone';
-/* How many conversations' plan summaries are followed for changes (planSummary in docs/protocol.md): the ones asked for
-   most recently. A window shows a few conversations at a time, so this is far above what is ever in use. */
+/* A window shows a few conversations at a time, so the limit is far above what is ever in use. */
 const MAX_SUMMARIES = 200;
 const EMPTY_LIST = { list: [], problem: '' };
 const NO_CONVERSATIONS = { running: [], stopped: [], asks: 0 };
@@ -449,7 +448,7 @@ function create(host, opts = {}) {
   };
 
   /* The question named `key` as the latest list has it, or null when no row is asking it any more. A question opened
-     from a plan bar for a conversation the list leaves out, one outside this window's folders, is read from its plan. */
+     from a plan bar for a conversation the list leaves out is read from its plan. */
   const questionNow = (data, key) => {
     for (const c of data.running.concat(data.stopped)) {
       for (const q of c.questions) if (questionKey(c.sourceId, c.sessionId, q.row) === key) return questionOf(c, q);
@@ -462,11 +461,10 @@ function create(host, opts = {}) {
   };
 
   /*
-   * One conversation in the shape the Conversations view gives it, with its questions and `doing` rows, put together
-   * from its plan as it is now and from what its source last listed: a plan bar counts the questions of the plan as it
-   * is now, and the latest pass of the list may be older than that, or leave the conversation out for being outside this
-   * window's folders. A conversation its source has not listed counts as not running. Null when the source is not
-   * registered.
+   * One conversation in the shape the Conversations view gives it, with its questions and `doing` rows, from its plan
+   * as it is now and its source's last list. The list alone will not do for a plan bar: it may be older than the plan,
+   * or leave the conversation out for being outside this window's folders. A conversation its source has not listed
+   * counts as not running. Null when the source is not registered.
    */
   const asideQuestions = new Map();
   const listedNow = (sourceId, sessionId) => {
@@ -514,12 +512,11 @@ function create(host, opts = {}) {
   };
 
   /*
-   * ── Plan summaries, for the plan bars a feature extension draws (planSummary in docs/protocol.md) ──
+   * ── Plan summaries (planSummary in docs/protocol.md) ──
    *
-   * Each conversation asked about is remembered with the summary it was given, the most recent MAX_SUMMARIES of them.
-   * Whenever the plans are read again (a plan folder changed, the tick, a source registered or went), each remembered
-   * one is worked out again from the same cached parse, and a listener hears { sourceId, sessionId } for each that
-   * changed. Nothing is worked out while nothing listens.
+   * Whenever the plans are read again (a plan folder changed, the tick, a source registered or went) and something
+   * listens, each summary asked for is worked out again from the same cached parse, and a listener hears
+   * { sourceId, sessionId } for each that changed.
    */
   const summaryBus = host.planSummaries || { wanted: () => false, fire() {} };
   const summaries = new Map();
@@ -645,8 +642,8 @@ function create(host, opts = {}) {
     }
     try { courier.pump(); } catch (e) { say('answer: ' + ((e && e.message) || e)); }
   };
-  /* Also while a deliver() call waits: its outcome is read on the same interval, so a watcher that stopped working
-     cannot hold it back until the last check. */
+  /* The interval also runs while a deliver() call waits, so that a watcher that stopped working cannot hold its
+     outcome back until the last check. */
   const tuneAnswerPoll = () => {
     const want = !!courier && !closing && (mayDeliver() || deliveries.size > 0);
     if (want && !answersPoll) answersPoll = setInterval(pollAnswers, answerPollMs);
@@ -680,9 +677,7 @@ function create(host, opts = {}) {
     return courier;
   };
   /*
-   * A message from a dependent extension into a conversation (deliver in docs/protocol.md). It goes through the answers
-   * folder as an answer does, with no row, and its outcome goes to the caller: nothing in the Answer view, nothing on
-   * the clipboard. Never rejects.
+   * A message from a dependent extension into a conversation (deliver in docs/protocol.md). Never rejects.
    */
   const deliver = (target) => new Promise((resolve) => {
     const end = (outcome, reason) => resolve(Object.freeze({ outcome, reason: reason || '' }));
@@ -820,7 +815,7 @@ function create(host, opts = {}) {
   const detach = (entry) => changed({ removed: entry.id, entry });
 
   /* ── Commands, called through src/host.js ── */
-  /* { sourceId, sessionId } as a plan bar's command passes it, or null when either id is unusable. */
+  /* The two ids of a plan bar command's argument, or null when either is unusable. */
   const targetOf = (v) => {
     const sourceId = sources.get(v, 'sourceId'), sessionId = sources.get(v, 'sessionId');
     return sources.usableId(sourceId) && sources.usableId(sessionId) ? { sourceId, sessionId } : null;
@@ -874,10 +869,8 @@ function create(host, opts = {}) {
       const it = needs.items().find((x) => x.sourceId === sourceId && x.sessionId === sessionId) || {};
       await openAnywhere({ sourceId, sessionId, title: it.title, cwd: it.cwd });
     },
-    /*
-     * A click on a plan bar (planSummary in docs/protocol.md). The work plan view moves to that conversation, as a focus
-     * report would move it, and comes into view; the next tab change moves it on as usual.
-     */
+    /* The work plan view moves to that conversation, as a focus report would move it, and comes into view; the next tab
+       change moves it on as usual. */
     showWorkPlanOf: async (target) => {
       const t = targetOf(target);
       if (!t || !registry.get(t.sourceId)) return;
@@ -885,13 +878,13 @@ function create(host, opts = {}) {
       if (focus.set(t.sourceId, t.sessionId)) showFocus();
       await vscode.commands.executeCommand('agentPlus.workPlan.focus');
     },
-    /* A click on the red part of a plan bar: the first question of that conversation's plan, in plan order as the
-       Conversations view lists them, in the Answer view. */
+    /* For the red part of a plan bar: shows the first question of that conversation's plan in the Answer view, in the
+       order the Conversations view lists them. */
     answerQuestionOf: async (target) => {
       const t = targetOf(target);
       if (!t) return;
-      /* A conversation its source did not list last time, such as one opened since, is asked about once more, for as
-         long as a pass of the Conversations view waits for a list, before it is taken as not running and untitled. */
+      /* The source's last list may be older than the conversation. Ask the source once more, waiting as long as a pass
+         of the Conversations view waits for a list. */
       const entry = registry.entry(t.sourceId);
       if (entry && !listedBy(entry, t.sessionId)) {
         await Promise.race([ask(entry), new Promise((r) => after(r, listWait))]).catch(() => {});
@@ -955,9 +948,7 @@ function create(host, opts = {}) {
     setActive(on) { active = !!on; paintConversations(); },
     /* A dependent started listening for every conversation, so a pass runs at once. */
     listSoon() { askAll(); convSoon(); },
-    /* The plan summary of one conversation, for a plan bar; remembered so that its changes are heard. */
     planSummary: (sourceId, sessionId) => summaryFor(sourceId, sessionId),
-    /* A dependent extension's message into a conversation, through the answers folder. */
     deliver,
     /* Whether this window tells the user when a conversation starts to wait. While it does, a source can leave out its
        agent's own notice of the wait. */

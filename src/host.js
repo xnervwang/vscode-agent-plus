@@ -104,9 +104,9 @@ function start(context, log, opts = {}) {
   };
 
   /*
-   * The plan summaries of the conversations a dependent extension draws a plan bar for (planSummary in
-   * docs/protocol.md). The views work them out from the plans they read anyway and fire a change for one conversation at
-   * a time, but only while something listens.
+   * planSummary() and onDidChangePlanSummary, for a dependent extension that draws a plan bar (docs/protocol.md). The
+   * views work the summaries out from the plans they read anyway, and fire one change per conversation, only while
+   * something listens.
    */
   const summaryChanges = sources.emitter();
   let summaryListeners = 0;
@@ -120,17 +120,14 @@ function start(context, log, opts = {}) {
     if (Array.isArray(disposables)) disposables.push(sub);
     return sub;
   };
-  /* planSummary(sourceId, sessionId), or planSummary({ sourceId, sessionId }). */
   const summaryOf = (a, b) => {
     const one = a && typeof a === 'object';
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
     try { return views && typeof views.planSummary === 'function' ? views.planSummary(sourceId, sessionId) : null; } catch (e) { say(`plan summary: ${(e && e.message) || e}`); return null; }
   };
 
-  /*
-   * A message from a dependent extension into a conversation (deliver in docs/protocol.md): deliver({ sourceId,
-   * sessionId, text }) resolves to a frozen { outcome, reason } and never rejects.
-   */
+  /* deliver({ sourceId, sessionId, text }) resolves to a frozen { outcome, reason } and never rejects
+     (docs/protocol.md). */
   const deliverTo = (target) => {
     const no = (reason) => Promise.resolve(Object.freeze({ outcome: 'notReceived', reason }));
     if (closing) return no('this window is closing');
@@ -140,8 +137,7 @@ function start(context, log, opts = {}) {
       return Promise.resolve(views.deliver(target)).catch((e) => Object.freeze({ outcome: 'notReceived', reason: String((e && e.message) || e).slice(0, 200) }));
     } catch (e) { return no(String((e && e.message) || e).slice(0, 200)); }
   };
-  /* planPathOf(sourceId, sessionId), or planPathOf({ sourceId, sessionId }): the absolute path the source registered in
-     this window gives for that conversation's plan, or ''. */
+  /* Asks only a source registered in this window; anything but an absolute path comes back as ''. */
   const planPathOf = (a, b) => {
     const one = a && typeof a === 'object';
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
@@ -323,13 +319,13 @@ function start(context, log, opts = {}) {
     },
     allConversations() { return everyone.list; },
     onDidChangeAllConversations: listenEveryone,
-    /* With 'planSummary': one conversation's plan in the figures a plan bar draws, or null when it has none to draw. */
+    /* With 'planSummary': the figures for one conversation's plan bar, or null for no bar. */
     planSummary: summaryOf,
     /* With 'planSummary': vscode.Event<{ sourceId, sessionId }>, a conversation whose summary has changed. */
     onDidChangePlanSummary: listenSummaries,
-    /* With 'deliver': a message from a dependent extension into a conversation, through the answers folder. */
+    /* With 'deliver'. */
     deliver: deliverTo,
-    /* With 'planPathOf': the plan file of a conversation, from its source in this window, or ''. */
+    /* With 'planPathOf'. */
     planPathOf,
     /* Whether this window shows its own notification when a conversation starts waiting for the user (feature
        'waitingFor'). */

@@ -30,8 +30,8 @@ const ASK_TEXT = 'Some features add text to the agent\'s context and use tokens.
 /* Beside the Conversations entry, which has 100. */
 const PRIORITY = 99;
 
-/* An extension's marketplace name; one not offered when this extension is alone goes by its manifest's displayName, from
-   `seen`, the dependents found installed. */
+/* The name to show for an extension: its marketplace name when it is in KNOWN, else the displayName from its manifest
+   (`seen` holds the dependents found installed), else its id. */
 const nameOf = (id, seen = []) => (KNOWN.find((k) => k.id === id) || seen.find((d) => d.id === id) || {}).name || id;
 
 /* The four items of the status bar's list. The tick for the mode in effect goes in the description: an icon before the

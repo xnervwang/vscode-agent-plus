@@ -36,7 +36,7 @@
  * whose rows each carry `row`, their number in the plan. The plan keeps a placeholder in each one's place, with only a
  * short title, the state and `"archived": true`, so no number changes. The rows are read from both files and put back
  * where their placeholders are; a placeholder whose row is not in the archive is drawn as it is. Either way the row
- * read keeps `archived: true`, for a reader that leaves out what was closed long ago (src/plan-summary.js).
+ * read keeps `archived: true`, so that src/plan-summary.js can leave out what was closed long ago.
  *
  * A child is something that has to be finished before its parent can be. Nesting means exactly that and nothing else.
  *
