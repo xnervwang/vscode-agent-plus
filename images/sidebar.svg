@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-label="Work plan">
-  <path d="M2.9 6.25L5.5 8.7L10.1 3.9" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M12.15 6.35H21M12.15 12.7H21M12.15 19.05H21" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-  <circle cx="6.45" cy="12.7" r="1.4" fill="currentColor"/>
-  <circle cx="6.45" cy="19.05" r="1.4" fill="currentColor"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6.4,2.2 H14.4 L19.8,7.6 V19.9 Q19.8,21.8 17.9,21.8 H6.4 Q4.4,21.8 4.4,19.9 V4.2 Q4.4,2.2 6.4,2.2 Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M14.4,2.4 V6.0 Q14.4,7.4 15.8,7.4 H19.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M7.2,11.2 L8.5,12.5 L10.7,10.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="12.6" y1="11.2" x2="16.8" y2="11.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="12.6" y1="16.2" x2="16.8" y2="16.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="8.7" cy="16.2" r="1.05" fill="currentColor"/></svg>
