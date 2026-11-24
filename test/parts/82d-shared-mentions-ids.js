@@ -3,11 +3,7 @@
 // All rights reserved.
 
 'use strict';
-/*
- * Session ids that are not UUIDs, such as OpenCode's ses_ ids, in the mention matcher of shared/page/kit.js: which of
- * them the list given to mentionIndex() makes it look for, where a whole one is linked, and that a list of UUIDs alone
- * gives the same links as before.
- */
+/* Tests for session ids that are not UUIDs in the mention matcher. */
 const path = require('path');
 
 module.exports = async ({ eq, root }) => {
