@@ -176,7 +176,7 @@ var agentPlusKit = (function () {
    * it. The conversation the text belongs to is never linked, nor any other with its title.
    */
   var LQ = '\u300C', RQ = '\u300D';
-  var MARKS = /(?:\uD83D\uDC51|\uD83D\uDECE|\u2709)[\uFE0E\uFE0F]?/g;
+  var MARKS = /(?:\uD83D\uDC51|\uD83D\uDECE|\uD83D\uDCE9|\u2709)[\uFE0E\uFE0F]?/g;
   var PLACEHOLDERS = { '(untitled)': 1, 'untitled': 1, 'new chat': 1, 'new session': 1, 'new conversation': 1 };
   var UUID = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
   var SHORT = /[0-9a-fA-F]{8}/g;

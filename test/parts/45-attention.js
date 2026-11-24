@@ -210,11 +210,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   fs.writeFileSync(path.join(tdir, 'n1-00000000.json'), JSON.stringify({ format: 1, at: clock, front: [], items: [
     item('s', 'Steward \u{1F6CE}\uFE0F', { steward: true }), item('o', '\u{1F451} Old steward'), item('p', 'Plain \u2709\uFE0F', { steward: false })] }));
   eq([...at.readAll(tdir, clock).merged.values()].map((it) => [it.sessionId, it.title]),
-    [['s', '\u{1F451} Steward'], ['o', '\u{1F451} Old steward'], ['p', 'Plain']],
-    'a title read from a window\'s file is drawn again, a steward\'s with one crown in front; a title from an older window that starts with a crown is taken as a steward\'s');
+    [['s', 'Steward \u{1F451}'], ['o', 'Old steward \u{1F451}'], ['p', 'Plain']],
+    'a title read from a window\'s file is drawn again, a steward\'s with one crown after it; a title from an older window that carries a crown is taken as a steward\'s');
   eq(at.itemsOf([{ sourceId: 'claude-code', label: 'Claude Code', conversations: [require(path.join(root, 'src', 'sources.js'))
     .conversation({ sessionId: 'm', title: 'Manager \u{1F6CE}', state: 'prompt', steward: true })] }]).map((it) => [it.title, it.steward]),
-  [['\u{1F451} Manager', true]], 'and a window writes the drawn title with steward beside it');
+  [['Manager \u{1F451}', true]], 'and a window writes the drawn title with steward beside it');
 
   /* agentPlus.notifications.enabled turned off and on again, with and without a conversation changing in between. */
   {

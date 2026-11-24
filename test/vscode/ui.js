@@ -32,8 +32,8 @@ const SOURCE = path.join(__dirname, 'source');
 const FEATURES = JSON.parse(fs.readFileSync(path.join(__dirname, 'ui-features.json'), 'utf8'));
 const LOOK_SETTINGS = {};
 const SCALE = 2;
-/* src/envelope.js: the colour emoji in dark themes, the text form in light ones. */
-const COLOUR = '\u2709\uFE0F', TEXT = '\u2709\uFE0E';
+/* src/envelope.js: 📩 in dark themes, the plain envelope's text form in light ones. */
+const COLOUR = '\u{1F4E9}', TEXT = '\u2709\uFE0E';
 const THEMES = { dark: 'Default Dark Modern', light: 'Default Light Modern', hcLight: 'Default High Contrast Light' };
 const SW = 'out/vs/workbench/contrib/webview/browser/pre/service-worker.js';
 const HOUR = 3600e3;
@@ -454,11 +454,11 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const inTheme = async (name, glyph) => {
       await theme(name);
       const wrong = await until(async () => { const x = await dotsWrong(glyph); return x.length ? null : x; }, 15000, 500) || await dotsWrong(glyph);
-      check(!wrong.length, `in ${name} each row with a reply not read ends with ${glyph === TEXT ? 'the text form of the envelope' : 'the colour envelope'}, and the dots take that theme's green and red`, wrong);
+      check(!wrong.length, `in ${name} each row with a reply not read ends with the envelope ${glyph}, and the dots take that theme's green and red`, wrong);
     };
-    const said = (name, glyph) => ({ expect: `The Conversations view in the ${name} theme. The four rows with a reply not read end with an envelope (Stopped with a reply not read has one again, as the script marked it unread after the step before), drawn ${glyph === TEXT
-      ? 'as a plain dark outline, easy to see on the light background, not a white or faint emoji'
-      : 'as the colour envelope emoji where the machine has a colour emoji font, and otherwise as a light outline: the text is the colour form, which the window test checks'}; the dots are the theme's green and red, filled for running and waiting, hollow for only background work left, and the stopped rows have none.` });
+    const said = (name, glyph) => ({ expect: `The Conversations view in the ${name} theme. The four rows with a reply not read end with an envelope (Stopped with a reply not read has one again, as the script marked it unread after the step before), drawn ${name !== THEMES.dark
+      ? 'as a plain envelope in a dark outline, easy to see on the light background, not a white or faint emoji'
+      : 'as the envelope with a downward arrow, in colour where the machine has a colour emoji font, and otherwise as an outline: the text is the character the window test checks'}; the dots are the theme's green and red, filled for running and waiting, hollow for only background work left, and the stopped rows have none.` });
     await inTheme(THEMES.light, TEXT);
     await look('envelope-light', said(THEMES.light, TEXT), pane('agentPlus.conversations'));
     await inTheme(THEMES.hcLight, TEXT);

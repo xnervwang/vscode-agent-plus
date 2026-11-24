@@ -14,7 +14,7 @@ const path = require('path');
 const fake = require('../fake-vscode');
 const { boot } = require('../boot');
 
-const ENVELOPE = '\u2709\uFE0F';
+const ENVELOPE = '\u{1F4E9}';
 const ENVELOPE_TEXT = '\u2709\uFE0E';
 
 module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
@@ -48,13 +48,13 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const longItem = longTree.getTreeItem(longTree.getChildren().filter((e) => e.kind === 'conversation')[0]);
     const longText = [typeof longItem.label === 'string' ? longItem.label : longItem.label.label, longItem.description || ''].join(' ');
     const longBadge = longItem.resourceUri ? longTree.decorations.provideFileDecoration(longItem.resourceUri) : undefined;
-    eq([longText.includes(long.slice(0, 40)), /\u2709/.test(longText), longBadge && longBadge.badge], [true, false, ENVELOPE],
+    eq([longText.includes(long.slice(0, 40)), /\u{1F4E9}|\u2709/u.test(longText), longBadge && longBadge.badge], [true, false, ENVELOPE],
       'a title too long for the row keeps the envelope out of the label VS Code cuts short: it is a badge drawn after the cut');
     let redrawn = 0;
     deco.onDidChangeFileDecorations(() => { redrawn++; });
     control.setTheme(1);
     eq([redrawn, items.map(badge)], [1, ['', ENVELOPE_TEXT, '', ENVELOPE_TEXT, '', '', ENVELOPE_TEXT, ENVELOPE_TEXT]],
-      'in a light theme the envelope is the same character in its text form, since a colour font draws it white, and a theme change redraws it');
+      'in a light theme the envelope is the plain one in its text form, since a colour font draws both envelopes white there, and a theme change redraws it');
     control.setTheme(4);
     eq(badge(items[1]), ENVELOPE_TEXT, 'and so in a high contrast light theme');
     control.setTheme(2);

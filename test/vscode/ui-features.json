@@ -13,7 +13,7 @@
     "steps": ["conversation-dots", "question-rows"], "looks": ["conversation-dots"], "settings": [], "commands": [], "views": [] },
   { "id": "unread-envelope", "what": "The envelope at the end of a conversation's row while it has a reply not seen, shown also on a row with a dot; it goes once the conversation is opened, and a row with nothing new never has one",
     "steps": ["conversation-dots", "envelope-read"], "looks": ["conversation-dots", "envelope-read"], "settings": [], "commands": [], "views": [] },
-  { "id": "envelope-themes", "what": "The envelope drawn as the colour emoji in dark themes and as the text form in the Light Modern and High Contrast Light themes",
+  { "id": "envelope-themes", "what": "The envelope at the end of a row with a reply not read: 📩 in a dark theme, and the plain envelope's text form in the Light Modern and High Contrast Light themes, clear on each background",
     "steps": ["envelope-themes"], "looks": ["envelope-light", "envelope-high-contrast-light", "envelope-dark"], "settings": [], "commands": [], "views": [] },
   { "id": "envelope-narrow", "what": "A long title cut short in a narrow Conversations view, with the envelope after it still whole at the row's end",
     "steps": ["narrow-panel"], "looks": ["narrow-panel"], "settings": [], "commands": [], "views": [] },

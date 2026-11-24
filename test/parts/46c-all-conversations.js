@@ -41,7 +41,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([told, list.map((c) => [c.sourceId, c.label, c.sessionId, c.title, c.cwd, c.lastActiveAt]), Object.isFrozen(list), Object.isFrozen(list[0])],
     [[['2bff', 'aaaa', '0199']], [['claude-code', 'Claude Code', C, 'Black-box testing of ADV and AUV', '/w/a', 5000],
       ['claude-code', 'Claude Code', D, 'A stopped one with a plan', '/w/b', 1000],
-      ['codex', 'Codex', X, '\u{1F451} Fix the login redirect', '/w/c', 9000]], true, true],
+      ['codex', 'Codex', X, 'Fix the login redirect \u{1F451}', '/w/c', 9000]], true, true],
     'when something starts to listen, a pass runs right away and lists each source\'s conversations, machine-wide and in this window, each one a single time with its agent\'s label');
 
   machine = [Object.assign({}, machine[0], { lastActiveAt: 7000 })];
@@ -54,12 +54,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   here[1].title = 'Renamed';
   claudeChanged.fire();
   await until(() => told.length > 2);
-  eq([told.length, b.api.allConversations().map((c) => c.title)], [3, ['Black-box testing of ADV and AUV', 'Another window', 'Renamed', '\u{1F451} Fix the login redirect']],
+  eq([told.length, b.api.allConversations().map((c) => c.title)], [3, ['Black-box testing of ADV and AUV', 'Another window', 'Renamed', 'Fix the login redirect \u{1F451}']],
     'a new conversation and a renamed one each fire a change');
 
   const codex = b.api.allConversations().find((c) => c.sourceId === 'codex');
   await b.control.state.handlers['agentPlus.openConversation']({ sourceId: codex.sourceId, sessionId: codex.sessionId, title: codex.title, cwd: codex.cwd });
-  eq(opened, [[X, '\u{1F451} Fix the login redirect', '/w/c']],
+  eq(opened, [[X, 'Fix the login redirect \u{1F451}', '/w/c']],
     'a link built from the list opens its conversation with agentPlus.openConversation, which calls the source\'s own open()');
 
   sub.dispose();

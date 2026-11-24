@@ -4,9 +4,11 @@
 // Source: vscode-agent-plus src/envelope.js; sync-shared.js copies it, so edit it there.
 
 'use strict';
-/* On a light background a colour emoji font's ✉️ is white and all but invisible, so there the text form is drawn. */
-const COLOUR = '✉️';
-const TEXT = '✉︎';
+/* A dark theme draws the envelope with an arrow, which a colour emoji font draws clearer there than the plain envelope ✉️.
+   On a light background both are white and faint in that font, and 📩 has no text form, so a light theme draws the plain
+   envelope's text form, a dark outline. */
+const COLOUR = '\u{1F4E9}';
+const TEXT = '\u2709\uFE0E';
 /* vscode.ColorThemeKind: Light is 1 and HighContrastLight 4. */
 const LIGHT_KINDS = [1, 4];
 

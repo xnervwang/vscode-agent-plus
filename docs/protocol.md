@@ -104,7 +104,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Field | Meaning |
 | --- | --- |
 | `sessionId` | Unique within its source; a conversation is `(source id, sessionId)` |
-| `title` | Title. Before showing it, the core removes any crown, envelope or old bell in it and puts one crown before a steward's title (see `steward`; `withMarks()` in `src/title-marks.js`) |
+| `title` | Title. Before showing it, the core removes any crown, envelope or old bell in it and puts one crown after a steward's title, before the envelope (see `steward`; `withMarks()` in `src/title-marks.js`) |
 | `steward` | Optional boolean: the conversation is a steward, one the user has given other conversations to look after |
 | `cwd` | Working folder; compared with the workspace folders through real paths |
 | `state` | `'prompt'`, `'working'`, `'unread'` or `'idle'`; anything else reads as `'idle'` |
@@ -118,7 +118,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `hasPlan` | Used only when the source gives no `planPath` |
 
 - The core derives "needs you" from the questions in the plan. Order: prompt, needs you, working, unread, idle.
-- The Conversations view draws `activity` in the row's icon: a green dot working, a green ring background, a red dot waiting, nothing stopped. An envelope at the end of the row shows `unseen`. In a light theme it is the text form ✉︎ (U+2709 U+FE0E) rather than the colour emoji ✉️, which draws white; `src/envelope.js` picks between them for any extension that draws the envelope too.
+- The Conversations view draws `activity` in the row's icon: a green dot working, a green ring background, a red dot waiting, nothing stopped. An envelope at the end of the row shows `unseen`: 📩 (U+1F4E9) in a dark theme, and in a light theme the plain envelope's text form ✉︎ (U+2709 U+FE0E), since a colour emoji font draws both envelopes white there; `src/envelope.js` picks between them for any extension that draws the envelope too.
 - A stopped conversation (`running: false`) is listed while its plan has open rows, was written in the last 7 days, and its `cwd` is in a workspace folder.
 
 ## Notifications
