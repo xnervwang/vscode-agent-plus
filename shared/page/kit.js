@@ -166,16 +166,16 @@ var agentPlusKit = (function () {
    * react-markdown renders).
    *
    * A conversation is named by its title inside the corner brackets U+300C and U+300D, by its title standing on its
-   * own, by its whole session id, or by the first 8 characters of an id of the UUID form when no other conversation's
-   * id starts with them. A UUID matches in any case. An id of any other form, such as OpenCode's ses_ ids, matches only
-   * whole and as it is written, and only when it is 8 to 200 letters, digits, _ or -. Titles are compared as they are
-   * shown, without the marks the extensions draw with them (src/title-marks.js). The minimum lengths keep short titles
-   * from matching common words: a title in brackets needs 4 characters or 2 CJK characters, and a title standing on its
-   * own needs a width of 10, in which a CJK character counts 2, with no letter or digit right before or after it. An id
-   * that is part of a path, next to a slash or followed by a file extension, names a folder or a file rather than the
-   * conversation, and is left alone. Where two matches overlap the longer one is kept. Of several conversations with
-   * one title the most recently active is linked and the others are listed with it. The conversation the text belongs
-   * to is never linked, nor any other with its title.
+   * own, by its whole session id, or, for an id that starts like a UUID, by its first 8 characters when no other
+   * conversation's id starts with them. A UUID matches in any case. An id of any other form, such as OpenCode's ses_
+   * ids, matches only whole and in the same case. Such an id is looked for only when it is 8 to 200 letters, digits, _
+   * or -. Titles are compared as they are shown, without the marks the extensions draw with them (src/title-marks.js).
+   * The minimum lengths keep short titles from matching common words: a title in brackets needs 4 characters or 2 CJK
+   * characters, and a title standing on its own needs a width of 10, in which a CJK character counts 2, with no letter
+   * or digit right before or after it. An id that is part of a path, next to a slash or followed by a file extension,
+   * names a folder or a file rather than the conversation, and is left alone. Where two matches overlap the longer one
+   * is kept. Of several conversations with one title the most recently active is linked and the others are listed with
+   * it. The conversation the text belongs to is never linked, nor any other with its title.
    */
   var LQ = '\u300C', RQ = '\u300D';
   var MARKS = /(?:\uD83D\uDC51|\uD83D\uDECE|\uD83D\uDCE9|\u2709)[\uFE0E\uFE0F]?/g;
