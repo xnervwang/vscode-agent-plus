@@ -37,6 +37,8 @@ EXTRA_DEFAULTS = {
 # The shape of a session id, which names its plan file (<id>.json) and the files kept beside it: a UUID, in hex with
 # hyphens. plan_common.py reads plans by this pattern, so it must not match any other file in the data directory.
 SESSION_ID = r"[0-9A-Fa-f][0-9A-Fa-f-]{7,}"
+# A session id of that shape, for the hooks' self-tests to name a conversation by.
+EXAMPLE_SESSION_ID = "5e000000-0000-0000-0000-000000000000"
 
 # The field of a hook's input that names the turn: one id from a prompt until the turn ends.
 TURN_FIELD = "turn_id"
@@ -349,5 +351,5 @@ def scratch_dir(payload):
 def fixture_session_meta(originator, cwd="/work/repo"):
     """The first record of a rollout, for the hooks' self-tests."""
     return json.dumps({"timestamp": "2026-01-01T00:00:00Z", "type": "session_meta", "payload": {
-        "id": "5e000000-0000-0000-0000-000000000000", "cwd": cwd, "originator": originator,
+        "id": EXAMPLE_SESSION_ID, "cwd": cwd, "originator": originator,
         "base_instructions": {"text": "x" * 2000}}})

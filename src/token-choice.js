@@ -30,7 +30,9 @@ const ASK_TEXT = 'Some features add text to the agent\'s context and use tokens.
 /* Beside the Conversations entry, which has 100. */
 const PRIORITY = 99;
 
-const nameOf = (id) => (KNOWN.find((k) => k.id === id) || {}).name || id;
+/* An extension's marketplace name; one not offered when this extension is alone goes by its manifest's displayName, from
+   `seen`, the dependents found installed. */
+const nameOf = (id, seen = []) => (KNOWN.find((k) => k.id === id) || seen.find((d) => d.id === id) || {}).name || id;
 
 /* The four items of the status bar's list. The tick for the mode in effect goes in the description: an icon before the
    name would push the name to the right of the line under it. */
@@ -39,17 +41,18 @@ function pickItems(now) {
     detail: m.detail, mode: m.id }));
 }
 
-/* The Settings editor's search for the feature settings of the extensions in `installed` (ids), or of both. */
+/* The Settings editor's search for the feature settings of the extensions in `installed` (ids), or of all of them. */
 function settingsQuery(installed = []) {
   const keys = tokenMode.SWITCHES.filter((s) => !installed.length || installed.includes(s.extension)).map((s) => s.key);
   return `@id:${keys.join(',')}`;
 }
 
 /*
- * What runs in `mode`, as [on, off] lists of feature names, for the extensions in `installed` (ids), or for both when
- * that is empty. In Custom, a feature that is on in one extension and off in the other is in both lists, with the names.
+ * What runs in `mode`, as [on, off] lists of feature names, for the extensions in `installed` (ids), or for all of them
+ * when that is empty. In Custom, a feature that is on in one extension and off in another is in both lists, with the
+ * names; `seen` is what src/host.js's dependents() gives, for the names of extensions not in KNOWN.
  */
-function features(mode, value, installed = []) {
+function features(mode, value, installed = [], seen = []) {
   const switches = tokenMode.SWITCHES.filter((s) => !installed.length || installed.includes(s.extension));
   const on = [], off = [];
   for (const f of tokenMode.FEATURES) {
@@ -58,7 +61,7 @@ function features(mode, value, installed = []) {
     const by = tokenMode.onIn(mode, f.id);
     const yes = mine.filter((s) => (by === null ? value(s) : by));
     const no = mine.filter((s) => !yes.includes(s));
-    const named = (list) => `${f.name} (${list.map((s) => nameOf(s.extension)).join(', ')})`;
+    const named = (list) => `${f.name} (${list.map((s) => nameOf(s.extension, seen)).join(', ')})`;
     if (!no.length) on.push(f.name);
     else if (!yes.length) off.push(f.name);
     else { on.push(named(yes)); off.push(named(no)); }
@@ -107,7 +110,8 @@ function create(host, opts = {}) {
    * there alone.
    */
   let migrating = null;
-  const installed = () => (typeof host.dependents === 'function' ? host.dependents().map((d) => d.id) : []);
+  const seen = () => (typeof host.dependents === 'function' ? host.dependents() : []);
+  const installed = () => seen().map((d) => d.id);
   /* Custom chosen by hand opens the Settings editor on the settings it hands each feature to. */
   const openSwitches = () => Promise.resolve(vscode.commands.executeCommand('workbench.action.openSettings', settingsQuery(installed())))
     .catch((e) => say(`token mode: opening the settings: ${(e && e.message) || e}`));
@@ -150,7 +154,7 @@ function create(host, opts = {}) {
   const value = (s) => tokenMode.effective(vscode, s.key);
   const describe = () => {
     const mode = tokenMode.modeNow(vscode);
-    const [on, off] = features(mode, value, installed());
+    const [on, off] = features(mode, value, installed(), seen());
     return { mode, on, off };
   };
   const item = vscode.window.createStatusBarItem('agentPlus.tokenMode', vscode.StatusBarAlignment.Right, PRIORITY);

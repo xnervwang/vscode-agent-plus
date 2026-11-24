@@ -16,9 +16,6 @@ const path = require('path');
 const AGENTS = ['claude', 'codex', 'opencode'];
 /* Hooks not every agent's part ships: file name -> the agents whose part has it. */
 const ONLY = {};
-/* Self-tests whose fixtures name sessions by a UUID, which only these agents' ids are. */
-const UUID_SELFTESTS = { 'resume-work-plan.py': ['claude', 'codex'], 'tell-time-zone.py': ['claude', 'codex'],
-  'tell-reply-images.py': ['claude', 'codex'] };
 /* A session id of each agent's own shape. */
 const SIDS = { claude: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', codex: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
   opencode: 'ses_df3c28ab2ffe0TYFbXAnoBpqy6' };
@@ -79,7 +76,7 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
 
   for (const agent of AGENTS) {
     for (const hook of ['changes.py', 'resume-work-plan.py', 'tell-time-zone.py', 'tell-reply-images.py']
-      .filter((h) => (!ONLY[h] || ONLY[h].includes(agent)) && (!UUID_SELFTESTS[h] || UUID_SELFTESTS[h].includes(agent)))) {
+      .filter((h) => !ONLY[h] || ONLY[h].includes(agent))) {
       const r = run([path.join(hooksOf[agent], hook), '--selftest'], '', { TZ: 'UTC' });
       if (r.status === 0 && /all checks pass/.test(r.stdout)) ok(`${hook} passes its self-test with ${agent}'s input shapes`);
       else bad(`${hook} --selftest with ${agent}: ${(r.stdout + r.stderr).split('\n').filter((l) => /FAIL|Error/.test(l)).slice(0, 3).join(' | ') || r.status}`);

@@ -221,12 +221,18 @@ def selftest():
     import shutil
     import tempfile
 
+    from plan_path import EXAMPLE_SESSION_ID
+
     failures = []
 
     def check(label, cond):
         print(("PASS " if cond else "FAIL ") + label)
         if not cond:
             failures.append(label)
+
+    def example_id(n):
+        """The n-th conversation's session id in the self-test, of this agent's shape."""
+        return EXAMPLE_SESSION_ID[:-1] + str(n)
 
     # Windows has no time.tzset.
     if not hasattr(time, "tzset"):
@@ -280,8 +286,7 @@ def selftest():
         def context(tokens):
             write("t.jsonl", fixture_usage(tokens) + "\n")
 
-        message = {"hook_event_name": "UserPromptSubmit", "session_id": "5e000000-0000-0000-0000-000000000000",
-                   "transcript_path": transcript}
+        message = {"hook_event_name": "UserPromptSubmit", "session_id": example_id(0), "transcript_path": transcript}
         context(20_000)
         check("the first message of a conversation is told", respond(message, summer, tmp) != "")
         check("and the next one is not", respond(message, summer + 600, tmp) == "")
@@ -318,22 +323,22 @@ def selftest():
         def agent_says(zone):
             write("t.jsonl", "\n".join([fixture_agent_told(zone), fixture_usage(20_000)]) + "\n")
         if fixture_agent_told("UTC"):
-            fresh = dict(message, session_id="5e000000-0000-0000-0000-000000000002")
+            fresh = dict(message, session_id=example_id(2))
             agent_says("America/Los_Angeles")
             check("where the agent told the model the same zone, nothing is said", respond(fresh, summer, tmp) == "")
             check("and nothing on the next message either", respond(fresh, summer + 600, tmp) == "")
             agent_says("Europe/Paris")
             check("the agent's message naming another zone does not count",
-                  respond(dict(message, session_id="5e000000-0000-0000-0000-000000000003"), summer, tmp) != "")
+                  respond(dict(message, session_id=example_id(3)), summer, tmp) != "")
             agent_says("America/Los_Angeles")
             with open(transcript, "a", encoding="utf-8") as fh:
                 fh.write(fixture_compacted() + "\n")
             check("nor does one from before a compaction",
-                  respond(dict(message, session_id="5e000000-0000-0000-0000-000000000004"), summer, tmp) != "")
+                  respond(dict(message, session_id=example_id(4)), summer, tmp) != "")
         check("a message with no session id is still told", respond(dict(message, session_id=""), summer, tmp) != "")
         write("config.json", json.dumps({"tellTimeZone": False}))
         check("the setting off says nothing even to a new conversation",
-              respond(dict(message, session_id="5e000000-0000-0000-0000-000000000001"), summer, tmp) == "")
+              respond(dict(message, session_id=example_id(1)), summer, tmp) == "")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

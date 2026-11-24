@@ -37,6 +37,8 @@ EXTRA_DEFAULTS = {}
 # An OpenCode session id: "ses_" and letters and digits, 26 of them on OpenCode 1 and 2 alike; the range leaves room for
 # another length. Nothing else the hooks keep in the plans folder starts with "ses_".
 SESSION_ID = r"ses_[0-9A-Za-z]{8,64}"
+# A session id of that shape, for the hooks' self-tests to name a conversation by.
+EXAMPLE_SESSION_ID = "ses_df3c28ab2ffe0TYFbXAnoBpqy6"
 
 # The field of a hook's input that names the turn: the id of the user message that began it.
 TURN_FIELD = "turn_id"

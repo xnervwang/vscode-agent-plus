@@ -6,9 +6,9 @@
 'use strict';
 /*
  * The token mode, agentPlus.tokenMode: one setting in Agent Plus that decides which of the features that add text to an
- * agent's context run, in Claude Code Plus and Codex Plus alike. Each extension reads such a feature through effective()
- * below, so the table of what each mode turns on is written once. Agent Plus's package.json repeats the labels and the
- * descriptions for the Settings editor, and its tests check that the two agree.
+ * agent's context run, in Claude Code Plus, Codex Plus and OpenCode Plus alike. Each extension reads such a feature
+ * through effective() below, so the table of what each mode turns on is written once. Agent Plus's package.json repeats
+ * the labels and the descriptions for the Settings editor, and its tests check that the two agree.
  *
  * No mode writes a feature's own setting. In Custom each feature follows it; in the other modes the table decides, and
  * the setting keeps its value for when the mode is Custom again.
@@ -53,6 +53,8 @@ const SWITCHES = Object.freeze([
   { key: 'codexPlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.wakeUps', feature: 'wakeUps', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.codex-plus', default: true },
+  { key: 'opencodePlus.workPlan', feature: 'workPlan', extension: 'xnervwang.opencode-plus', default: true },
+  { key: 'opencodePlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.opencode-plus', default: true },
 ].map((s) => Object.freeze(s)));
 
 /* The sentence each of those settings ends its description with. */

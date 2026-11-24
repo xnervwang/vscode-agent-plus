@@ -112,12 +112,25 @@ def selftest():
     import shutil
     import tempfile
 
+    from plan_path import EXAMPLE_SESSION_ID
+
     failures = []
 
     def check(label, cond):
         print(("PASS " if cond else "FAIL ") + label)
         if not cond:
             failures.append(label)
+
+    def finish():
+        if failures:
+            print("%d checks failed" % len(failures))
+            return 1
+        print("all checks pass")
+        return 0
+
+    def example_id(n):
+        """The n-th conversation's session id in the self-test, of this agent's shape."""
+        return EXAMPLE_SESSION_ID[:-1] + str(n)
 
     tmp = tempfile.mkdtemp()
     saved = {k: os.environ.get(k) for k in ("CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "CLAUDE_CONFIG_DIR")}
@@ -126,7 +139,7 @@ def selftest():
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(tmp, "claude-home")
         project = os.path.join(tmp, "projects", "-work-repo")
         os.makedirs(project)
-        transcript = os.path.join(project, "5e000000-0000-0000-0000-000000000000.jsonl")
+        transcript = os.path.join(project, example_id(0) + ".jsonl")
 
         def shown_in(where):
             """Puts the conversation in the panel or out of it, as this agent tells the two apart."""
@@ -139,17 +152,24 @@ def selftest():
             with open(os.path.join(tmp, "config.json"), "w", encoding="utf-8") as fh:
                 json.dump({"replyImages": on}, fh)
 
-        message = {"hook_event_name": "UserPromptSubmit", "session_id": "5e000000-0000-0000-0000-000000000000",
-                   "transcript_path": transcript, "cwd": "/work/repo"}
+        message = {"hook_event_name": "UserPromptSubmit", "session_id": example_id(0), "transcript_path": transcript,
+                   "cwd": "/work/repo"}
         compacted = dict(message, hook_event_name="SessionStart", source="compact")
         shown_in("panel")
         check("with no settings written nothing is said", respond(message, tmp) == "")
         setting(True)
+        if not folder_for(message):
+            # An agent that keeps no folder of a conversation's own has nowhere for an image to be saved.
+            check("with no folder of the conversation's own nothing is said, in the panel or after a compaction",
+                  respond(dict(message, in_panel=True), tmp) == ""
+                  and respond(dict(compacted, in_panel=True), tmp) == "")
+            check("  and nothing is recorded", not os.path.exists(told_file(message, tmp)))
+            return finish()
         said = respond(message, tmp)
         folder = folder_for(message)
         check("with the setting on, in the panel, the first message is told", said.startswith("This panel shows images"))
         check("  naming the conversation's own folder", folder and folder in said and folder.endswith(
-            "/scratch/-work-repo/5e000000-0000-0000-0000-000000000000"))
+            "/scratch/-work-repo/" + example_id(0)))
         check("  and asking for an absolute path, and for an image from the web to be downloaded first",
               "absolute path" in said and "download it there first" in said)
         check("the next message is not told again", respond(message, tmp) == "")
@@ -163,25 +183,25 @@ def selftest():
         check("turned back on, it is told again", respond(message, tmp).startswith("This panel shows images"))
         shown_in("elsewhere")
         check("a conversation the panel does not show is told images are no longer shown", respond(message, tmp) == NO_LONGER)
-        fresh = dict(message, session_id="5e000000-0000-0000-0000-000000000001")
+        fresh = dict(message, session_id=example_id(1))
         check("and a new one outside the panel is told nothing", respond(fresh, tmp) == "")
         shown_in("panel")
         check("a new one in the panel is told", respond(fresh, tmp) != "")
-        respond(dict(message, session_id="5e000000-0000-0000-0000-000000000002"), tmp)
+        respond(dict(message, session_id=example_id(2)), tmp)
         setting(False)
         check("after a compaction with the setting off there is nothing to take back",
-              respond(dict(compacted, session_id="5e000000-0000-0000-0000-000000000002"), tmp) == "")
+              respond(dict(compacted, session_id=example_id(2)), tmp) == "")
         with open(os.path.join(tmp, "config.json"), "w", encoding="utf-8") as fh:
             json.dump({"replyImages": True, "extensionMarkers": [os.path.join(tmp, "gone")]}, fh)
         check("with the extension uninstalled from every editor nothing is said",
-              respond(dict(message, session_id="5e000000-0000-0000-0000-000000000003"), tmp) == "")
+              respond(dict(message, session_id=example_id(3)), tmp) == "")
         setting(True)
         check("a message with no session id names no folder and says nothing",
               respond(dict(message, session_id=""), tmp) == "")
         with open(os.path.join(tmp, "config.json"), "w", encoding="utf-8") as fh:
             json.dump({"replyImages": True, "quietWhenReplyMatches": "^Done"}, fh)
         check("a compaction in a conversation that relays another model says nothing",
-              respond(dict(compacted, session_id="5e000000-0000-0000-0000-000000000004"), tmp) == "")
+              respond(dict(compacted, session_id=example_id(4)), tmp) == "")
         with open(transcript, "a", encoding="utf-8") as fh:
             fh.write(fixture_compacted() + "\n")
     finally:
@@ -192,11 +212,7 @@ def selftest():
                 os.environ[k] = v
         shutil.rmtree(tmp, ignore_errors=True)
 
-    if failures:
-        print("%d checks failed" % len(failures))
-        return 1
-    print("all checks pass")
-    return 0
+    return finish()
 
 
 if __name__ == "__main__":

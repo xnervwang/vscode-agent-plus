@@ -94,10 +94,16 @@ def selftest():
     import subprocess
     import tempfile
 
+    from plan_path import EXAMPLE_SESSION_ID
+
+    def example_id(n):
+        """The n-th conversation's session id in the self-test, of this agent's shape."""
+        return EXAMPLE_SESSION_ID[:-1] + str(n)
+
     root = tempfile.mkdtemp(prefix="resume-work-plan-selftest-")
     data = os.path.join(root, "data")
     os.makedirs(data)
-    sid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    sid = example_id(0)
     plan = os.path.join(data, sid + ".json")
     transcript = os.path.join(root, sid + ".jsonl")
     me = [sys.executable, os.path.abspath(__file__), data]
@@ -137,7 +143,7 @@ def selftest():
     check("  and says where the next step is written", "`detail`" in c)
     check("  and hands back nothing from the transcript", "an ordinary reply" not in c)
 
-    other = os.path.join(data, "ffffffff-ffff-ffff-ffff-ffffffffffff.json")
+    other = os.path.join(data, example_id(9) + ".json")
     os.rename(plan, other)
     check("another conversation's plan is not this one's", run(base)[1] == "")
     os.rename(other, plan)
