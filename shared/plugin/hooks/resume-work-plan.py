@@ -97,7 +97,6 @@ def selftest():
     from plan_path import EXAMPLE_SESSION_ID
 
     def example_id(n):
-        """The n-th conversation's session id in the self-test, of this agent's shape."""
         return EXAMPLE_SESSION_ID[:-1] + str(n)
 
     root = tempfile.mkdtemp(prefix="resume-work-plan-selftest-")

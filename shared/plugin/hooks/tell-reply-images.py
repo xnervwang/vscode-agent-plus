@@ -129,7 +129,6 @@ def selftest():
         return 0
 
     def example_id(n):
-        """The n-th conversation's session id in the self-test, of this agent's shape."""
         return EXAMPLE_SESSION_ID[:-1] + str(n)
 
     tmp = tempfile.mkdtemp()
@@ -154,7 +153,7 @@ def selftest():
                 fh.write((meta + "\n" if meta else "") + fixture_reply("Done.") + "\n")
 
         def ask(payload, **changes):
-            """respond() to the event, which says where the conversation is shown as OpenCode's plugin does."""
+            """respond() to the event with in_panel added, as OpenCode's plugin adds it."""
             return respond(dict(payload, in_panel=panel[0], **changes), tmp)
 
         def setting(on):

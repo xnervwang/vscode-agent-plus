@@ -3,9 +3,9 @@
 # All rights reserved.
 # Source: vscode-agent-plus shared/plugin/opencode/plan_agent.py; sync-shared.js copies it, so edit it there.
 
-"""OpenCode's side of the work plan hooks, as the OpenCode Plus extension's OpenCode plugin runs them: where the plans are,
-how the plugin's turn record is read, and what the model is told to change rows with. plan_common.py imports this
-module, which imports nothing from the plugin.
+"""The OpenCode side of the work plan hooks, run by the OpenCode Plus extension's plugin: where the plans are, how the
+plugin's turn record is read, and what the model is told to change rows with. plan_common.py imports this module,
+which imports nothing from the plugin.
 
 OpenCode has no hook commands and no transcript file. Its plugin (opencode-plugin/agent-work-plan/index.js in the OpenCode
 Plus repository) runs these scripts itself, with the plans folder as the first argument and the event on standard
@@ -35,8 +35,8 @@ def opencode_plus_home():
     return os.environ.get("OPENCODE_PLUS_HOME") or os.path.join(os.path.expanduser("~"), ".opencode-plus")
 
 
-# The plans folder is the extension's own (paths.plansDir() there): <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/plans. The
-# plugin passes it as the first argument; this is the same folder for a caller started without one.
+# The folder for a caller started without one as its first argument: the extension's own plans folder
+# (paths.plansDir() there).
 DATA_ENV = ()
 FALLBACK = os.path.join(opencode_plus_home(), "plans")
 
@@ -45,7 +45,7 @@ EXTRA_DEFAULTS = {}
 # An OpenCode session id: "ses_" and letters and digits, 26 of them on OpenCode 1 and 2 alike; the range leaves room for
 # another length. Nothing else the hooks keep in the plans folder starts with "ses_".
 SESSION_ID = r"ses_[0-9A-Za-z]{8,64}"
-# A session id of that shape, for the hooks' self-tests to name a conversation by.
+# The hooks' self-tests name their conversations with ids made from this one.
 EXAMPLE_SESSION_ID = "ses_df3c28ab2ffe0TYFbXAnoBpqy6"
 
 # The field of a hook's input that names the turn: the id of the user message that began it.
@@ -67,20 +67,18 @@ def _row(line, kind):
 
 
 def reply_text(line):
-    """The text of an assistant reply on a turn record line, or None when the line is not one."""
+    """The text of an assistant reply on a turn record line, or None for any other line."""
     row = _row(line, "assistant_text")
     return str(row.get("text") or "") if row else None
 
 
 def usage_of(line):
-    """Tokens the model call recorded on the line sent, or None."""
     row = _row(line, "usage")
     value = row.get("tokens") if row else None
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def window_of(line):
-    """The model's context window as the line records it, or None."""
     row = _row(line, "usage")
     value = row.get("window") if row else None
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
@@ -121,12 +119,10 @@ def row_gist(path, command):
 
 
 def fixture_reply(text):
-    """A turn record line holding an assistant reply, for the hooks' self-tests."""
     return json.dumps({"type": "assistant_text", "timestamp": "2026-01-01T00:00:00Z", "text": text})
 
 
 def fixture_tool_call():
-    """A turn record line holding a turn made of a tool call alone, for the hooks' self-tests."""
     return json.dumps({"type": "tool_call", "timestamp": "2026-01-01T00:00:01Z", "name": "bash", "input": {}})
 
 
@@ -137,7 +133,7 @@ CHANGING_TOOLS = ("edit", "write", "patch", "apply_patch", "multiedit")
 SHELL_TOOLS = ("Bash", "bash", "shell")
 
 
-"""The user's time zone (tell-time-zone.py). OpenCode does not tell the model the reader's zone."""
+"""The user's time zone (tell-time-zone.py). OpenCode does not tell the model the user's zone."""
 TOLD_BY = "opencode"
 
 
@@ -146,7 +142,6 @@ def agent_told(tail, zone):
 
 
 def fixture_usage(tokens):
-    """A turn record line recording a model call that sent `tokens`, for the hooks' self-tests."""
     return json.dumps({"type": "usage", "timestamp": "2026-01-01T00:00:00Z", "tokens": tokens, "window": 200000})
 
 
@@ -162,19 +157,19 @@ def fixture_compacted():
 MAYBE_CALL = ('"tool_call"',)
 MAYBE_USER = ('"user_message"',)
 AFTER_OFFER = ""
-# What the end of a turn says is kept for the next turn rather than answered at once, so no Stop follows it.
+# Context the Stop hook adds waits for the next turn: the model does not answer it before this turn ends, so no
+# second Stop comes back to the hook.
 STOP_REENTERS = False
 
 
 def tool_calls(row):
-    """The (name, input) of the tool call on a parsed turn record row, as a list of none or one."""
     if row.get("type") != "tool_call":
         return []
     return [(str(row.get("name") or ""), row.get("input"))]
 
 
 def spoke(row):
-    """True for a row that is the user speaking. The plugin records only the user's own messages this way, not the
+    """Whether the row is a message the user typed. The plugin records only the user's own messages this way, not the
     messages it adds itself."""
     return row.get("type") == "user_message"
 
@@ -212,8 +207,8 @@ def brief_how(path, parts):
     return "Write %s with %s." % (" and ".join("the " + p for p in parts), " and ".join(forms[p] for p in parts))
 
 
-# The end of a turn asks about the brief only after a turn in which a row of the plan changed state: what it says is a
-# message kept in the conversation, and one after every turn that did work would fill it.
+# The Stop hook (nudge-work-plan.py) asks about the brief only after a turn in which a row of the plan changed state:
+# what it says stays in the conversation as a message, and one after every turn that did work would fill it.
 BRIEF_AFTER_MOVES = True
 
 
@@ -240,7 +235,6 @@ def event_calls(payload):
 
 
 def keeps_plan(tool, given, plan_name):
-    """A call to the plan's own tools, or one that names the plan file, is the plan being kept."""
     return str(tool or "") in PLAN_TOOLS or plan_name in json.dumps(given, ensure_ascii=False, default=str)
 
 
@@ -257,14 +251,14 @@ def remind_how(path):
 
 
 def in_panel(payload):
-    """Whether the conversation is shown in a panel that draws a reply's images; the plugin says so in the event."""
+    """The plugin puts in_panel in the event: true when the conversation is in a panel that draws a reply's images."""
     return payload.get("in_panel") is True
 
 
 def scratch_dir(payload):
     """The conversation's own folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>/, outside the
     user's workspace and on the machine OpenCode runs on, which is where the extension reads a reply's images. None
-    without a session id of OpenCode's shape, so that a name cannot lead out of the folder."""
+    unless the session id has OpenCode's shape, which keeps a name such as ../x from pointing outside the folder."""
     session = str(payload.get("session_id") or "").strip()
     if not re.match(r"^%s$" % SESSION_ID, session):
         return None
@@ -272,7 +266,6 @@ def scratch_dir(payload):
 
 
 def fixture_scratch_suffix(session_id):
-    """How scratch_dir() ends, with forward slashes, for the self-tests' conversation."""
     return "/scratch/" + session_id
 
 

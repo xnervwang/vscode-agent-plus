@@ -231,7 +231,6 @@ def selftest():
             failures.append(label)
 
     def example_id(n):
-        """The n-th conversation's session id in the self-test, of this agent's shape."""
         return EXAMPLE_SESSION_ID[:-1] + str(n)
 
     # Windows has no time.tzset.

@@ -4,40 +4,26 @@
 // Source: vscode-agent-plus shared/page/plan-bar.js; sync-shared.js copies it, so edit it there.
 
 /*
- * The plan bar: one line above an agent's input box, as wide as the box, saying where the conversation's work plan
- * stands. Claude Code Plus draws it in Claude Code's panel and Codex Plus in the Codex page, each from the summary Agent
- * Plus gives for the conversation (planSummary in docs/protocol.md). Exported as one object, agentPlusPlanBar, so its
- * names cannot collide with names already in either page; under Node it is also a module, for the tests. The source is
- * ASCII and ES5, like the page scripts.
+ * The plan bar: one line above an agent's input box. Claude Code Plus draws it in Claude Code's panel and Codex Plus in
+ * the Codex page, each from the summary Agent Plus gives for the conversation (planSummary in docs/protocol.md).
+ * Exported as one global, agentPlusPlanBar; under Node it is also a module, for the tests. The source is ASCII and ES5,
+ * like the page scripts.
  *
- * Left to right: a list icon and "Plan"; a track of one segment per state of the rows still open, each as long as its
- * share of them; how many rows are open; the current row, with its state's icon; when the plan has questions waiting
- * for the user, a red part saying how many; an arrow. The colours are the work plan view's for its state icons, and the
- * red is the red of a tab whose conversation waits for the user. Narrower than COMPACT_BELOW, only the count and the
- * number of questions are left. Hovering shows the current row's whole title and lists the rows still open.
- *
- * The bar never changes size with what the plan holds: it is as wide as the element it is placed in, one line high, the
- * track has one width, the count has room for three digits in figures of one width, and the current row takes what is
- * left and ends in an ellipsis. A width near COMPACT_BELOW does not flip the form back and forth: the bar turns compact
- * below it and full again only HYSTERESIS pixels above it.
- *
- * A click on the bar calls opts.onOpen, a click on the red part opts.onAnswer. The page places `el` itself and gives it
- * the summary to draw with update(); a null summary hides the bar.
+ * Narrower than COMPACT_BELOW, the bar drops the track and the current row. Hovering shows the current row's whole
+ * title and lists the rows still open.
  */
 var agentPlusPlanBar = (function () {
   'use strict';
-  /* Below this width, in CSS pixels, the bar keeps only "Plan", the count, the number of questions and the arrow. At
-     this width the full bar still leaves its current row about a hundred pixels. */
+  /* Below this measured width, in CSS pixels, the bar keeps only "Plan", the count, the number of questions and the
+     arrow. At this width the full bar still leaves its current row about a hundred pixels. */
   var COMPACT_BELOW = 400;
-  /* How far above COMPACT_BELOW a compact bar has to get before it is drawn full again. */
   var HYSTERESIS = 24;
-  /* The track's width in CSS pixels, whatever the plan holds: more rows make the segments thinner, not the track longer.
+  /* The track's width in CSS pixels, whatever the plan holds; more rows only make the segments thinner.
      Every segment drawn is at least SEGMENT_MIN wide, so a state with one row among many still shows. */
   var TRACK_WIDTH = 72;
   var SEGMENT_MIN = 2;
-  /* The most open rows the hover lists; the summary gives no more than this either. */
+  /* The hover lists at most this many open rows, the same limit as the summary's. */
   var MAX_LIST = 30;
-  /* How long the pointer rests on the bar before the hover shows. */
   var HOVER_MS = 350;
   var MARK = 'data-agent-plus-plan-bar';
 
@@ -187,7 +173,7 @@ var agentPlusPlanBar = (function () {
     e.innerHTML = ICON[name] || ICON.todo;
     return e;
   };
-  /* The count's box is as wide as COUNT_ROOM in the bar's figures; `ch` is the width of a figure there. */
+  /* `ch` is the width of one figure in the bar's font, so the count's box fits COUNT_ROOM. */
   var countWidth = COUNT_ROOM.length + 'ch';
 
   /*
@@ -278,7 +264,6 @@ var agentPlusPlanBar = (function () {
         if (m.current && m.current.state === 'done') el.appendChild(icon(doc, 'done', COLOR.done));
         el.appendChild(part(doc, 'span', 'apb-gap'));
       } else if (m.current) {
-        /* With no count beside it the dot would stand alone; it keeps its room, so the title does not move. */
         var sep = part(doc, 'span', 'apb-sep', String.fromCharCode(183));
         if (!m.count) sep.style.visibility = 'hidden';
         el.appendChild(sep);
@@ -335,7 +320,7 @@ var agentPlusPlanBar = (function () {
       el: el,
       /* The summary to draw, or null to hide the bar. */
       update: function (next) { summary = next && typeof next === 'object' ? next : null; paint(); },
-      /* The width the bar has, when the page knows it before the bar is laid out. */
+      /* For a page that knows the bar's width before the bar is laid out. */
       fit: function (w) {
         var next = +w > 0 ? +w : 0;
         if (!next || next === width) return;
