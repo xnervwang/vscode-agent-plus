@@ -22,6 +22,10 @@ FALLBACK = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.p
 
 EXTRA_DEFAULTS = {}
 
+# The shape of a session id, which names its plan file (<id>.json) and the files kept beside it: a UUID, in hex with
+# hyphens. plan_common.py reads plans by this pattern, so it must not match any other file in the data directory.
+SESSION_ID = r"[0-9A-Fa-f][0-9A-Fa-f-]{7,}"
+
 # The field of a hook's input that names the turn: one id from a prompt until the next.
 TURN_FIELD = "prompt_id"
 NO_GROUPING = ("the project part there is the starting directory with every character other than a letter or digit "

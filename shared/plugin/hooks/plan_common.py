@@ -344,9 +344,11 @@ def context_window(tail):
 """Plan file names, and the files the hooks keep beside a plan.
 
 A plan is <session id>.json. The extension's sweep (src/workplan.js) finds plans and the side files below by these
-names, and a file it does not recognise would never be cleaned up.
+names, and a file it does not recognise would never be cleaned up. Each agent gives its ids a shape of its own, so the
+pattern is plan_agent.SESSION_ID; it has to stay narrow enough that no other file the hooks keep in the data directory
+(client-time-zone.json and the like) passes for a plan.
 """
-SESSION_ID = r"[0-9A-Fa-f][0-9A-Fa-f-]{7,}"
+SESSION_ID = A.SESSION_ID
 SESSION_NAME = re.compile(r"^%s$" % SESSION_ID)
 PLAN_NAME = re.compile(r"^%s\.json$" % SESSION_ID)
 

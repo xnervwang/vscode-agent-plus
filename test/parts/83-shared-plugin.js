@@ -108,4 +108,34 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
     [true, true, agent === 'codex' ? 'block' : 'Stop', true],
     `with ${agent}'s inputs the plan is injected, the reminder speaks, and the Stop hook answers in ${agent}'s shape`);
   }
+
+  /* The shape of a session id is the agent's (plan_agent.SESSION_ID): an agent whose ids are not hex, as OpenCode's
+     ses_ ids are, gives its own, and it stays narrow enough that the other files in the data directory are not plans. */
+  {
+    const probe = `
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import plan_common as C
+ids = json.loads(sys.argv[2])
+print(json.dumps([bool(C.SESSION_NAME.match(i)) for i in ids] + [bool(C.PLAN_NAME.match('client-time-zone.json'))]
+                 + [C.plan_file({'session_id': ids[0]}, '/d') is not None]))
+`;
+    const UUID = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61', SES = 'ses_df3c28ab2ffe0TYFbXAnoBpqy6';
+    for (const agent of AGENTS) {
+      const r = run(['-c', probe, hooksOf[agent], JSON.stringify([UUID, SES, 'client-time-zone'])]);
+      let got = null;
+      try { got = JSON.parse(r.stdout); } catch (_) { got = r.stderr || r.stdout; }
+      eq(got, [true, false, false, false, true], `${agent}'s plan_agent.py gives the session id shape: a UUID names a plan, an OpenCode id and the time-zone file do not`);
+    }
+    const dir = path.join(tmp('hooks-ses'), 'hooks');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of fs.readdirSync(hooksOf.codex)) fs.copyFileSync(path.join(hooksOf.codex, f), path.join(dir, f));
+    const agentFile = path.join(dir, 'plan_agent.py');
+    const text = fs.readFileSync(agentFile, 'utf8');
+    fs.writeFileSync(agentFile, text.replace(/^SESSION_ID = .*$/m, 'SESSION_ID = r"ses_[0-9A-Za-z]{26}"'));
+    const r = run(['-c', probe, dir, JSON.stringify([SES, UUID, 'client-time-zone'])]);
+    let got = null;
+    try { got = JSON.parse(r.stdout); } catch (_) { got = r.stderr || r.stdout; }
+    eq(got, [true, false, false, false, true], 'an agent that gives ses_ ids as its shape has them name plans, and only them');
+  }
 };
