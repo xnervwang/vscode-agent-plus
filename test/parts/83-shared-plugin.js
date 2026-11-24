@@ -5,17 +5,23 @@
 'use strict';
 /*
  * The work plan plugin's shared Python (shared/plugin/hooks/) with each agent's plan_agent.py, laid out as each
- * extension ships them. Each name a shared hook imports from plan_path must exist for both agents. The self-tests run
- * with both agents' input shapes, the other hooks must answer in their agent's output shape, and each agent's skill is
- * rendered from the template with every block used.
+ * extension ships them. Each name a shared hook imports from plan_path must exist for every agent. The self-tests run
+ * with each agent's input shapes, the other hooks must answer in their agent's output shape, and each agent that ships
+ * the skill has it rendered from the template with every block used.
  */
 const cp = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const AGENTS = ['claude', 'codex'];
+const AGENTS = ['claude', 'codex', 'opencode'];
 /* Hooks not every agent's part ships: file name -> the agents whose part has it. */
 const ONLY = {};
+/* Self-tests whose fixtures name sessions by a UUID, which only these agents' ids are. */
+const UUID_SELFTESTS = { 'resume-work-plan.py': ['claude', 'codex'], 'tell-time-zone.py': ['claude', 'codex'],
+  'tell-reply-images.py': ['claude', 'codex'] };
+/* A session id of each agent's own shape. */
+const SIDS = { claude: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', codex: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+  opencode: 'ses_df3c28ab2ffe0TYFbXAnoBpqy6' };
 
 module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
   const shared = path.join(root, 'shared', 'plugin');
@@ -32,7 +38,7 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
   {
     const sync = require(path.join(root, 'shared', 'build', 'sync-shared.js'));
     const template = fs.readFileSync(path.join(shared, 'skills', 'maintain', 'SKILL.md'), 'utf8');
-    for (const agent of AGENTS) {
+    for (const agent of AGENTS.filter((a) => fs.existsSync(path.join(shared, a, 'maintain-skill.txt')))) {
       let out = '', err = '';
       try { out = sync.render(template, fs.readFileSync(path.join(shared, agent, 'maintain-skill.txt'), 'utf8')); } catch (e) { err = e.message; }
       eq([err, /^---\nname: maintain\ndescription: .+\n/.test(out), /\{\{[\w-]+\}\}/.test(out)], ['', true, false],
@@ -55,7 +61,7 @@ def defined(f):
         elif isinstance(n, (ast.Import, ast.ImportFrom)): names |= {(a.asname or a.name).split('.')[0] for a in n.names}
     return names
 common = defined(os.path.join(hooks, 'plan_common.py'))
-agents = {a: defined(os.path.join(sys.argv[2], a, 'plan_agent.py')) for a in ('claude', 'codex')}
+agents = {a: defined(os.path.join(sys.argv[2], a, 'plan_agent.py')) for a in json.loads(sys.argv[4])}
 only = json.loads(sys.argv[3])
 missing = {}
 for f in sorted(os.listdir(hooks)):
@@ -66,33 +72,36 @@ for f in sorted(os.listdir(hooks)):
                 if a.name == '*': continue
                 lacking = [ag for ag, names in agents.items() if ag in only.get(f, agents) and a.name not in common and a.name not in names]
                 if lacking: missing.setdefault(f, []).append('%s (%s)' % (a.name, ', '.join(lacking)))
-print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(ONLY)]);
+print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(ONLY), JSON.stringify(AGENTS)]);
     eq([r.status, r.status === 0 ? JSON.parse(r.stdout) : r.stderr.slice(-300)], [0, {}],
-      'every name a shared hook imports is in plan_common.py or in both agents\' plan_agent.py');
+      'every name a shared hook imports is in plan_common.py or in every agent\'s plan_agent.py');
   }
 
   for (const agent of AGENTS) {
-    for (const hook of ['changes.py', 'resume-work-plan.py', 'tell-time-zone.py', 'tell-reply-images.py'].filter((h) => !ONLY[h] || ONLY[h].includes(agent))) {
+    for (const hook of ['changes.py', 'resume-work-plan.py', 'tell-time-zone.py', 'tell-reply-images.py']
+      .filter((h) => (!ONLY[h] || ONLY[h].includes(agent)) && (!UUID_SELFTESTS[h] || UUID_SELFTESTS[h].includes(agent)))) {
       const r = run([path.join(hooksOf[agent], hook), '--selftest'], '', { TZ: 'UTC' });
       if (r.status === 0 && /all checks pass/.test(r.stdout)) ok(`${hook} passes its self-test with ${agent}'s input shapes`);
       else bad(`${hook} --selftest with ${agent}: ${(r.stdout + r.stderr).split('\n').filter((l) => /FAIL|Error/.test(l)).slice(0, 3).join(' | ') || r.status}`);
     }
   }
 
-  const SID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   for (const agent of AGENTS) {
+    const SID = SIDS[agent];
     const fields = agent === 'claude'
       ? { turn: 'prompt_id', remind: { hook_event_name: 'PostToolBatch', tool_calls: [{ tool_name: 'Bash', tool_input: { command: 'echo a > b' } }] } }
-      : { turn: 'turn_id', remind: { hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'echo a > b' } } };
+      : { turn: 'turn_id', remind: { hook_event_name: 'PostToolUse', tool_name: agent === 'opencode' ? 'bash' : 'Bash', tool_input: { command: 'echo a > b' } } };
     const data = tmp(`data-${agent}`);
     const plan = path.join(data, SID + '.json');
     fs.writeFileSync(plan, JSON.stringify({ nodes: [{ title: 'A', state: 'todo' }] }));
     fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ remindMinCalls: 1 }));
     /* The user's message, then the reply the Stop hook reads it from. */
     const transcript = path.join(data, 't.jsonl');
-    fs.writeFileSync(transcript, (agent === 'claude'
-      ? [{ type: 'user', timestamp: '2026-01-01T00:00:00Z', message: { role: 'user', content: 'merge it' } }]
-      : [{ timestamp: '2026-01-01T00:00:00Z', type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage' } } }])
+    fs.writeFileSync(transcript, ({
+      claude: [{ type: 'user', timestamp: '2026-01-01T00:00:00Z', message: { role: 'user', content: 'merge it' } }],
+      codex: [{ timestamp: '2026-01-01T00:00:00Z', type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage' } } }],
+      opencode: [{ type: 'user_message', timestamp: '2026-01-01T00:00:00Z', text: 'merge it' }],
+    })[agent]
       .map((l) => JSON.stringify(l)).join('\n') + '\n');
     const say = (hook, payload) => {
       const r = run([path.join(hooksOf[agent], hook), data], JSON.stringify({ session_id: SID, [fields.turn]: 't1', ...payload }));
@@ -122,10 +131,13 @@ print(json.dumps([bool(C.SESSION_NAME.match(i)) for i in ids] + [bool(C.PLAN_NAM
 `;
     const UUID = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61', SES = 'ses_df3c28ab2ffe0TYFbXAnoBpqy6';
     for (const agent of AGENTS) {
-      const r = run(['-c', probe, hooksOf[agent], JSON.stringify([UUID, SES, 'client-time-zone'])]);
+      const [own, other] = agent === 'opencode' ? [SES, UUID] : [UUID, SES];
+      const r = run(['-c', probe, hooksOf[agent], JSON.stringify([own, other, 'client-time-zone'])]);
       let got = null;
       try { got = JSON.parse(r.stdout); } catch (_) { got = r.stderr || r.stdout; }
-      eq(got, [true, false, false, false, true], `${agent}'s plan_agent.py gives the session id shape: a UUID names a plan, an OpenCode id and the time-zone file do not`);
+      eq(got, [true, false, false, false, true], agent === 'opencode'
+        ? `${agent}'s plan_agent.py gives the session id shape: an OpenCode id names a plan, a UUID and the time-zone file do not`
+        : `${agent}'s plan_agent.py gives the session id shape: a UUID names a plan, an OpenCode id and the time-zone file do not`);
     }
     const dir = path.join(tmp('hooks-ses'), 'hooks');
     fs.mkdirSync(dir, { recursive: true });
