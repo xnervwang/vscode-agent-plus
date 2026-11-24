@@ -43,7 +43,7 @@ const NOTICE_DELAY_MS = 4000;
    once those exist. */
 const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
   'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit', 'chooseTokenMode', 'openAttention',
-  'showAttention'];
+  'showAttention', 'showWorkPlanOf', 'answerQuestionOf'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {
@@ -100,6 +100,30 @@ function start(context, log, opts = {}) {
     if (Array.isArray(disposables)) disposables.push(sub);
     if (everyone.listeners === 1 && views && typeof views.listSoon === 'function') { try { views.listSoon(); } catch (_) { /* the next pass */ } }
     return sub;
+  };
+
+  /*
+   * The plan summaries of the conversations a dependent extension draws a plan bar for (planSummary in
+   * docs/protocol.md). The views work them out from the plans they read anyway and fire a change for one conversation at
+   * a time, but only while something listens.
+   */
+  const summaryChanges = sources.emitter();
+  let summaryListeners = 0;
+  host.planSummaries = { wanted: () => summaryListeners > 0, fire: (e) => summaryChanges.fire(e) };
+  const listenSummaries = (listener, thisArgs, disposables) => {
+    if (typeof listener !== 'function') throw new TypeError('a listener is a function');
+    const d = summaryChanges.event(listener, thisArgs);
+    summaryListeners++;
+    let gone = false;
+    const sub = disposable(() => { if (gone) return; gone = true; summaryListeners--; d.dispose(); });
+    if (Array.isArray(disposables)) disposables.push(sub);
+    return sub;
+  };
+  /* planSummary(sourceId, sessionId), or planSummary({ sourceId, sessionId }). */
+  const summaryOf = (a, b) => {
+    const one = a && typeof a === 'object';
+    const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
+    try { return views && typeof views.planSummary === 'function' ? views.planSummary(sourceId, sessionId) : null; } catch (e) { say(`plan summary: ${(e && e.message) || e}`); return null; }
   };
 
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
@@ -274,6 +298,10 @@ function start(context, log, opts = {}) {
     },
     allConversations() { return everyone.list; },
     onDidChangeAllConversations: listenEveryone,
+    /* With 'planSummary': one conversation's plan in the figures a plan bar draws, or null when it has none to draw. */
+    planSummary: summaryOf,
+    /* With 'planSummary': vscode.Event<{ sourceId, sessionId }>, a conversation whose summary has changed. */
+    onDidChangePlanSummary: listenSummaries,
     /* Whether this window shows its own notification when a conversation starts waiting for the user (feature
        'waitingFor'). */
     announcesWaits() {
@@ -319,6 +347,7 @@ function start(context, log, opts = {}) {
     for (const entry of registry.list()) unhook(entry.subs);
     registry.clear();
     everyone.changes.dispose();
+    summaryChanges.dispose();
   } });
   host.api = agentPlus;
   host.views = () => views;

@@ -42,11 +42,13 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | `version` | The core's marketplace version |
 | `protocol` | The newest protocol major the core implements; also the first number of `version` |
 | `accepts` | The source protocol majors the core accepts |
-| `features` | Optional core capabilities by name: `'allConversations'` (see `allConversations()` below), and `'waitingFor'`: the core reads each conversation's `waitingFor` and names the reason in its notices (see Notifications). With `'waitingFor'` the core also provides `announcesWaits()` (below) |
+| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()` and `onDidChangePlanSummary` (below) and the two commands in Plan bar. |
 | `registerSource(source)` | Registers a source; never throws; returns a frozen result |
 | `allConversations()` | With `'allConversations'`. Returns a frozen array with one entry per conversation from the last time the core read the sources' lists. For each source, the core includes the results of `listConversations()` and, if the source implements it, `listAllConversations()` (see Source members). Each entry has the form `{ sourceId, label, sessionId, title, steward, cwd, lastActiveAt }` (`sourceId` is the source's `id`; the other fields as in Conversations), where `label` is the source's label and `title` is the title displayed in the Conversations view. Kept current only while something listens to `onDidChangeAllConversations` (next row), and empty until then |
 | `onDidChangeAllConversations` | With `'allConversations'`. `vscode.Event<void>`: a conversation came or went, or its title or folder changed. If only `lastActiveAt` changes, the event does not fire, but `allConversations()` returns the new value. Listening starts a pass at once |
 | `announcesWaits()` | With `'waitingFor'`: whether this window tells the user when a conversation starts to wait for them (the core's views are shown in this window, the workspace is trusted, `agentPlus.notifications.enabled` and `.waiting` are on). If a source's agent has its own notice for the same wait, such as an approval request, the source skips that notice while `announcesWaits()` returns true and shows it when the call returns false. The source calls `announcesWaits()` again when the `agentPlus.notifications` settings or workspace trust change |
+| `planSummary(sourceId, sessionId)` | With `'planSummary'`. Also accepts `{ sourceId, sessionId }` as one argument. Returns a frozen object with the figures for one conversation's plan bar (see Plan bar). Returns `null` if the source is not registered, the conversation has no plan file, the file does not parse, or no rows count. Calling `planSummary()` makes the core follow that conversation's summary for changes. |
+| `onDidChangePlanSummary` | With `'planSummary'`. `vscode.Event<{ sourceId, sessionId }>`: a summary requested through `planSummary()` changed, including to or from `null`. While the event has a listener, the core recalculates the summaries each time it rereads the plans: when a plan folder changes, on its 30-second tick, or when a source registers or goes away. A page redraws its bar only for its own conversation. |
 
 ### Result of `registerSource`
 
@@ -201,6 +203,54 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 - Send is disabled for a question while its answer is on the way.
 - The folder is read when it changes, on a 2 second interval of its own while a registered source could take an answer, and on `onDidFocus` and `onDidChangeConversations` from any source.
 
+## Plan bar
+
+A plan bar is a line a feature extension draws just above its agent's input box, as wide as the box. It shows the plan summary for the conversation in the panel.
+
+| Extension | Plan bar |
+|---|---|
+| Claude Code Plus | Draws the bar in Claude Code's panel. |
+| Codex Plus | Draws the bar in the Codex page. |
+
+The core provides the summary, a page fragment that draws it, and two commands for clicks. Each feature extension owns its setting for turning the bar off; in Claude Code Plus it is `claudeCodePlus.show.planBar`.
+
+| Field | Meaning |
+|---|---|
+| `total` | Number of counted rows. Excludes rows in `dropped` and rows whose state this version of the core does not know. |
+| `done` | Number of counted rows in `done`. |
+| `counts` | `{ discussing, todo, doing, waiting, parked, done }`: number of counted rows in each state. |
+| `current` | `{ number, title, state, dim }` or `null`. The deepest `doing` row wins; plan order breaks ties. With no `doing` row, the core takes the first `waiting` row, then tries the first `discussing` row, then the first `todo` row. If only `parked` rows remain besides `done` rows, it takes the first `parked` row with `dim: true`; otherwise `dim` is `false`. `current` is `null` when every counted row is `done`. |
+| `allDone` | `true` when every counted row is `done`. |
+| `questions` | Number of rows waiting for the user's answer. The status bar uses the same count for `N to decide`: rows in `waiting` or `discussing` with `waitingOn: user`. |
+| `open` | Up to 30 counted rows that are not `done`, in plan order. Each is `{ number, title, state, depth }`, with `depth` of `1` for a top-level row, `2` for its children, and so on. |
+
+- Plan order is file order, with parents before their children.
+- `number` comes from the row's place in the file, as in the Work plan view: `1`, `2.1.1`.
+- The core reads back closed rows from `closed/<session id>.json` first, so they count and keep their numbers (see Plan files).
+- The core cuts titles to 200 characters.
+
+`build/sync-shared.js` copies `shared/page/plan-bar.js` into each feature extension with the other shared files.
+
+| Part | Detail |
+|---|---|
+| Object | The fragment exposes one global, `agentPlusPlanBar`, to keep its members from colliding with names in either page. It uses ASCII and ES5 like the page scripts and is also a module under Node. |
+| `create(document, { onOpen, onAnswer, css })` | Returns `{ el, update(summary), fit(width), model(), destroy() }`. The page places `el` and can add `css` to the bar's own style. |
+| `update(summary)` | Draws the summary. `null` hides the bar. |
+| `fit(width)` | Supplies the width when the page knows it before layout. The fragment also watches its own width with a `ResizeObserver` when one is available. |
+| `destroy()` | Removes the bar and its hover list from the page. |
+| Contents, left to right | A list icon and `Plan`; one segment per state (`done`, `doing`, `waiting`, `discussing`, `todo`, `parked`), each as long as its share of counted rows; `done` out of `total` (such as `1/10`); the current row with its number and state icon, grey when `dim`, or a green check and `All rows done` when `allDone`; a red part with a dot and `N to decide` when `questions` is above `0`; an arrow. |
+| Colours | The bar reads the Work plan view's state icon colours from the page's `--vscode-*` variables: `charts.green` for `done`, `charts.blue` for `doing`, `charts.orange` for `waiting`, `charts.yellow` for `discussing`, `charts.purple` for `todo`, and `descriptionForeground` for `parked`. The red part uses `#ef4444`, the colour both feature extensions use for the tab dot when a conversation waits for the user. |
+| `COMPACT_BELOW` | Both feature extensions use this exported constant of 400 CSS pixels. Below that width the bar keeps only `Plan`, the done count, the question count (just the number in the red part), and the arrow. |
+| Hover | After the pointer rests on the bar for 350 ms, a line gives the number of rows not done. Below it, the list shows each `open` row with its state icon and number, indented by depth, followed by `and N more` if the summary lists fewer rows than the count. |
+| Clicks and keys | A click, `Enter`, or `Space` on the bar calls `onOpen`. On the red part, the same actions call only `onAnswer`. |
+
+Both commands take `{ sourceId, sessionId }`. Neither appears in the command palette.
+
+| Command | Does |
+|---|---|
+| `agentPlus.showWorkPlanOf` | Moves the Work plan view to the conversation, as a focus report does, and brings the view into sight. The next editor tab change moves the view as usual. |
+| `agentPlus.answerQuestionOf` | Reads the plan as it is now and shows the first question in the Answer view, in the same plan order the Conversations view uses. This works even for a conversation the Conversations view leaves out, such as one outside the window's folders. A conversation counts as running when its source lists it as running. If there is no question, a message says that nothing in the conversation's plan waits for an answer. The Answer view's button opens the conversation through its source's `open()` when the source provides it, so a Codex conversation opens in Codex. |
+
 ## Timing and limits
 
 | Item | Value |
@@ -216,6 +266,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Plan file | 8 MB, regular files only |
 | Logo file | 256 KB, regular files only |
 | Ids | Non-empty, at most 200 characters, no space at either end, well-formed UTF-16 |
+| Plan summaries followed for changes | 200, the most recently requested |
+| Open rows in a summary | 30 |
 
 ## Restricted Mode
 

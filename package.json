@@ -102,6 +102,14 @@
       {
         "command": "agentPlus.openAttention",
         "title": "Agent Plus: Open a Conversation That Needs You"
+      },
+      {
+        "command": "agentPlus.showWorkPlanOf",
+        "title": "Agent Plus: Show a Conversation's Work Plan"
+      },
+      {
+        "command": "agentPlus.answerQuestionOf",
+        "title": "Agent Plus: Answer a Conversation's Question"
       }
     ],
     "viewsContainers": {
@@ -225,6 +233,14 @@
         },
         {
           "command": "agentPlus.openAttention",
+          "when": "false"
+        },
+        {
+          "command": "agentPlus.showWorkPlanOf",
+          "when": "false"
+        },
+        {
+          "command": "agentPlus.answerQuestionOf",
           "when": "false"
         }
       ]

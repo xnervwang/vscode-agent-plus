@@ -28,6 +28,7 @@ const { sharedHome } = require('./files');
 const attention = require('./attention');
 const waitReason = require('./wait-reason');
 const windowOpen = require('./window-open');
+const planSummary = require('./plan-summary');
 
 const CONFIG = 'agentPlus';
 const REFRESH_MS = 30000;
@@ -48,6 +49,9 @@ const WRITING_MS = 2000;
 const LIST_WAIT_MS = 3000;
 const SLOW_MS = 20000;
 const ZONE_KEY = 'agentPlus.timeZone';
+/* How many conversations' plan summaries are followed for changes (planSummary in docs/protocol.md): the ones asked for
+   most recently. A window shows a few conversations at a time, so this is far above what is ever in use. */
+const MAX_SUMMARIES = 200;
 const EMPTY_LIST = { list: [], problem: '' };
 const NO_CONVERSATIONS = { running: [], stopped: [], asks: 0 };
 
@@ -442,12 +446,39 @@ function create(host, opts = {}) {
     }
   };
 
-  /* The question named `key` as the latest list has it, or null when no row is asking it any more. */
+  /* The question named `key` as the latest list has it, or null when no row is asking it any more. A question opened
+     from a plan bar for a conversation the list leaves out, one outside this window's folders, is read from its plan. */
   const questionNow = (data, key) => {
     for (const c of data.running.concat(data.stopped)) {
       for (const q of c.questions) if (questionKey(c.sourceId, c.sessionId, q.row) === key) return questionOf(c, q);
     }
-    return null;
+    const aside = asideQuestions.get(key);
+    if (!aside) return null;
+    const c = conversationOf(aside.sourceId, aside.sessionId);
+    const q = c && c.questions.find((x) => x.row === aside.row);
+    return q ? questionOf(c, q) : null;
+  };
+
+  /*
+   * One conversation in the shape the Conversations view gives it, with its questions and `doing` rows, put together
+   * from its plan as it is now and from what its source last listed: a plan bar counts the questions of the plan as it
+   * is now, and the latest pass of the list may be older than that, or leave the conversation out for being outside this
+   * window's folders. A conversation its source has not listed counts as not running. Null when the source is not
+   * registered.
+   */
+  const asideQuestions = new Map();
+  const listedNow = (sourceId, sessionId) => {
+    const data = conversationsTree.data;
+    return data.running.concat(data.stopped).some((x) => x.sourceId === sourceId && x.sessionId === sessionId);
+  };
+  const conversationOf = (sourceId, sessionId) => {
+    const entry = registry.entry(sourceId);
+    if (!entry) return null;
+    const st = listState(entry);
+    const raw = ((st.last && st.last.list) || []).find((x) => x.sessionId === sessionId)
+      || { sessionId, cwd: '', title: '', state: 'idle', running: false };
+    const { plan, file } = planOf(sourceId, sessionId);
+    return Object.assign(conversations.entry(raw, plan, !!file), { sourceId });
   };
 
   /* The conversation whose brief is named `key`, as the latest list has it, or null when it is not in the list. */
@@ -474,8 +505,46 @@ function create(host, opts = {}) {
     const moved = workplan.setFocus(focus.sessionId, focus.sourceId);
     paintPlanView();
     if (workplan.refresh() || moved) paintBadge();
+    recheckSummaries();
     refreshConversations(false);
   };
+
+  /*
+   * ── Plan summaries, for the plan bars a feature extension draws (planSummary in docs/protocol.md) ──
+   *
+   * Each conversation asked about is remembered with the summary it was given, the most recent MAX_SUMMARIES of them.
+   * Whenever the plans are read again (a plan folder changed, the tick, a source registered or went), each remembered
+   * one is worked out again from the same cached parse, and a listener hears { sourceId, sessionId } for each that
+   * changed. Nothing is worked out while nothing listens.
+   */
+  const summaryBus = host.planSummaries || { wanted: () => false, fire() {} };
+  const summaries = new Map();
+  const summaryKey = (sourceId, sessionId) => keyOf(sourceId) + '/' + keyOf(sessionId);
+  const keyOf = (v) => sources.keyPart(v);
+  const summaryNow = (sourceId, sessionId) => (registry.get(sourceId) ? planSummary.summarize(planOf(sourceId, sessionId).plan) : null);
+  const freeze = (v) => {
+    if (v && typeof v === 'object') { for (const k of Object.keys(v)) freeze(v[k]); Object.freeze(v); }
+    return v;
+  };
+  const summaryFor = (sourceId, sessionId) => {
+    if (closing || !sources.usableId(sourceId) || !sources.usableId(sessionId)) return null;
+    const now = summaryNow(sourceId, sessionId);
+    const key = summaryKey(sourceId, sessionId);
+    summaries.delete(key);
+    summaries.set(key, { sourceId, sessionId, last: now });
+    while (summaries.size > MAX_SUMMARIES) summaries.delete(summaries.keys().next().value);
+    return now ? freeze(JSON.parse(JSON.stringify(now))) : null;
+  };
+  function recheckSummaries() {
+    if (closing || !summaries.size || !summaryBus.wanted()) return;
+    for (const s of summaries.values()) {
+      let now = null;
+      try { now = summaryNow(s.sourceId, s.sessionId); } catch (e) { say('plan summary: ' + ((e && e.message) || e)); continue; }
+      if (planSummary.same(now, s.last)) continue;
+      s.last = now;
+      summaryBus.fire(Object.freeze({ sourceId: s.sourceId, sessionId: s.sessionId }));
+    }
+  }
   /*
    * One write of one plan file arrives as several create and change events, and a source that keeps its conversation
    * list current can fire onDidChangeConversations as fast as it likes. Each pass reads the plan file of every
@@ -639,6 +708,7 @@ function create(host, opts = {}) {
     if (again) claimTab(true);
     if (e.added) listState(e.entry).askNext = true;
     paintPlanView();
+    recheckSummaries();
     refreshConversations(false);
     if (e.added) { courierNow(); pumpSoon(); }
     tuneAnswerPoll();
@@ -701,6 +771,11 @@ function create(host, opts = {}) {
   const detach = (entry) => changed({ removed: entry.id, entry });
 
   /* ── Commands, called through src/host.js ── */
+  /* { sourceId, sessionId } as a plan bar's command passes it, or null when either id is unusable. */
+  const targetOf = (v) => {
+    const sourceId = sources.get(v, 'sourceId'), sessionId = sources.get(v, 'sessionId');
+    return sources.usableId(sourceId) && sources.usableId(sessionId) ? { sourceId, sessionId } : null;
+  };
   const commands = {
     refreshWorkPlan: () => { plans.clear(); workplan.signature = ''; refreshPlans(); refreshConversations(true); },
     openWorkPlanFile: async (element) => {
@@ -749,6 +824,31 @@ function create(host, opts = {}) {
       if (typeof sourceId !== 'string' || typeof sessionId !== 'string') return;
       const it = needs.items().find((x) => x.sourceId === sourceId && x.sessionId === sessionId) || {};
       await openAnywhere({ sourceId, sessionId, title: it.title, cwd: it.cwd });
+    },
+    /*
+     * A click on a plan bar (planSummary in docs/protocol.md). The work plan view moves to that conversation, as a focus
+     * report would move it, and comes into view; the next tab change moves it on as usual.
+     */
+    showWorkPlanOf: async (target) => {
+      const t = targetOf(target);
+      if (!t || !registry.get(t.sourceId)) return;
+      focus.mark();
+      if (focus.set(t.sourceId, t.sessionId)) showFocus();
+      await vscode.commands.executeCommand('agentPlus.workPlan.focus');
+    },
+    /* A click on the red part of a plan bar: the first question of that conversation's plan, in plan order as the
+       Conversations view lists them, in the Answer view. */
+    answerQuestionOf: async (target) => {
+      const t = targetOf(target);
+      if (!t) return;
+      const c = conversationOf(t.sourceId, t.sessionId);
+      const q = c && c.questions[0];
+      if (!q) { vscode.window.showInformationMessage('Agent Plus: no question in that conversation\'s plan is waiting for your answer.'); return; }
+      if (!listedNow(t.sourceId, t.sessionId)) {
+        asideQuestions.set(questionKey(t.sourceId, t.sessionId, q.row), { sourceId: t.sourceId, sessionId: t.sessionId, row: q.row });
+        while (asideQuestions.size > 50) asideQuestions.delete(asideQuestions.keys().next().value);
+      }
+      await commands.answerQuestion(questionOf(c, q));
     },
     showAttention: async () => {
       const items = needs.items();
@@ -800,12 +900,14 @@ function create(host, opts = {}) {
     setActive(on) { active = !!on; paintConversations(); },
     /* A dependent started listening for every conversation, so a pass runs at once. */
     listSoon() { askAll(); convSoon(); },
+    /* The plan summary of one conversation, for a plan bar; remembered so that its changes are heard. */
+    planSummary: (sourceId, sessionId) => summaryFor(sourceId, sessionId),
     /* Whether this window tells the user when a conversation starts to wait. While it does, a source can leave out its
        agent's own notice of the wait. */
     announcesWaits() { const s = notifySettings(); return !closing && !!active && trusted() && s.enabled && s.waiting; },
     /* For tests. */
     _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, attentionEntry, needs, opener, answerView, focus, courier: () => courier,
-      plans: () => [...plans.keys()] },
+      plans: () => [...plans.keys()], summaries: () => [...summaries.values()].map((s) => [s.sourceId, s.sessionId]) },
     dispose() {
       closing = true;
       clearInterval(tick);
@@ -824,4 +926,4 @@ function create(host, opts = {}) {
   };
 }
 
-module.exports = { create, REFRESH_MS, LIST_WAIT_MS, SLOW_MS, ZONE_KEY };
+module.exports = { create, REFRESH_MS, LIST_WAIT_MS, SLOW_MS, ZONE_KEY, MAX_SUMMARIES };

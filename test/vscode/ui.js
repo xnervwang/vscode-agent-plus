@@ -850,6 +850,44 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     QPLANS();
   });
 
+  /* What an extension that draws a plan bar above its agent's input box gets: the summary, its change event, and the two
+     commands the bar's clicks run. */
+  await step('plan-summary', async () => {
+    needs('plan-follows-tab');
+    QPLANS();
+    const API = 'const api = vscode.extensions.getExtension("xnervwang.agent-plus").exports.agentPlus;';
+    const sum = await until(() => call(`${API} return api.features.includes("planSummary") && api.planSummary("codex", "asks-new");`), 10000, 300);
+    check(!!sum && sum.total === 3 && sum.done === 0 && !!sum.current && sum.current.number === '2' && sum.current.state === 'doing' && sum.questions === 1
+      && sameList(sum.open.map((r) => r.number), ['1', '2', '3']),
+    'planSummary gives a conversation\'s plan in a plan bar\'s figures: none of 3 rows done, row 2 doing as the current one, one question', sum);
+    await call(`${API} globalThis.__planTold = []; globalThis.__planSub = api.onDidChangePlanSummary((e) => globalThis.__planTold.push([e.sourceId, e.sessionId])); return true;`);
+    const plan = JSON.parse(fs.readFileSync(path.join(profile.plans, 'asks-new.json'), 'utf8'));
+    plan.nodes[1].state = 'done';
+    writePlan('asks-new', plan);
+    const told = await until(() => call('return globalThis.__planTold.length ? globalThis.__planTold : null;'), 15000, 300);
+    check(!!told && sameList(told[0], ['codex', 'asks-new']), 'a change to the plan file fires onDidChangePlanSummary with the agent and the conversation', told);
+    const after = await call(`${API} return api.planSummary({ sourceId: "codex", sessionId: "asks-new" });`);
+    check(!!after && after.done === 1 && !!after.current && after.current.number === '1' && after.current.state === 'waiting',
+      'and the summary asked for then has row 2 done and the waiting row 1 as the current one', after);
+    await call('globalThis.__planSub.dispose(); return true;');
+    QPLANS();
+    await openConv('briefed');
+    await showPlanView();
+    await until(async () => { const r = await planRows(); return r && r.some((x) => x.title === '1. Port the importer'); }, 15000, 300);
+    await exec('agentPlus.showWorkPlanOf', { sourceId: 'codex', sessionId: 'asks-new' });
+    const rows = await until(async () => { const r = await planRows(); return r && sameList(r.map((x) => x.title), ['3. Update the changelog', '2. Rewrite the parser', '1. Pick the release branch']) && r; }, 15000, 300);
+    check(!!rows, 'agentPlus.showWorkPlanOf moves the Work plan view to the conversation it is handed, though another conversation\'s tab is in front', await planRows());
+    await look('plan-summary-plan', { expect: 'The Agent Plus side bar shows the Work plan of Asked about the release branch (3. Update the changelog, 2. Rewrite the parser, 1. Pick the release branch), while the tab in front is Keeps a brief.' },
+      page.locator('#workbench\\.parts\\.sidebar'));
+    await exec('agentPlus.answerQuestionOf', { sourceId: 'codex', sessionId: 'asks-new' });
+    const f = await answerFrame({ title: 'Asked about the release branch' });
+    const shown = f && await answerSays(f);
+    check(!!shown && shown.question === Q1 && /^Row 1: Pick the release branch/.test(shown.row), 'agentPlus.answerQuestionOf shows that conversation\'s question in the Answer view', shown);
+    await look('plan-summary-answer', { expect: 'The Answer view shows Asked about the release branch with Row 1: Pick the release branch, the question Release from main or from the hotfix branch?, and a box to answer in.' },
+      pane('agentPlus.answer'));
+    await openNotes();
+  });
+
   await step('plan-notice', async () => {
     needs('plan-follows-tab');
     await openConv('asks-new');
