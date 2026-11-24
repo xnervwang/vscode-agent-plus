@@ -31,9 +31,9 @@ sys.dont_write_bytecode = True
 # The script's folder on the import path: see inject-work-plan.py.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from plan_path import (IMAGES_TOLD_SUFFIX, fixture_compacted, fixture_reply, fixture_session_meta, in_panel,
-                       latest_reply_matches, open_tail, plan_file, read_payload, scratch_dir, settings, side_file,
-                       write_quietly)
+from plan_path import (IMAGES_TOLD_SUFFIX, fixture_compacted, fixture_reply, fixture_scratch_suffix,
+                       fixture_session_meta, in_panel, latest_reply_matches, open_tail, plan_file, read_payload,
+                       scratch_dir, settings, side_file, write_quietly)
 
 # Said once, and only to a conversation that was told the note and has not been compacted since: without it, that
 # model goes on linking images nothing draws. Kept short because it is the one thing said while the option is off.
@@ -133,20 +133,29 @@ def selftest():
         return EXAMPLE_SESSION_ID[:-1] + str(n)
 
     tmp = tempfile.mkdtemp()
-    saved = {k: os.environ.get(k) for k in ("CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "CLAUDE_CONFIG_DIR")}
+    saved = {k: os.environ.get(k) for k in ("CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "CLAUDE_CONFIG_DIR",
+                                            "OPENCODE_PLUS_HOME")}
     try:
         os.environ["CODEX_HOME"] = os.path.join(tmp, "codex-home")
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(tmp, "claude-home")
+        os.environ["OPENCODE_PLUS_HOME"] = os.path.join(tmp, "opencode-plus-home")
         project = os.path.join(tmp, "projects", "-work-repo")
         os.makedirs(project)
         transcript = os.path.join(project, example_id(0) + ".jsonl")
 
+        panel = [True]
+
         def shown_in(where):
             """Puts the conversation in the panel or out of it, as this agent tells the two apart."""
-            os.environ["CLAUDE_CODE_ENTRYPOINT"] = "claude-vscode" if where == "panel" else "cli"
-            meta = fixture_session_meta("codex_vscode" if where == "panel" else "codex_exec")
+            panel[0] = where == "panel"
+            os.environ["CLAUDE_CODE_ENTRYPOINT"] = "claude-vscode" if panel[0] else "cli"
+            meta = fixture_session_meta("codex_vscode" if panel[0] else "codex_exec")
             with open(transcript, "w", encoding="utf-8") as fh:
                 fh.write((meta + "\n" if meta else "") + fixture_reply("Done.") + "\n")
+
+        def ask(payload, **changes):
+            """respond() to the event, which says where the conversation is shown as OpenCode's plugin does."""
+            return respond(dict(payload, in_panel=panel[0], **changes), tmp)
 
         def setting(on):
             with open(os.path.join(tmp, "config.json"), "w", encoding="utf-8") as fh:
@@ -156,52 +165,44 @@ def selftest():
                    "cwd": "/work/repo"}
         compacted = dict(message, hook_event_name="SessionStart", source="compact")
         shown_in("panel")
-        check("with no settings written nothing is said", respond(message, tmp) == "")
+        check("with no settings written nothing is said", ask(message) == "")
         setting(True)
-        if not folder_for(message):
-            # An agent that keeps no folder of a conversation's own has nowhere for an image to be saved.
-            check("with no folder of the conversation's own nothing is said, in the panel or after a compaction",
-                  respond(dict(message, in_panel=True), tmp) == ""
-                  and respond(dict(compacted, in_panel=True), tmp) == "")
-            check("  and nothing is recorded", not os.path.exists(told_file(message, tmp)))
-            return finish()
-        said = respond(message, tmp)
+        said = ask(message)
         folder = folder_for(message)
         check("with the setting on, in the panel, the first message is told", said.startswith("This panel shows images"))
         check("  naming the conversation's own folder", folder and folder in said and folder.endswith(
-            "/scratch/-work-repo/" + example_id(0)))
+            fixture_scratch_suffix(example_id(0))) and folder.startswith(tmp.replace("\\", "/") + "/"))
         check("  and asking for an absolute path, and for an image from the web to be downloaded first",
               "absolute path" in said and "download it there first" in said)
-        check("the next message is not told again", respond(message, tmp) == "")
-        check("a compaction tells it again", respond(compacted, tmp).startswith("This panel shows images"))
-        check("and the message after it is not told a third time", respond(message, tmp) == "")
+        check("the next message is not told again", ask(message) == "")
+        check("a compaction tells it again", ask(compacted).startswith("This panel shows images"))
+        check("and the message after it is not told a third time", ask(message) == "")
         setting(False)
         check("once the setting is off, the next message is told images are no longer shown",
-              respond(message, tmp) == NO_LONGER)
-        check("and only once", respond(message, tmp) == "")
+              ask(message) == NO_LONGER)
+        check("and only once", ask(message) == "")
         setting(True)
-        check("turned back on, it is told again", respond(message, tmp).startswith("This panel shows images"))
+        check("turned back on, it is told again", ask(message).startswith("This panel shows images"))
         shown_in("elsewhere")
-        check("a conversation the panel does not show is told images are no longer shown", respond(message, tmp) == NO_LONGER)
+        check("a conversation the panel does not show is told images are no longer shown", ask(message) == NO_LONGER)
         fresh = dict(message, session_id=example_id(1))
-        check("and a new one outside the panel is told nothing", respond(fresh, tmp) == "")
+        check("and a new one outside the panel is told nothing", ask(fresh) == "")
         shown_in("panel")
-        check("a new one in the panel is told", respond(fresh, tmp) != "")
-        respond(dict(message, session_id=example_id(2)), tmp)
+        check("a new one in the panel is told", ask(fresh) != "")
+        ask(message, session_id=example_id(2))
         setting(False)
         check("after a compaction with the setting off there is nothing to take back",
-              respond(dict(compacted, session_id=example_id(2)), tmp) == "")
+              ask(compacted, session_id=example_id(2)) == "")
         with open(os.path.join(tmp, "config.json"), "w", encoding="utf-8") as fh:
             json.dump({"replyImages": True, "extensionMarkers": [os.path.join(tmp, "gone")]}, fh)
         check("with the extension uninstalled from every editor nothing is said",
-              respond(dict(message, session_id=example_id(3)), tmp) == "")
+              ask(message, session_id=example_id(3)) == "")
         setting(True)
-        check("a message with no session id names no folder and says nothing",
-              respond(dict(message, session_id=""), tmp) == "")
+        check("a message with no session id names no folder and says nothing", ask(message, session_id="") == "")
         with open(os.path.join(tmp, "config.json"), "w", encoding="utf-8") as fh:
             json.dump({"replyImages": True, "quietWhenReplyMatches": "^Done"}, fh)
         check("a compaction in a conversation that relays another model says nothing",
-              respond(dict(compacted, session_id=example_id(4)), tmp) == "")
+              ask(compacted, session_id=example_id(4)) == "")
         with open(transcript, "a", encoding="utf-8") as fh:
             fh.write(fixture_compacted() + "\n")
     finally:

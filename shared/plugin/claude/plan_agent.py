@@ -266,6 +266,12 @@ def scratch_dir(payload):
     return os.path.join(base, "scratch", project, session)
 
 
+def fixture_scratch_suffix(session_id):
+    """How scratch_dir() ends, with forward slashes, for the self-tests' conversation, whose transcript is in
+    projects/-work-repo."""
+    return "/scratch/-work-repo/" + session_id
+
+
 def fixture_session_meta(originator, cwd="/work/repo"):
     """Claude Code's transcript has no record of where it runs; the self-tests set the environment instead."""
     return ""

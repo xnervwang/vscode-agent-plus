@@ -74,13 +74,46 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
       'every name a shared hook imports is in plan_common.py or in every agent\'s plan_agent.py');
   }
 
+  const imageTests = {};
   for (const agent of AGENTS) {
     for (const hook of ['changes.py', 'resume-work-plan.py', 'tell-time-zone.py', 'tell-reply-images.py']
       .filter((h) => !ONLY[h] || ONLY[h].includes(agent))) {
       const r = run([path.join(hooksOf[agent], hook), '--selftest'], '', { TZ: 'UTC' });
+      if (hook === 'tell-reply-images.py') imageTests[agent] = r.stdout.split('\n');
       if (r.status === 0 && /all checks pass/.test(r.stdout)) ok(`${hook} passes its self-test with ${agent}'s input shapes`);
       else bad(`${hook} --selftest with ${agent}: ${(r.stdout + r.stderr).split('\n').filter((l) => /FAIL|Error/.test(l)).slice(0, 3).join(' | ') || r.status}`);
     }
+  }
+  /* Every agent keeps a folder of a conversation's own, so the image self-test tells the model and checks the folder
+     it names for each of them, rather than only that nothing is said. */
+  for (const agent of AGENTS) {
+    const lines = imageTests[agent] || [];
+    eq(['PASS with the setting on, in the panel, the first message is told', "PASS   naming the conversation's own folder"]
+      .map((l) => lines.includes(l)), [true, true],
+    `with ${agent}'s plan_agent.py the image note is said in the panel and names the conversation's own folder`);
+  }
+
+  /* OpenCode's folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>, and none for an id not of
+     OpenCode's shape, so that a name cannot lead out of it. */
+  {
+    const probe = `
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import plan_agent as A
+print(json.dumps([A.scratch_dir({"session_id": s} if s is not None else {}) for s in json.loads(sys.argv[2])]))
+`;
+    const SES = SIDS.opencode;
+    const ids = [SES, `${SES}/../x`, 'ses_../../x', SIDS.claude, '', null];
+    const where = (env) => {
+      const r = run(['-c', probe, hooksOf.opencode, JSON.stringify(ids)], '', env);
+      try { return JSON.parse(r.stdout); } catch (_) { return r.stderr || r.stdout; }
+    };
+    const home = tmp('opencode-plus-home');
+    eq(where({ OPENCODE_PLUS_HOME: home }), [path.join(home, 'scratch', SES), null, null, null, null, null],
+      "opencode's scratch_dir is OPENCODE_PLUS_HOME/scratch/<session id>, and none for an id not of OpenCode's shape");
+    const user = tmp('opencode-user');
+    eq(where({ OPENCODE_PLUS_HOME: '', HOME: user, USERPROFILE: user })[0], path.join(user, '.opencode-plus', 'scratch', SES),
+      'and ~/.opencode-plus/scratch/<session id> without OPENCODE_PLUS_HOME');
   }
 
   for (const agent of AGENTS) {

@@ -348,6 +348,11 @@ def scratch_dir(payload):
     return os.path.join(codex_home(), "scratch", re.sub(r"[^A-Za-z0-9]", "-", cwd) or "-", session)
 
 
+def fixture_scratch_suffix(session_id):
+    """How scratch_dir() ends, with forward slashes, for the self-tests' conversation, whose cwd is /work/repo."""
+    return "/scratch/-work-repo/" + session_id
+
+
 def fixture_session_meta(originator, cwd="/work/repo"):
     """The first record of a rollout, for the hooks' self-tests."""
     return json.dumps({"timestamp": "2026-01-01T00:00:00Z", "type": "session_meta", "payload": {

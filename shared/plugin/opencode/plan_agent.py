@@ -23,14 +23,22 @@ row command from a shell where the plugin cannot add tools. The plugin says whic
 """
 import json
 import os
+import re
 
 AGENT = "OpenCode"
 SETTING_PREFIX = "opencodePlus"
 
+
+def opencode_plus_home():
+    """The extension's folder (paths.root() there): OPENCODE_PLUS_HOME, else ~/.opencode-plus. The plugin runs these
+    scripts with the extension's OPENCODE_PLUS_HOME in their environment."""
+    return os.environ.get("OPENCODE_PLUS_HOME") or os.path.join(os.path.expanduser("~"), ".opencode-plus")
+
+
 # The plans folder is the extension's own (paths.plansDir() there): <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/plans. The
 # plugin passes it as the first argument; this is the same folder for a caller started without one.
 DATA_ENV = ()
-FALLBACK = os.path.join(os.environ.get("OPENCODE_PLUS_HOME") or os.path.join(os.path.expanduser("~"), ".opencode-plus"), "plans")
+FALLBACK = os.path.join(opencode_plus_home(), "plans")
 
 EXTRA_DEFAULTS = {}
 
@@ -254,8 +262,18 @@ def in_panel(payload):
 
 
 def scratch_dir(payload):
-    """No folder of a conversation's own is kept for OpenCode."""
-    return None
+    """The conversation's own folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>/, outside the
+    user's workspace and on the machine OpenCode runs on, which is where the extension reads a reply's images. None
+    without a session id of OpenCode's shape, so that a name cannot lead out of the folder."""
+    session = str(payload.get("session_id") or "").strip()
+    if not re.match(r"^%s$" % SESSION_ID, session):
+        return None
+    return os.path.join(opencode_plus_home(), "scratch", session)
+
+
+def fixture_scratch_suffix(session_id):
+    """How scratch_dir() ends, with forward slashes, for the self-tests' conversation."""
+    return "/scratch/" + session_id
 
 
 def fixture_session_meta(originator, cwd="/work/repo"):
