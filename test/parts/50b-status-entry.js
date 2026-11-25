@@ -45,12 +45,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   plan('b', 1);
   plan('c', 3);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta'), conv('c', 'Gamma', false)], '2 conversations need you'),
-    [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.errorBackground'],
-    'it counts the running conversations with a question, not the questions, lists them in its tooltip, and is red; a stopped one is not counted');
+    [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.warningBackground'],
+    'it counts the running conversations with a question, not the questions, lists them in its tooltip, and is yellow; a stopped one is not counted');
 
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 conversation needs you'),
-    [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nAlpha · 2 questions', 'statusBarItem.errorBackground'],
+    [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nAlpha · 2 questions', 'statusBarItem.warningBackground'],
     'one conversation is written in the singular');
 
   const many = Array.from({ length: 12 }, (_, i) => { plan(`m${i}`, 1); return conv(`m${i}`, `Task ${i + 1}`); });
@@ -61,7 +61,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
 
   vscode.env.language = 'zh-cn';
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 个对话等你'),
-    [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\nAlpha · 2 个问题', 'statusBarItem.errorBackground'],
+    [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\nAlpha · 2 个问题', 'statusBarItem.warningBackground'],
     'in Chinese it says how many conversations wait for the user');
   b.close();
 };

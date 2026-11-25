@@ -171,7 +171,7 @@ function create(host, opts = {}) {
       ? [t.statusWho(asking.length), ...asking.slice(0, 10).map((c) => `${c.title} · ${t.questions(c.questions.length)}`)]
         .concat(asking.length > 10 ? [t.statusMore(asking.length - 10)] : []).join('\n')
       : t.statusTip;
-    statusEntry.backgroundColor = asking.length ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
+    statusEntry.backgroundColor = asking.length ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
     statusEntry.show();
   };
 

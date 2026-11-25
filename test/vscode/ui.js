@@ -564,8 +564,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     });
     check(tab === '2', 'the Conversations tab\'s badge counts the two questions', tab);
     const st = await entry('conversations');
-    check(!!st && /2 conversations need you/.test(st.text) && st.error && !st.warning,
-      'and the status bar entry says 2 conversations need you, on a red background', st);
+    check(!!st && /2 conversations need you/.test(st.text) && st.warning && !st.error,
+      'and the status bar entry says 2 conversations need you, on a yellow background', st);
     await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you on a red background.' },
       pane('agentPlus.conversations'));
   });
