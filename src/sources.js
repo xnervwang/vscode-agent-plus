@@ -24,8 +24,7 @@ const ACCEPTS = [1];
    announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
    methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards; a source that answers them lists it
-   too. 'stewardList' adds stewardsOf(), which onDidChangeStewards covers as well; a source that answers stewardsOf() lists
-   it. */
+   too. 'stewardList' adds stewardsOf(), which onDidChangeStewards covers as well. */
 const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
@@ -35,8 +34,8 @@ const ACTIVITIES = ['working', 'background', 'waiting', 'stopped'];
 const ACTIVITY_OF_STATE = { prompt: 'waiting', working: 'working', unread: 'stopped', idle: 'stopped' };
 const MAX_ID = 200;
 const MAX_CONVERSATIONS = 2000;
-/* The most stewards stewardsOf() gives for one conversation, how many entries of a source's answer are looked at to find
-   them, and the longest title kept. */
+/* Caps on stewardsOf(): the stewards it gives for one conversation, the entries of a source's answer it looks at to
+   find them, and the length of a title. */
 const MAX_STEWARDS = 20;
 const MAX_STEWARD_ENTRIES = 200;
 const MAX_STEWARD_TITLE = 200;
@@ -200,8 +199,7 @@ function stewardOf(source, sourceId, sessionId) {
 }
 
 /* The stewards the source gives for (sourceId, sessionId), in its order, each a frozen { sourceId, sessionId, title }.
-   An entry without two usable ids is left out and the others are kept. Empty when the source does not list
-   'stewardList' or its answer is not an array. */
+   An entry without two usable ids is skipped without voiding the rest. */
 function stewardsOf(source, sourceId, sessionId, max = MAX_STEWARDS) {
   if (!supports(source, 'stewardList')) return [];
   const list = call(source, 'stewardsOf', [sourceId, sessionId], null);

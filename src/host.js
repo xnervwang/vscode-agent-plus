@@ -149,9 +149,8 @@ function start(context, log, opts = {}) {
 
   /*
    * stewardOf(), stewardsOf() and onDidChangeStewards (docs/protocol.md): the stewards that look after a conversation.
-   * stewardOf() is the first answer given by a source registered here that lists 'stewards'; stewardsOf() joins the
-   * lists of every source that lists 'stewardList'. However many things change the answers in one turn, the event fires
-   * once.
+   * stewardOf() takes the first answer from the sources registered here that list 'stewards'; stewardsOf() joins what
+   * every source with 'stewardList' gives. However many things change the answers in one turn, the event fires once.
    */
   const stewardChanges = sources.emitter();
   let stewardsDue = false;
@@ -167,8 +166,7 @@ function start(context, log, opts = {}) {
     if (Array.isArray(disposables)) disposables.push(sub);
     return sub;
   };
-  /* The conversation asked about, from two ids or one { sourceId, sessionId }, or null. Null in Restricted Mode too,
-     where deliver() could not hand anything to a steward either. */
+  /* Null in Restricted Mode, where deliver() could not hand anything to a steward either. */
   const stewardQuery = (a, b) => {
     const one = a && typeof a === 'object';
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
@@ -183,7 +181,6 @@ function start(context, log, opts = {}) {
     }
     return null;
   };
-  /* The sources' lists in the order the sources registered, a steward named twice kept where it first appears. */
   const stewardsOf = (a, b) => {
     const q = stewardQuery(a, b), out = [], seen = new Set();
     for (const entry of q ? registry.list() : []) {
@@ -388,7 +385,8 @@ function start(context, log, opts = {}) {
     planPathOf,
     /* With 'stewards': the steward of that conversation as a frozen { sourceId, sessionId }, or null. */
     stewardOf,
-    /* With 'stewardList': every steward of that conversation, a frozen array of frozen { sourceId, sessionId, title }. */
+    /* With 'stewardList': the stewards of that conversation, at most sources.MAX_STEWARDS, as a frozen array of frozen
+       { sourceId, sessionId, title }. */
     stewardsOf,
     /* With 'stewards' or 'stewardList': vscode.Event<void>, stewardOf() or stewardsOf() may answer differently. */
     onDidChangeStewards: listenStewards,

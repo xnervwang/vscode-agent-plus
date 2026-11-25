@@ -21,13 +21,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   let list = [];
   const plan = (id, questions) => fs.writeFileSync(path.join(plans, id + '.json'), JSON.stringify({ nodes: [{ title: 'build', state: 'doing' }]
     .concat(Array.from({ length: questions }, (_, i) => ({ title: `ask ${i + 1}`, state: 'waiting', waitingOn: 'user', question: `Q${i + 1}?` }))) }));
-  /* Each one a second older than the one before, so the list keeps the order they are given in. */
+  /* The list puts the most recently active first, so this keeps them in the order they are given in. */
   let age = 0;
   const conv = (id, title, running = true) => ({ sessionId: id, title, cwd: ws, state: 'idle', running, lastActiveAt: Date.now() - 1000 * ++age });
   b.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', planPath: (id) => path.join(plans, id + '.json'), planDir: () => plans,
     listConversations: async () => list, onDidChangeConversations: changed.event });
   const entry = () => control.state.status.find((i) => i.id === 'agentPlus.conversations');
-  /* A change is listed again only after the debounce, so this waits for the entry to say `text`, for up to 5 s. */
+  /* A change is listed again only after the debounce. */
   const look = async (convs, text) => {
     list = convs;
     changed.fire();
@@ -40,19 +40,19 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], 'Conversations 2'),
     [true, '$(comment-discussion) Conversations 2', 'Show the conversations of this workspace', null],
-    'with no question, the entry counts the running conversations, with no background');
+    'with no question waiting, the entry shows how many conversations run, on the plain status bar');
 
   plan('a', 2);
   plan('b', 1);
   plan('c', 3);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta'), conv('c', 'Gamma', false)], '2 conversations need you'),
     [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.warningBackground'],
-    'it counts the running conversations with a question, not the questions, lists them in its tooltip, and is yellow; a stopped one is not counted');
+    'two running conversations with three questions between them are counted as 2, listed in the tooltip, on a yellow background; the stopped one is left out');
 
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 conversation needs you'),
     [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions', 'statusBarItem.warningBackground'],
-    'one conversation is written in the singular');
+    'for one conversation the entry says 1 conversation needs you');
 
   const many = Array.from({ length: 12 }, (_, i) => { plan(`m${i}`, 1); return conv(`m${i}`, `Task ${i + 1}`); });
   const [, text, tip] = await look(many, '12 conversations need you');
@@ -63,7 +63,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   vscode.env.language = 'zh-cn';
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 个对话等你'),
     [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\n在等你回答计划里问题的：\nAlpha · 2 个问题', 'statusBarItem.warningBackground'],
-    'in Chinese it says how many conversations wait for the user');
+    'with VS Code in Chinese, the entry and its tooltip are in Chinese');
   b.close();
 
   /* With the attention watcher counting too. */

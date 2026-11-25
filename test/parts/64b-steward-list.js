@@ -10,7 +10,7 @@
 const { boot } = require('../boot');
 
 module.exports = async ({ eq, tmp, root, wait }) => {
-  /* A stand-in source that lists 'stewardList': its stewardsOf() records each call and returns answer(sourceId, sessionId). */
+  /* A stand-in source that lists 'stewardList'; `over` replaces any of its members. */
   const keeper = (id, answer, over = {}) => {
     const heard = new Set(), asked = [];
     const source = Object.assign({ protocol: 1, id, label: id, features: ['stewardList'],
@@ -44,17 +44,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const two = b.api.stewardsOf('opencode-plus', 'ses_A'), one = b.api.stewardsOf({ sourceId: 'opencode-plus', sessionId: 'ses_A' });
     eq([two, one, frozen(two), frozen(one), cc.asked], [[S('a', 'Steward A'), S('b', 'Steward B')], [S('a', 'Steward A'), S('b', 'Steward B')], true, true,
       [['opencode-plus', 'ses_A'], ['opencode-plus', 'ses_A']]],
-      'stewardsOf() takes the two ids or one { sourceId, sessionId }, passes them to the source as two, and returns frozen copies in the source\'s order');
-    eq(b.api.stewardsOf('opencode-plus', 'ses_B'), [], 'a conversation no steward looks after has none');
+      'stewardsOf() takes two ids or one { sourceId, sessionId }, always asks the source with two ids, and returns frozen copies in the source\'s order');
+    eq(b.api.stewardsOf('opencode-plus', 'ses_B'), [], 'another conversation, for which the source has none, gets an empty array');
     const asked = cc.asked.length;
     eq([b.api.stewardsOf('opencode-plus', ''), b.api.stewardsOf(' opencode-plus', 'ses_A'), b.api.stewardsOf('opencode-plus', 42),
       b.api.stewardsOf('opencode-plus'), b.api.stewardsOf({ sourceId: 'opencode-plus' }), b.api.stewardsOf(null), b.api.stewardsOf(),
       cc.asked.length - asked], [[], [], [], [], [], [], [], 0],
-      'an id that is empty, padded, not a string or missing, or nothing at all: none, and no source is asked');
+      'ids it cannot use give an empty array, and no source is asked');
     b.close();
   }
 
-  /* ── An entry of the wrong form is left out, an answer of the wrong form counts as none ── */
+  /* ── Entries without usable ids are dropped; an answer that is not an array gives none ── */
   {
     const b = boot(root, tmp, { views: false });
     let answer = null;
@@ -64,7 +64,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const wrongAnswers = [null, S('a'), 'claude-code:a', 42, Promise.resolve([S('a')]), () => { throw new Error('no table'); },
       () => new Proxy([], { get(t, k) { if (k === 'length') throw new Error('length'); return t[k]; } })];
     eq(wrongAnswers.map(got), Array(wrongAnswers.length).fill([]),
-      'an answer that is null, one entry, a string, a number, a promise, a stewardsOf() that throws or an array whose length throws: none');
+      'an answer that is not an array, or one that throws when called or when its length is read, gives none');
     const mixed = got([
       S('kept-1', 'First'),
       { sessionId: 'no-source' },
@@ -86,7 +86,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [['kept-1', 'First', ['sourceId', 'sessionId', 'title']], ['kept-2', 'Second', ['sourceId', 'sessionId', 'title']],
         ['kept-3', 'Third', ['sourceId', 'sessionId', 'title']], ['kept-4', '', ['sourceId', 'sessionId', 'title']],
         ['kept-5', 200, ['sourceId', 'sessionId', 'title']]],
-      'entries missing an id or with an empty, padded, too long or broken one, a throwing getter, or not an object are left out and the rest kept; '
+      'entries without two usable ids, with a getter that throws, or that are not objects are left out and the rest kept; '
         + 'a title is trimmed and cut to 200 characters, one that is not a string is empty, and other fields are dropped');
     const long = got(Array.from({ length: 30 }, (_, i) => S(`s${i}`)));
     eq([long.length, long[19].sessionId], [20, 's19'], 'at most 20 stewards are given');
@@ -106,7 +106,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     ].map((r) => r.accepted);
     eq([accepted, b.api.stewardsOf('opencode-plus', 'ses_A').map((s) => [s.sourceId, s.sessionId, s.title])],
       [[true, true, true, true, true], [['first', 'a', 'A'], ['claude-code', 'shared', 'Shared from first'], ['second', 'b', 'B']]],
-      'a source with no stewardsOf() or one that throws on reading it is passed over; the lists are joined in registration order, a steward named twice kept where it first appears');
+      'a source with no stewardsOf(), or whose stewardsOf() throws when read, is passed over; the other lists are joined in registration order, keeping a steward named twice where it first appears');
     eq([b.api.stewardsOf('claude-code', 'x').length, second.asked[second.asked.length - 1]], [3, ['claude-code', 'x']],
       'a source is asked about a conversation of any source, not only its own');
     const many = keeper('many', () => Array.from({ length: 19 }, (_, i) => S(`m${i}`, '', 'many')));
@@ -125,19 +125,19 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const reg = b.api.registerSource(cc.source);
     eq([n, cc.heard.size], [0, 1], 'a source that lists only \'stewardList\' is listened to as it registers');
     await turn();
-    eq(n, 1, 'and its registering fires the event once');
+    eq(n, 1, 'and registering it fires the event once');
     cc.fire(); cc.fire();
     await turn();
     eq(n, 2, 'two changes it reports in one turn fire the event once');
     const both = keeper('both', () => [S('b')], { features: ['stewards', 'stewardList'], stewardOf: () => S('b') });
     b.api.registerSource(both.source);
     await turn();
-    eq([n, both.heard.size], [3, 1], 'a source that lists both is listened to once');
+    eq([n, both.heard.size], [3, 1], 'a source listing both features gets one listener');
     reg.registration.dispose();
     eq([cc.heard.size, b.api.stewardsOf('opencode-plus', 'ses_A').map((s) => s.sessionId)], [0, ['b']],
-      'a source going away is no longer listened to, and its stewards are gone with it');
+      'a source that goes away stops being listened to, and its stewards go with it');
     await turn();
-    eq(n, 4, 'and its going away fires the event once');
+    eq(n, 4, 'and that fires the event once more');
     b.close();
     await turn();
     eq(b.api.stewardsOf('opencode-plus', 'ses_A'), [], 'a closed window has no stewards');

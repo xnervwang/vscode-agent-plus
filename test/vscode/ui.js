@@ -726,7 +726,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await step('status-entry', async () => {
     needs('question-rows');
     const st = await entry('conversations');
-    check(!!st && /2 conversations need you/.test(st.text), 'the status bar entry says how many conversations wait for you', st);
+    check(!!st && /2 conversations need you/.test(st.text), 'the status bar entry says 2 conversations need you', st);
     const tip = await hoverText(entryLoc('conversations'));
     check(tip.startsWith('2 conversations need you:') && tip.includes('Asked about the release branch · 1 question') && tip.includes('Asked days ago · 1 question'),
       'hovering it lists those conversations, each with how many questions it has', tip);
