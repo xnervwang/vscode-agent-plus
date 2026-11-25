@@ -110,6 +110,11 @@
       {
         "command": "agentPlus.answerQuestionOf",
         "title": "Agent Plus: Answer a Question in a Conversation's Plan"
+      },
+      {
+        "command": "agentPlus.writeAboutRow",
+        "title": "%agentPlus.writeAboutRow.title%",
+        "icon": "$(edit)"
       }
     ],
     "viewsContainers": {
@@ -180,6 +185,11 @@
       ],
       "view/item/context": [
         {
+          "command": "agentPlus.writeAboutRow",
+          "when": "view == agentPlus.workPlan && viewItem == agentPlusNode && agentPlus.workPlanCanPrefill",
+          "group": "inline"
+        },
+        {
           "command": "agentPlus.openWorkPlanFile",
           "when": "view == agentPlus.workPlan && viewItem == agentPlusNode",
           "group": "navigation"
@@ -241,6 +251,10 @@
         },
         {
           "command": "agentPlus.answerQuestionOf",
+          "when": "false"
+        },
+        {
+          "command": "agentPlus.writeAboutRow",
           "when": "false"
         }
       ]

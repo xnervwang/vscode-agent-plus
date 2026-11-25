@@ -34,7 +34,8 @@ function activate(context) {
   const list = new Map();
   /* sessionId -> its tab's panel; '' -> a tab with no conversation yet. */
   const panels = new Map();
-  const state = { problem: '', notice: null, canDeliver: true, outcome: { outcome: 'submitted' }, answers: [], revealed: [], ran: [], seenOnOpen: true };
+  const state = { problem: '', notice: null, canDeliver: true, outcome: { outcome: 'submitted' }, answers: [], revealed: [], ran: [], seenOnOpen: true,
+    prefilled: [], prefillOutcome: { outcome: 'drafted' } };
 
   const html = (title) => `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"></head>`
     + `<body style="font-family: var(--vscode-font-family); color: var(--vscode-foreground)">`
@@ -78,7 +79,7 @@ function activate(context) {
     id: 'codex',
     label: 'Codex',
     extensionId: 'xnervwang.codex-plus',
-    features: ['brief'],
+    features: ['brief', 'prefill'],
     logo: { light: vscode.Uri.file(path.join(__dirname, 'logo-codex.svg')), dark: vscode.Uri.file(path.join(__dirname, 'logo-codex.svg')) },
     planPath: (id) => path.join(plans, `${id}.json`),
     planDir: () => plans,
@@ -99,6 +100,12 @@ function activate(context) {
     },
     planNotice: () => state.notice,
     onDidChangePlanNotice: noticeChanged.event,
+    /* Records the text and brings the conversation's tab forward; what it answers is set with configure(). */
+    prefill: async (id, text) => {
+      state.prefilled.push({ sessionId: id, text });
+      if (!openTab(id)) return { outcome: 'notReceived', reason: 'no such conversation' };
+      return state.prefillOutcome;
+    },
   };
 
   const api = vscode.extensions.getExtension('xnervwang.agent-plus');

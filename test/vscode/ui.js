@@ -531,7 +531,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     writePlan('asks-new', { nodes: [
       { title: 'Pick the release branch', state: 'waiting', waitingOn: 'user', question: Q1, asked: iso(qAt - 60e3), since: iso(qAt - 60e3),
         opened: iso(qAt - 2 * HOUR), detail: 'The hotfix branch has two fixes main does not have yet.' },
-      { title: 'Rewrite the parser', state: 'doing', since: iso(qAt - 600e3), opened: iso(qAt - 2 * HOUR) },
+      { title: 'Rewrite the parser', state: 'doing', since: iso(qAt - 600e3), opened: iso(qAt - 2 * HOUR), detail: 'The old parser reads only the first format.' },
       { title: 'Update the changelog', state: 'todo', opened: iso(qAt - HOUR) }] });
     writePlan('asks-old', { nodes: [{ title: 'Choose the log format', state: 'waiting', waitingOn: 'user', question: Q2, asked: iso(qAt - 3 * 86400e3),
       since: iso(qAt - 3 * 86400e3), opened: iso(qAt - 3 * 86400e3) }] });
@@ -811,14 +811,40 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await step('plan-row-detail', async () => {
     needs('plan-follows-tab');
     await showPlanView();
-    await viaUi('agentPlus.showWorkPlanDetail', () => clickRow('agentPlus.workPlan', '1. Pick the release branch'));
+    await viaUi('agentPlus.showWorkPlanDetail', () => clickRow('agentPlus.workPlan', '2. Rewrite the parser'));
     const d = await until(dialog, 10000, 300);
-    check(!!d && /Pick the release branch/.test(d.text) && /waiting on you for \d+m/.test(d.text) && d.text.includes(`Question: ${Q1}`) && /The hotfix branch has two fixes/.test(d.text),
-      'a click on a row opens a dialog with its title, state, question and description', d);
-    await look('plan-row-detail', { toasts: true, expect: 'A dialog in the middle of the window titled Pick the release branch, with waiting on you for some minutes, Question: Release from main or from the hotfix branch?, the date and time the row was opened, then after a blank line the sentence about the hotfix branch, and an OK button.' },
+    check(!!d && /Rewrite the parser/.test(d.text) && /doing for \d+m/.test(d.text) && /The old parser reads only the first format/.test(d.text),
+      'a click on a row that asks nothing opens a dialog with its title, state and description', d);
+    await look('plan-row-detail', { toasts: true, expect: 'A dialog in the middle of the window titled Rewrite the parser, with doing for some minutes, the date and time the row was opened, then after a blank line the sentence about the old parser, and an OK button.' },
       page.locator('.monaco-dialog-box').first());
     await page.keyboard.press('Escape');
     check(!!await until(async () => !await dialog(), 5000, 200), 'and Escape closes it');
+  });
+
+  await step('write-about-row', async () => {
+    needs('plan-follows-tab');
+    await openConv('asks-new');
+    await showPlanView();
+    await src('src.state.prefilled.length = 0; src.configure({ prefillOutcome: { outcome: "drafted" } }); return true;');
+    const row = rowLoc('agentPlus.workPlan', '2. Rewrite the parser');
+    const pen = row.locator('.action-label[aria-label="Agent Plus: Write About This Row in Its Conversation"]');
+    await row.hover();
+    await look('write-about-row', { pointer: true, expect: 'The row 2. Rewrite the parser in the Work plan view, under the pointer, with a pen button at its right end.' },
+      page.locator('#workbench\\.parts\\.sidebar'));
+    await viaUi('agentPlus.writeAboutRow', () => pen.click({ timeout: 10000 }));
+    const got = await until(async () => { const p = await src('return src.state.prefilled;'); return p && p.length && p; }, 10000, 300);
+    check(!!got && got[0].sessionId === 'asks-new' && got[0].text === 'About row 2 (Rewrite the parser): ',
+      'the pen on a row asks the conversation\'s agent to put About row 2 (Rewrite the parser): in its message box', got);
+    await src('src.configure({ prefillOutcome: { outcome: "notReceived", reason: "no message box here" } }); return true;');
+    await clearToasts();
+    await row.hover();
+    await pen.click({ timeout: 10000 });
+    const t = await toastWith('could not put it in the conversation', 10000);
+    const clip = await call('return vscode.env.clipboard.readText();');
+    check(!!t && /no message box here/.test(t.text) && clip === 'About row 2 (Rewrite the parser): ',
+      'when the agent could not, the text is on the clipboard and a notification says why', { toast: t, clip });
+    await src('src.configure({ prefillOutcome: { outcome: "drafted" } }); return true;');
+    await clearToasts();
   });
 
   await step('plan-file', async () => {

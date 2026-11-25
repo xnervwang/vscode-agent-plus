@@ -25,7 +25,7 @@ const ACCEPTS = [1];
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
    methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards; a source that answers them lists it
    too. 'stewardList' adds stewardsOf(), which onDidChangeStewards covers as well. */
-const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList'];
+const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList', 'prefill'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
 /* What a conversation is doing; whether it has an unread reply is separate. A source that gives no activity has one
@@ -427,8 +427,33 @@ class Focus {
   }
 }
 
+/*
+ * A source's prefill(sessionId, text), which brings the conversation to the front and puts `text` in its message box
+ * without sending it, as a frozen { outcome, reason }. `outcome` is 'drafted', 'notReceived' or 'uncertain'. A source that
+ * does not list 'prefill' or has no such method, one that throws or rejects, and one whose answer has another outcome are
+ * 'notReceived' with a reason; one that has not answered within `waitMs` is 'uncertain'.
+ */
+const PREFILL_OUTCOMES = ['drafted', 'notReceived', 'uncertain'];
+async function prefill(source, sessionId, text, waitMs) {
+  const fn = optional(source, 'prefill');
+  if (!fn) return Object.freeze({ outcome: 'notReceived', reason: 'its agent\'s extension cannot put text in a message box' });
+  let timer = null;
+  try {
+    const late = new Promise((resolve) => { timer = setTimeout(() => resolve(null), waitMs); });
+    const got = await Promise.race([Promise.resolve().then(() => fn(sessionId, text)), late]);
+    if (got === null) return Object.freeze({ outcome: 'uncertain', reason: '' });
+    const outcome = get(got, 'outcome'), reason = get(got, 'reason');
+    if (!PREFILL_OUTCOMES.includes(outcome)) return Object.freeze({ outcome: 'notReceived', reason: 'its agent\'s extension gave no answer it could read' });
+    return Object.freeze({ outcome, reason: typeof reason === 'string' ? reason.slice(0, 200) : '' });
+  } catch (e) {
+    return Object.freeze({ outcome: 'notReceived', reason: String((e && e.message) || e || 'it failed').slice(0, 200) });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 module.exports = {
   PROTOCOL, ACCEPTS, FEATURES, STATES, ACTIVITIES, MAX_ID, MAX_CONVERSATIONS, MAX_STEWARDS, MAX_STEWARD_TITLE, REFUSED,
   emitter, get, activityOfState, idOf, usableId, keyPart, verdict, refusal, supports, optional, call, listen, labelOf, extensionOf, logoOf,
-  planFileOf, planDirOf, noticeOf, stewardOf, stewardsOf, keepsStewards, timeZoneOf, conversation, conversations, Registry, Focus,
+  planFileOf, planDirOf, noticeOf, stewardOf, stewardsOf, keepsStewards, prefill, PREFILL_OUTCOMES, timeZoneOf, conversation, conversations, Registry, Focus,
 };

@@ -49,6 +49,12 @@ const WRITING_MS = 2000;
 const LIST_WAIT_MS = 3000;
 const SLOW_MS = 20000;
 const ZONE_KEY = 'agentPlus.timeZone';
+/* True while the plan shown is a conversation whose source can put text in its message box: the Work plan view's rows
+   then show the pen (package.json). */
+const PREFILL_KEY = 'agentPlus.workPlanCanPrefill';
+/* How long a source has to put a row's text in the message box, and the longest row title the text quotes. */
+const PREFILL_WAIT_MS = 10000;
+const ROW_TITLE_CHARS = 80;
 /* A window shows a few conversations at a time, so the limit is far above what is ever in use. */
 const MAX_SUMMARIES = 200;
 const EMPTY_LIST = { list: [], problem: '' };
@@ -63,6 +69,7 @@ function create(host, opts = {}) {
   const { context, registry, say } = host;
   const trusted = () => host.trusted();
   const listWait = Number.isFinite(opts.listWaitMs) ? opts.listWaitMs : LIST_WAIT_MS;
+  const prefillWait = Number.isFinite(opts.prefillWaitMs) ? opts.prefillWaitMs : PREFILL_WAIT_MS;
   const slowAfter = Number.isFinite(opts.slowMs) ? opts.slowMs : SLOW_MS;
   const cfg = () => vscode.workspace.getConfiguration(CONFIG);
   const subs = [];
@@ -128,11 +135,18 @@ function create(host, opts = {}) {
   workplan.setScoped(true);
   const view = keep(vscode.window.createTreeView('agentPlus.workPlan', { treeDataProvider: workplan }));
   let viewSays;
+  /* Whether the rows of the plan shown get the button that writes about a row in its conversation (writeAboutRow). */
+  let canPrefill = null;
   const paintPlanView = () => {
     const s = focus.sourceId ? registry.get(focus.sourceId) : null;
     const says = s ? sources.labelOf(s) : undefined;
     if (says !== viewSays) { viewSays = says; view.description = says; }
     workplan.setProblem(s ? sources.noticeOf(s) : null);
+    const can = !!s && !!focus.sessionId && !!sources.optional(s, 'prefill');
+    if (can !== canPrefill) {
+      canPrefill = can;
+      Promise.resolve(vscode.commands.executeCommand('setContext', PREFILL_KEY, can)).catch(() => {});
+    }
   };
   /* Badge: the discussing and todo rows of the plan shown. */
   const paintBadge = () => {
@@ -848,6 +862,22 @@ function create(host, opts = {}) {
       if (row.unknown) head.push('This version of Agent Plus does not know this state.');
       const body = row.detail || 'No description was written for this one.';
       await vscode.window.showInformationMessage(row.title, { modal: true, detail: head.concat(['', body]).join('\n') });
+    },
+    /* The pen on a row of the Work plan view: the plan's conversation comes to the front with "About row N (title): " in
+       its message box, in the display language, left for the user to go on writing and send. When the source could not
+       put it there, the text goes on the clipboard and the user is told why. */
+    writeAboutRow: async (element) => {
+      const node = element && element.node;
+      if (!node || typeof element.num !== 'string') return;
+      const t = conversationsText.textFor(conversationsLang());
+      const title = String(node.title || '');
+      const text = t.aboutRow(element.num, title.length > ROW_TITLE_CHARS ? title.slice(0, ROW_TITLE_CHARS - 1) + '\u2026' : title);
+      const source = workplan.source ? registry.get(workplan.source) : null;
+      const r = source && sources.usableId(workplan.focus)
+        ? await sources.prefill(source, workplan.focus, text, prefillWait) : { outcome: 'notReceived', reason: t.prefillNone };
+      if (r.outcome === 'drafted') return;
+      try { await vscode.env.clipboard.writeText(text); } catch (_) { /* told below either way */ }
+      vscode.window.showInformationMessage(r.outcome === 'uncertain' ? t.prefillUnsure : t.prefillCopied(r.reason || t.prefillNone));
     },
     answerQuestion: async (q) => {
       if (!q) return;

@@ -34,6 +34,8 @@
     "steps": ["plan-row-detail"], "looks": ["plan-row-detail"], "settings": [], "commands": ["agentPlus.showWorkPlanDetail"], "views": [] },
   { "id": "work-plan-file", "what": "Open the Work Plan File in the view's title bar and on a row's right-click menu, and Refresh, which reads every plan afresh",
     "steps": ["plan-file", "plan-refresh"], "looks": ["plan-file", "plan-file-menu"], "settings": [], "commands": ["agentPlus.openWorkPlanFile", "agentPlus.refreshWorkPlan"], "views": [] },
+  { "id": "write-about-row", "what": "The pen on a Work plan row: the plan's conversation asked to put About row N (title): in its message box, and the text on the clipboard with a notification when it could not",
+    "steps": ["write-about-row"], "looks": ["write-about-row"], "settings": [], "commands": ["agentPlus.writeAboutRow"], "views": [] },
   { "id": "plan-summary", "what": "For an extension that draws a plan bar above its agent's input box: planSummary giving a conversation's plan in the bar's figures and onDidChangePlanSummary firing when it changes, agentPlus.showWorkPlanOf moving the Work plan view to a conversation, and agentPlus.answerQuestionOf showing its first question in the Answer view",
     "steps": ["plan-summary"], "looks": ["plan-summary-plan", "plan-summary-answer"], "settings": [], "commands": ["agentPlus.showWorkPlanOf", "agentPlus.answerQuestionOf"], "views": [] },
   { "id": "plan-notice", "what": "A row above the plan that the conversation's agent puts there, for example when its work plan plugin is not installed, and that runs the agent's command when clicked",

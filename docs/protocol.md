@@ -42,7 +42,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | `version` | The core's marketplace version |
 | `protocol` | The newest protocol major the core implements; also the first number of `version` |
 | `accepts` | The source protocol majors the core accepts |
-| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()`, `onDidChangePlanSummary` (below) and the two commands in Plan bar. The features `'deliver'` and `'planPathOf'` each add a method of the same name. `'stewards'` provides `stewardOf()` and `onDidChangeStewards` (below). `'stewardList'` provides `stewardsOf()` and the same `onDidChangeStewards` (below). |
+| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()`, `onDidChangePlanSummary` (below) and the two commands in Plan bar. The features `'deliver'` and `'planPathOf'` each add a method of the same name. `'stewards'` provides `stewardOf()` and `onDidChangeStewards` (below). `'stewardList'` provides `stewardsOf()` and the same `onDidChangeStewards` (below). `'prefill'` says the core puts a pen on the Work plan view's rows for a source that lists `'prefill'` (see Writing about a row). |
 | `registerSource(source)` | Registers a source; never throws; returns a frozen result |
 | `allConversations()` | With `'allConversations'`. Returns a frozen array with one entry per conversation from the last time the core read the sources' lists. For each source, the core includes the results of `listConversations()` and, if the source implements it, `listAllConversations()` (see Source members). Each entry has the form `{ sourceId, label, sessionId, title, steward, cwd, lastActiveAt }` (`sourceId` is the source's `id`; the other fields as in Conversations), where `label` is the source's label and `title` is the title displayed in the Conversations view. Kept current only while something listens to `onDidChangeAllConversations` (next row), and empty until then. A link to one of them opens with `agentPlus.openConversation` (see Opening a conversation from another extension) |
 | `onDidChangeAllConversations` | With `'allConversations'`. `vscode.Event<void>`: a conversation came or went, or its title or folder changed. If only `lastActiveAt` changes, the event does not fire, but `allConversations()` returns the new value. Listening starts a pass at once |
@@ -98,6 +98,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `reveal(sessionId, row)` | `Promise<boolean>`; `row` is `{ title, cwd }`. Focus a tab already in this window; never open a second copy of a conversation running elsewhere. `false` makes the core try the other windows (see Notifications, Opening) |
 | `canDeliver(sessionId)` | Whether this window can type into that conversation now |
 | `deliverAnswer(sessionId, text, { deliveryId })` | `Promise<{ outcome, reason? }>`, see Answers |
+| `prefill(sessionId, text)` | With `'prefill'` in `features`. `Promise<{ outcome, reason? }>`, see Writing about a row |
 | `planNotice()` | `null` or `{ title, description, detail, command, arguments }`: a row above the plan, such as a plugin that failed to install |
 | `onDidChangePlanNotice` | `vscode.Event<void>` |
 | `timeZone()` | The reader's IANA time zone, when the source knows it |
@@ -225,6 +226,17 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 - A message sent through `deliver()` gets the same outcomes, given to its caller: nothing is shown in the Answer view and nothing is put on the clipboard.
 - Send is disabled for a question while its answer is on the way.
 - The folder is read when it changes, on a 2 second interval of its own while a registered source could take an answer or a `deliver()` call waits for its outcome, and on `onDidFocus` and `onDidChangeConversations` from any source.
+
+## Writing about a row
+
+| Item | Rule |
+| --- | --- |
+| The pen | A button at the end of every row of the Work plan view, shown while the conversation the view shows belongs to a source that lists `'prefill'` in its `features`. Its tooltip is the command's title, in VS Code's display language. A click runs `agentPlus.writeAboutRow`, which no other way of running it reaches (it is not in the command palette). A click on a question row itself still opens its question in the Answer view |
+| Text | `About row N (title): ` with VS Code's display language in English or any language the core has no strings for, `关于第 N 行（标题）：` in Chinese. N is the row's number as the view shows it, such as `2.1`. A title longer than 80 characters is cut to 79 and an ellipsis. At most 2,000 characters |
+| `prefill(sessionId, text)` | The core calls it on the source of the conversation the view shows. The source brings that conversation to the front in this window, opening it here the way it opens a conversation when it is not, and puts `text` in its message box without sending it. An empty box then holds `text` exactly. A box that holds text of the user's keeps it and gets `text` after it, after a space when it does not already end in white space; a source that cannot add to it answers `notReceived` and never replaces what is there. The box has the focus, with the cursor after `text` |
+| Outcomes | `drafted`: `text` is in the box. `notReceived` with a `reason`: it is not, and nothing was changed. `uncertain`: the source put it there but could not tell whether it arrived. The source settles within 10 seconds and never rejects; the core reads a later answer, a rejection, a throw or an answer it does not know as `uncertain` (late) or `notReceived` (the rest) |
+| When it is not `drafted` | The core puts `text` on the clipboard and shows a notification: the `reason` for `notReceived`, or that it could not tell for `uncertain` |
+| Restricted Mode | The pen works there too: it sends nothing and writes no file |
 
 ## Plan bar
 
