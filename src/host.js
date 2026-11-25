@@ -148,9 +148,9 @@ function start(context, log, opts = {}) {
   };
 
   /*
-   * stewardOf() and onDidChangeStewards (docs/protocol.md): the steward that looks after a conversation, as the first
-   * source registered here that lists 'stewards' says. Every reason the answer may have changed in one turn fires the
-   * event once.
+   * stewardOf() and onDidChangeStewards (docs/protocol.md): the steward that looks after a conversation. The answer is
+   * the first one given by a source registered here that lists 'stewards'. However many things change the answer in one
+   * turn, the event fires once.
    */
   const stewardChanges = sources.emitter();
   let stewardsDue = false;
@@ -366,7 +366,7 @@ function start(context, log, opts = {}) {
     deliver: deliverTo,
     /* With 'planPathOf'. */
     planPathOf,
-    /* With 'stewards': a frozen { sourceId, sessionId } of the steward that looks after that conversation, or null. */
+    /* With 'stewards': the steward of that conversation as a frozen { sourceId, sessionId }, or null. */
     stewardOf,
     /* With 'stewards': vscode.Event<void>, stewardOf() may answer differently. */
     onDidChangeStewards: listenStewards,

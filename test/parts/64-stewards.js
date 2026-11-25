@@ -5,12 +5,12 @@
 'use strict';
 /*
  * stewardOf() and onDidChangeStewards on the interface (src/host.js, src/sources.js): the steward that looks after a
- * conversation, asked of the sources registered in this window that list 'stewards'.
+ * conversation.
  */
 const { boot } = require('../boot');
 
 module.exports = async ({ eq, tmp, root, wait }) => {
-  /* A source that keeps stewards; its stewardOf() returns what `answer(sourceId, sessionId)` does. */
+  /* A stand-in source that lists 'stewards': its stewardOf() records each call and returns answer(sourceId, sessionId). */
   const keeper = (id, answer, over = {}) => {
     const heard = new Set(), asked = [];
     const source = Object.assign({ protocol: 1, id, label: id, features: ['stewards'],
@@ -35,7 +35,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.close();
   }
 
-  /* ── The two ways to call it, and ids it cannot use ── */
+  /* ── Called with two ids or with one object, and with ids it cannot use ── */
   {
     const b = boot(root, tmp, { views: false });
     const cc = keeper('claude-code', (s, id) => (s === 'opencode-plus' && id === 'ses_A' ? CC : null));

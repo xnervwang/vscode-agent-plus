@@ -23,7 +23,8 @@ const ACCEPTS = [1];
    'waitingFor' a conversation's waitingFor is read and named in the notifications, and a source can call
    announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
-   methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards, which a source lists too. */
+   methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards; a source that answers them lists it
+   too. */
 const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
@@ -182,8 +183,8 @@ function noticeOf(source) {
   };
 }
 
-/* The steward a source that lists 'stewards' says looks after (sourceId, sessionId), as a frozen copy, or null. An
-   answer whose two ids are not usable ids counts as none. */
+/* The steward the source gives for (sourceId, sessionId), frozen. Null when the source does not list 'stewards' or its
+   answer lacks two usable ids. */
 function stewardOf(source, sourceId, sessionId) {
   if (!supports(source, 'stewards')) return null;
   const s = call(source, 'stewardOf', [sourceId, sessionId], null);
