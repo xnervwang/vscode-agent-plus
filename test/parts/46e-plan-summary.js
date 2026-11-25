@@ -176,11 +176,31 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const view = b.control.state.views['agentPlus.workPlan'];
   eq([b.control.state.commands.some((c) => c[0] === 'agentPlus.workPlan.focus'), view.description, view.provider.focus, view.provider.source],
     [true, 'Codex', X, 'codex'], 'agentPlus.showWorkPlanOf moves the work plan view to that conversation and brings the view up');
+  {
+    const LOOK = require(path.join(root, 'src', 'workplan-view.js')).LOOK;
+    const item = view.provider.getTreeItem(view.provider.getChildren()[0]);
+    eq([item.iconPath.id, item.iconPath.color.id, item.command.command, item.command.arguments[0]],
+      ['question', 'charts.orange', 'agentPlus.answerQuestionOf', { sourceId: 'codex', sessionId: X, row: '1' }],
+      'in the work plan view, a row waiting for the user with its question is drawn as a question, and a click opens it in the Answer view');
+    write(codexDir, X, { nodes: [row('Refunds', 'waiting', { waitingOn: 'user', question: 'Skip negative amounts?' }),
+      row('CI', 'waiting', { waitingOn: 'build' }), row('Later', 'waiting', { waitingOn: 'user' })] });
+    view.provider.refresh();
+    const drawn = view.provider.getChildren().map((e) => view.provider.getTreeItem(e));
+    const kept = ['CI', 'Later'].map((t) => drawn.find((i) => i.label.endsWith('. ' + t))).map((i) => [i.iconPath.id, i.command.command]);
+    eq(kept, [[LOOK.waiting.icon, 'agentPlus.showWorkPlanDetail'], [LOOK.waiting.icon, 'agentPlus.showWorkPlanDetail']],
+      'a row waiting on anyone else, or on the user with no question written, keeps the clock and opens its description');
+    write(codexDir, X, { nodes: [row('Refunds', 'waiting', { waitingOn: 'user', question: 'Skip negative amounts?' })] });
+  }
   const answer = b.control.state.webviews['agentPlus.answer'];
   await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 'claude-code', sessionId: C });
   eq([answer.current && answer.current.row, answer.current && answer.current.question, answer.current && answer.current.running,
     b.control.state.commands.some((c) => c[0] === 'agentPlus.answer.focus')], ['2', 'This month or last month?', true, true],
   'agentPlus.answerQuestionOf shows the first question of that conversation\'s plan in the Answer view, ready to be answered');
+  await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 'claude-code', sessionId: C, row: '3' });
+  const third = answer.current && answer.current.question;
+  await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 'claude-code', sessionId: C, row: '1' });
+  eq([third, answer.current && answer.current.question], ['CSV or JSON?', 'This month or last month?'],
+    'with a row it shows that row\'s question, and the first question when that row asks nothing');
   await b.control.state.handlers['agentPlus.answerQuestionOf']({ sourceId: 'codex', sessionId: X });
   eq([answer.current && answer.current.sourceId, answer.current && answer.current.question, answer.current && answer.current.open],
     ['codex', 'Skip negative amounts?', { sourceId: 'codex', sessionId: X, cwd: '/elsewhere', title: 'Login redirect' }],

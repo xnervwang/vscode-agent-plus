@@ -66,6 +66,8 @@ class ConversationsProvider {
     this._emitter = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._emitter.event;
     this.data = { running: [], stopped: [], asks: 0 };
+    /* The conversation in front, the one the Work plan view shows: it heads the list, running or not. */
+    this.front = { sourceId: '', sessionId: '' };
     this.problem = '';
     this.lang = 'en';
     this.signature = '';
@@ -81,6 +83,20 @@ class ConversationsProvider {
 
   dispose() {
     this._theme.dispose();
+  }
+
+  /* Returns whether the conversation in front changed, and redraws the list when it did. */
+  setFront(sourceId, sessionId) {
+    const next = { sourceId: String(sourceId || ''), sessionId: String(sessionId || '') };
+    if (next.sourceId === this.front.sourceId && next.sessionId === this.front.sessionId) return false;
+    this.front = next;
+    this._emitter.fire();
+    return true;
+  }
+
+  isFront(c) {
+    return !!this.front.sessionId && c.sessionId === this.front.sessionId
+      && ((c.source && c.source.id) || c.sourceId || '') === this.front.sourceId;
   }
 
   /* Returns whether the tree changed; ages are part of the comparison. */
@@ -102,13 +118,15 @@ class ConversationsProvider {
   }
 
   getChildren(element) {
+    const isFront = (c) => this.isFront(c);
     if (!element) {
-      const rows = this.data.running.map((c) => ({ kind: 'conversation', c }));
-      if (this.data.stopped.length) rows.push({ kind: 'stopped' });
+      const first = this.data.running.find(isFront) || this.data.stopped.find(isFront);
+      const rows = (first ? [first] : []).concat(this.data.running.filter((c) => c !== first)).map((c) => ({ kind: 'conversation', c }));
+      if (this.data.stopped.some((c) => c !== first)) rows.push({ kind: 'stopped' });
       if (this.problem) rows.unshift({ kind: 'problem' });
       return rows;
     }
-    if (element.kind === 'stopped') return this.data.stopped.map((c) => ({ kind: 'conversation', c }));
+    if (element.kind === 'stopped') return this.data.stopped.filter((c) => !isFront(c)).map((c) => ({ kind: 'conversation', c }));
     if (element.kind === 'conversation') {
       const c = element.c;
       return c.questions.map((q) => ({ kind: 'question', c, q })).concat(c.doing.map((d) => ({ kind: 'doing', c, d })));
@@ -126,7 +144,7 @@ class ConversationsProvider {
       return item;
     }
     if (element.kind === 'stopped') {
-      const item = new vscode.TreeItem(t.stopped(this.data.stopped.length), vscode.TreeItemCollapsibleState.Collapsed);
+      const item = new vscode.TreeItem(t.stopped(this.data.stopped.filter((c) => !this.isFront(c)).length), vscode.TreeItemCollapsibleState.Collapsed);
       item.id = 'conversations/!stopped';
       item.iconPath = new vscode.ThemeIcon('history');
       return item;

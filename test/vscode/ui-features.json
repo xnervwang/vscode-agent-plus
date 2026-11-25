@@ -27,7 +27,7 @@
     "settings": [], "commands": ["agentPlus.showBrief", "agentPlus.goToConversation"], "views": [] },
   { "id": "open-conversation", "what": "A doing row under a conversation, which goes to that conversation when clicked",
     "steps": ["doing-row"], "looks": ["doing-row"], "settings": [], "commands": ["agentPlus.openConversation"], "views": [] },
-  { "id": "work-plan-view", "what": "The Work plan view in the Agent Plus sidebar: the plan of the conversation in front, following its tab, with the agent's name, a badge counting its open rows, a hover on each row with its question, and the welcome text for a tab with no conversation yet",
+  { "id": "work-plan-view", "what": "The Work plan view in the Agent Plus sidebar: the plan of the conversation in front, following its tab, with the agent's name, a badge counting its open rows, a hover on each row with its question, a row waiting for the user's answer drawn as a question that opens it in the Answer view, and the welcome text for a tab with no conversation yet",
     "steps": ["plan-follows-tab", "plan-hover", "plan-no-conversation"], "looks": ["plan-follows-tab", "plan-hover", "plan-no-conversation"],
     "settings": [], "commands": [], "views": ["agentPlus.workPlan"] },
   { "id": "work-plan-detail", "what": "A click on a plan row opens a dialog with its description, state, question and place in the plan",

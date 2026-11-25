@@ -23,6 +23,10 @@ const { keyPart } = require('./sources');
  * at all for a name it does not have, so there the watch stands in: a weaker shape, but a shape. A version that cannot
  * be read gets the watch too.
  */
+/* A `waiting` row that waits for the user and has its question written. */
+const asksUser = (node) => !!node && node.state === 'waiting' && node.waitingOn === 'user'
+  && typeof node.question === 'string' && node.question.trim() !== '';
+
 function waitingIcon(version) {
   const have = String(version || '').split(/[.-]/).slice(0, 2).map(Number);
   if (have.length < 2 || have.some((n) => !Number.isFinite(n))) return 'watch';
@@ -359,7 +363,11 @@ class WorkPlanProvider {
      * just for those rows would give two rows that look alike different behaviour, with nothing on either saying why.
      */
     item.description = [times, lasted ? 'for ' + lasted : '', look.unknown ? `"${node.state}": ${UNKNOWN_NOTE}` : ''].filter(Boolean).join(' · ');
-    item.iconPath = new vscode.ThemeIcon(look.icon, new vscode.ThemeColor(look.color));
+    /* A row waiting for the user with its question written is drawn as the Conversations view draws a question, and a
+       click opens it in the Answer view; a row waiting on anyone else keeps the clock. */
+    const asks = asksUser(node) && !!this.focus;
+    item.iconPath = asks ? new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.orange'))
+      : new vscode.ThemeIcon(look.icon, new vscode.ThemeColor(look.color));
     item.contextValue = 'agentPlusNode';
     const head = `**${node.title}**\n\n${word}${node.note ? ' — ' + node.note : ''}`
       + (look.unknown ? `\n\n"${node.state}": ${UNKNOWN_NOTE}, so this row is left out of every count.` : '')
@@ -374,6 +382,11 @@ class WorkPlanProvider {
      * It deliberately does not open the file - clicking a task and being given a page of JSON is not what the click
      * looks like it will do. The file has a button in the title bar and an entry in the row's context menu.
      */
+    if (asks) {
+      item.command = { command: 'agentPlus.answerQuestionOf', title: 'Answer it',
+        arguments: [{ sourceId: this.source, sessionId: this.focus, row: element.num }] };
+      return item;
+    }
     item.command = {
       command: 'agentPlus.showWorkPlanDetail',
       title: 'Show the description',
@@ -386,5 +399,5 @@ class WorkPlanProvider {
   }
 }
 
-module.exports = { WorkPlanProvider, hasOpen, stamp, held, heldAll, ageSince, waitsOn, unknownLook, lookOf, LOOK, TIMED, WHO, waitingIcon,
+module.exports = { WorkPlanProvider, hasOpen, stamp, held, heldAll, ageSince, waitsOn, unknownLook, lookOf, LOOK, TIMED, WHO, waitingIcon, asksUser,
   UNKNOWN_NOTE };

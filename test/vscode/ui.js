@@ -771,12 +771,21 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       const blue = await themeColor('charts.blue'), orange = await themeColor('charts.orange'), purple = await themeColor('charts.purple');
       const opened = /^\d\d\/\d\d \d\d:\d\d/;
       check(a[1].icon === 'codicon-debug-start' && a[1].color === blue && opened.test(a[1].description) && / · for 10m$/.test(a[1].description)
-        && /codicon-(clockface|watch)/.test(a[2].icon) && a[2].color === orange && / · for 1m$/.test(a[2].description)
+        && a[2].icon === 'codicon-question' && a[2].color === orange && / · for 1m$/.test(a[2].description)
         && a[0].icon === 'codicon-circle-large-outline' && a[0].color === purple && opened.test(a[0].description) && !/for/.test(a[0].description),
-      'each row\'s icon shows its state, with when it was opened beside it, and a doing or waiting row says how long it has been in that state', a);
+      'each row\'s icon shows its state, or a question mark on a row waiting for the user\'s answer, with when it was opened beside it, and a doing or waiting row says how long it has been in that state', a);
     }
-    await look('plan-follows-tab', { expect: 'The Agent Plus side bar shows the Work plan of Asked about the release branch, top to bottom: 3. Update the changelog with a purple ring, 2. Rewrite the parser with a blue triangle and for 10m, 1. Pick the release branch with an orange clock and for 1m. The Agent Plus icon in the activity bar carries a badge of 1.' },
+    await look('plan-follows-tab', { expect: 'The Agent Plus side bar shows the Work plan of Asked about the release branch, top to bottom: 3. Update the changelog with a purple ring, 2. Rewrite the parser with a blue triangle and for 10m, 1. Pick the release branch with an orange question mark and for 1m. The Agent Plus icon in the activity bar carries a badge of 1.' },
       page.locator('#workbench\\.parts\\.sidebar'));
+    await viaUi('agentPlus.answerQuestionOf', () => clickRow('agentPlus.workPlan', '1. Pick the release branch'));
+    const asked = await answerFrame({ title: 'Asked about the release branch' });
+    check(!!asked && (await answerSays(asked)).question === Q1, 'a click on that row opens its question in the Answer view', asked && await answerSays(asked));
+    await showConversations();
+    const firstRow = await until(async () => {
+      const top = (await convRows() || []).filter((r) => r.level === 1 && !/^Not running, with open rows|^Could not list/.test(r.title));
+      return top[0] && top[0].title === 'Asked about the release branch' && top.map((r) => r.title);
+    }, 10000, 300);
+    check(!!firstRow, 'the Conversations view lists the conversation in front first', await convRows());
     await openConv('briefed');
     const b = await until(async () => { const r = await planRows(); return r && sameList(r.map((x) => x.title), ['2. Write the tests', '1. Port the importer']) && r; }, 15000, 300);
     check(!!b, 'bringing another conversation\'s tab to the front shows that one\'s plan', await planRows());

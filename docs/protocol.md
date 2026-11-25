@@ -127,7 +127,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `lastReplyAt` | Optional. When the agent's last reply landed, in the same forms. Notifications use it instead of `lastActiveAt` to detect a turn that started and ended between two reads (see Notifications, When) |
 | `hasPlan` | Used only when the source gives no `planPath` |
 
-- The core derives "needs you" from the questions in the plan. Order: prompt, needs you, working, unread, idle.
+- The core derives "needs you" from the questions in the plan. The conversation in front, the one the Work plan view shows, comes first, running or not; the others are in this order: prompt, needs you, working, unread, idle.
 - The Conversations view draws `activity` in the row's icon: a green dot working, a green ring background, a red dot waiting, nothing stopped. An envelope at the end of the row shows `unseen`: 📩 (U+1F4E9) in a dark theme, and in a light theme the plain envelope's text form ✉︎ (U+2709 U+FE0E), since a colour emoji font draws both envelopes white there; `src/envelope.js` picks between them for any extension that draws the envelope too.
 - A stopped conversation (`running: false`) is listed while its plan has open rows, was written in the last 7 days, and its `cwd` is in a workspace folder.
 
@@ -276,7 +276,7 @@ In Claude Code Plus and Codex Plus, `onOpen` runs `agentPlus.showWorkPlanOf` and
 | Command | Does |
 |---|---|
 | `agentPlus.showWorkPlanOf` | Moves the Work plan view to the conversation, as a focus report does, and runs `agentPlus.workPlan.focus` to reveal the view. The next editor tab change moves the view as usual. |
-| `agentPlus.answerQuestionOf` | Reads the plan as it is now and shows the first question in the Answer view, in the same plan order the Conversations view uses. This works even for a conversation the Conversations view leaves out, such as one outside the window's folders. If the source's last list omits the conversation, the core calls the source's `listConversations()` once more and waits up to 3 seconds (the same limit the Conversations view uses) before treating the conversation as not running. If there is no question, a message says so. The Answer view's Go to the conversation button opens the conversation through its source's `open()` when the source provides it. |
+| `agentPlus.answerQuestionOf` | Reads the plan as it is now and shows the first question in the Answer view, in the same plan order the Conversations view uses. Given a `row` too, a row number such as `2.1`, it shows that row's question while the row still asks one; the Work plan view's question rows pass theirs. This works even for a conversation the Conversations view leaves out, such as one outside the window's folders. If the source's last list omits the conversation, the core calls the source's `listConversations()` once more and waits up to 3 seconds (the same limit the Conversations view uses) before treating the conversation as not running. If there is no question, a message says so. The Answer view's Go to the conversation button opens the conversation through its source's `open()` when the source provides it. |
 
 ## Timing and limits
 

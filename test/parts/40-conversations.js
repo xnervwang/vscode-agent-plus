@@ -80,6 +80,29 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
     && items[0].description.startsWith('needs you') && /1 in a state this version does not know/.test(items[1].description)) {
     ok('rows show the logo and label, carry the source id, and say how many rows are in unknown states');
   } else bad(`drawn: ${JSON.stringify(items.slice(0, 2))}`);
+
+  /* The conversation in front, the one the Work plan view shows, heads the list; the others keep their order. */
+  {
+    const key = (c) => `${c.sourceId}/${c.sessionId}`;
+    const listed = () => tree.getChildren().filter((e) => e.kind === 'conversation').map((e) => key(e.c));
+    const before = listed();
+    const last = decorated.running[decorated.running.length - 1];
+    const moved = tree.setFront(last.sourceId, last.sessionId);
+    eq([moved, listed()], [true, [key(last)].concat(before.filter((k) => k !== key(last)))],
+      'the conversation in front comes first, and the others keep their order');
+    const parked = { sourceId: 'codex', sessionId: 'parked', cwd: '/w', title: 'Not running', running: false, state: 'idle',
+      questions: [], doing: [], open: 1, unknown: 0, source: { id: 'codex', label: 'Codex' } };
+    const other = Object.assign({}, parked, { sessionId: 'other', title: 'Also not running' });
+    tree.set(Object.assign({}, decorated, { stopped: [parked, other] }), '', 'en');
+    tree.setFront('codex', 'parked');
+    const top = tree.getChildren();
+    const group = top.find((e) => e.kind === 'stopped');
+    eq([key(top.find((e) => e.kind === 'conversation').c), tree.getChildren(group).map((e) => key(e.c)), tree.getTreeItem(group).label],
+      ['codex/parked', ['codex/other'], 'Not running, with open rows (1)'],
+      'one that is not running comes first too, and leaves the group of those not running');
+    tree.setFront('', '');
+    eq(listed(), before, 'with nothing in front the list is in its own order again');
+  }
   undo();
 
   const icons = require(path.join(root, 'src', 'sourceicons.js'));

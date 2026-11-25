@@ -512,6 +512,7 @@ function create(host, opts = {}) {
     if (closing) return;
     workplan.setTimeZone(readerZone());
     const moved = workplan.setFocus(focus.sessionId, focus.sourceId);
+    conversationsTree.setFront(focus.sourceId, focus.sessionId);
     paintPlanView();
     if (workplan.refresh() || moved) paintBadge();
     recheckSummaries();
@@ -728,6 +729,7 @@ function create(host, opts = {}) {
   const drawFocus = () => {
     if (closing) return;
     paintPlanView();
+    conversationsTree.setFront(focus.sourceId, focus.sessionId);
     if (!workplan.setFocus(focus.sessionId, focus.sourceId)) return;
     say('active conversation: ' + (focus.sourceId ? `${focus.sourceId} ${focus.sessionId || '(no session yet)'}` : '(none)'));
     workplan.refresh();
@@ -886,7 +888,8 @@ function create(host, opts = {}) {
       await vscode.commands.executeCommand('agentPlus.workPlan.focus');
     },
     /* For the red part of a plan bar: shows the first question of that conversation's plan in the Answer view, in the
-       order the Conversations view lists them. */
+       order the Conversations view lists them. With a `row`, as the Work plan view's question rows give, that row's
+       question instead, when it is still one. */
     answerQuestionOf: async (target) => {
       const t = targetOf(target);
       if (!t) return;
@@ -897,7 +900,8 @@ function create(host, opts = {}) {
         await Promise.race([ask(entry), new Promise((r) => after(r, listWait))]).catch(() => {});
       }
       const c = conversationOf(t.sourceId, t.sessionId);
-      const q = c && c.questions[0];
+      const row = sources.get(target, 'row');
+      const q = c && ((typeof row === 'string' && c.questions.find((x) => x.row === row)) || c.questions[0]);
       if (!q) { vscode.window.showInformationMessage('Agent Plus: no question in that conversation\'s plan is waiting for your answer.'); return; }
       if (!listedNow(t.sourceId, t.sessionId)) {
         asideQuestions.set(questionKey(t.sourceId, t.sessionId, q.row), { sourceId: t.sourceId, sessionId: t.sessionId, row: q.row });
