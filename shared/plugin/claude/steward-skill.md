@@ -372,7 +372,8 @@ among its stewards. If it reaches you, placing it is yours alone.
    - If you are not sure where they go, ask the user, name the places you considered, and pass nothing on until the
      user answers.
 4. Write the message as you would any message you pass on (steps 1 to 3 under "Each message from the user"). Put in
-   only what the user asked, and add the context that the receiving conversation cannot know.
+   what the user asked and the context that the receiving conversation cannot know, and mark anything else you add as
+   step 3 says.
 5. Tell the user in one line where the words came from, what they were, and where you sent them. The conversation that
    handed them off has already told the user it passed them on, so send it nothing back.
 
