@@ -48,9 +48,8 @@ const LOOK = {
      A clock face in orange. The shape says time is passing, which is the whole of what this state means; the watch it
      replaced was a rounded box at sixteen pixels and said nothing. Orange because there are few of these rows and each
      one wants a look, and because sharing yellow with `discussing` left the colour unable to tell them apart. It is its
-     own state because `doing` was being used for it: four of the six rows `doing` on the machine this was written on
-     said in their notes that they were waiting, and a tree that shows those as being worked on gets wrong the one thing
-     it is watched for. */
+     own state because without it a row that is waiting gets marked `doing`, and a tree that shows those as being worked
+     on gets wrong the one thing it is watched for. */
   waiting: { icon: waitingIcon(vscode.version), color: 'charts.orange', word: 'waiting' },
   parked: { icon: 'debug-pause', color: 'descriptionForeground', word: 'parked' },
   done: { icon: 'pass-filled', color: 'charts.green', word: 'done' },

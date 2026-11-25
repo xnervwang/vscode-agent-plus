@@ -233,8 +233,8 @@ def spoke(row):
     """True for a row that is the user speaking.
 
     Codex records each message the user sent as an item_completed event whose item is a UserMessage. The older
-    user_message event is written only for a thread in its legacy history mode: none of 49 rollouts written by Codex
-    0.159 and 0.164 held one, against 120 UserMessage items. The response_item rows with role "user" are no use here,
+    user_message event is written only for a thread in its legacy history mode, and the rollouts of Codex 0.159 and
+    0.164 hold UserMessage items instead. The response_item rows with role "user" are no use here,
     since Codex also sends its own context to the model that way.
     """
     payload = row.get("payload")

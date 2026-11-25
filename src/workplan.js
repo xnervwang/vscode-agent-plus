@@ -59,8 +59,8 @@ const STATES = ['discussing', 'todo', 'doing', 'waiting', 'parked', 'done', 'dro
 const WAITING_ON = ['user', 'build', 'someone', 'session', 'other'];
 const MAX_QUESTION_CHARS = 200;
 const MAX_STATE_CHARS = 40;
-/* MAX_NODES takes effect only after the whole file is read and parsed. Plans on the machines this was written on stay
-   under a megabyte. */
+/* MAX_NODES takes effect only after the whole file is read and parsed, so this is what bounds the reading and the
+   parsing. */
 const MAX_PLAN_BYTES = 8 * 1024 * 1024;
 /* Depth and count are bounded because another process writes the file: a cycle turned into JSON, or a runaway generator,
    would otherwise be rendered forever. Both are far above any plan a person reads. */
