@@ -1110,7 +1110,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     needs('notify-waiting');
     await startWorking([conv('n-a', 'First of two', 'prompt', 'waiting'), conv('n-fin2', 'Stopped while you were away', 'unread', 'stopped', true)]);
     await clearToasts();
-    await exec('agentPlus.showAttention');
+    await start('agentPlus.showAttention');
     const rows = await pickRows();
     check(!!rows && rows.some((r) => /First of two.*waiting for you/.test(r.text)) && rows.some((r) => /Stopped while you were away.*finished/.test(r.text)),
       'Show the Conversations That Need You lists every conversation counted as waiting or finished', rows);
