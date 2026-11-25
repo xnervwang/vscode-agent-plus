@@ -16,7 +16,7 @@ const CODEX_KEYS = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'co
   'codexPlus.detachedEndNotices'];
 const CLAUDE_KEYS = ['claudeCodePlus.workPlan', 'claudeCodePlus.tellClaudeYourTimeZone', 'claudeCodePlus.conversationBrief',
   'claudeCodePlus.detachedEndNotices'];
-const OPENCODE_KEYS = ['opencodePlus.workPlan', 'opencodePlus.tellOpenCodeYourTimeZone', 'opencodePlus.conversationBrief'];
+const OPENCODE_KEYS = ['opencodeAgentPlus.workPlan', 'opencodeAgentPlus.tellOpenCodeYourTimeZone', 'opencodeAgentPlus.conversationBrief'];
 
 /* A stand-in VS Code holding only settings, for the pure functions. */
 function settings(config = {}) {
@@ -71,14 +71,14 @@ module.exports = async ({ eq, tmp, root, wait }) => {
         ...Object.fromEntries([...CODEX_KEYS, ...OPENCODE_KEYS].map((k) => [k, mode === 'all' ? false : true])) });
       eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), want[mode], `${mode}: the five Codex Plus features run as the table says, whatever their own settings are`);
       eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), claudeWant(want[mode]), `${mode}: and Claude Code Plus's four`);
-      eq(OPENCODE_KEYS.map((k) => tm.effective(vscode, k)), want[mode].slice(0, 3), `${mode}: and OpenCode Plus's three, the work plan, the time-zone note and the brief`);
+      eq(OPENCODE_KEYS.map((k) => tm.effective(vscode, k)), want[mode].slice(0, 3), `${mode}: and OpenCode Agent Plus's three, the work plan, the time-zone note and the brief`);
     }
     const custom = { 'codexPlus.workPlan': false, 'codexPlus.tellCodexYourTimeZone': true, 'codexPlus.wakeUps': false, 'claudeCodePlus.conversationBrief': false,
-      'opencodePlus.conversationBrief': false };
+      'opencodeAgentPlus.conversationBrief': false };
     const { vscode, control } = settings({ 'agentPlus.tokenMode': 'custom', ...custom });
     eq(CODEX_KEYS.map((k) => tm.effective(vscode, k)), [false, true, true, false, true], 'custom: each feature follows its own setting, one not set being on');
     eq(CLAUDE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false, true], 'custom: Claude Code Plus\'s too');
-    eq(OPENCODE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false], 'custom: and OpenCode Plus\'s');
+    eq(OPENCODE_KEYS.map((k) => tm.effective(vscode, k)), [true, true, false], 'custom: and OpenCode Agent Plus\'s');
     const nulls = settings({ 'agentPlus.tokenMode': 'custom', 'codexPlus.workPlan': null, 'claudeCodePlus.conversationBrief': null }).vscode;
     eq([tm.effective(nulls, 'codexPlus.workPlan'), tm.effective(nulls, 'claudeCodePlus.conversationBrief')], [true, true],
       'custom: a setting stored as null, which only a hand edit or another extension writes, is read as its default');
@@ -90,8 +90,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(MODES.map((m) => tm.unloadsPlugin(m)), [true, false, false, false], 'only Interface features takes the work plan plugin out of the agent');
     eq(tm.SWITCHES.map((s) => s.key).sort(), [...CLAUDE_KEYS, ...CODEX_KEYS, ...OPENCODE_KEYS].sort(),
       'the settings an earlier install is checked for are the twelve of the three extensions');
-    eq(tm.SWITCHES.filter((s) => s.extension === 'xnervwang.opencode-plus').map((s) => s.feature), ['workPlan', 'timeZone', 'conversationBrief'],
-      'OpenCode Plus has only the work plan, the time-zone note and the brief: no wake-ups or detached-command notices');
+    eq(tm.SWITCHES.filter((s) => s.extension === 'xnervwang.opencode-agent-plus').map((s) => s.feature), ['workPlan', 'timeZone', 'conversationBrief'],
+      'OpenCode Agent Plus has only the work plan, the time-zone note and the brief: no wake-ups or detached-command notices');
     eq(tm.SWITCHES.every((s) => s.default === true), true, 'each of them on by default');
   }
 
@@ -221,9 +221,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await wait(20);
     eq(b.control.state.configWrites, [], 'and the next start does not look again');
     b.close();
-    const oc = host({ memento: earlier(), extensions: [OPENCODE()], config: { 'opencodePlus.conversationBrief': false } });
+    const oc = host({ memento: earlier(), extensions: [OPENCODE()], config: { 'opencodeAgentPlus.conversationBrief': false } });
     await wait(20);
-    eq(oc.control.state.configWrites, [['agentPlus.tokenMode', 'custom']], 'so does one of OpenCode Plus\'s');
+    eq(oc.control.state.configWrites, [['agentPlus.tokenMode', 'custom']], 'so does one of OpenCode Agent Plus\'s');
     oc.close();
   }
   {
@@ -339,17 +339,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const oc = host({ memento: earlier(), extensions: [OPENCODE()] });
     await wait(20);
     eq(oc.control.state.status.find((s) => s.id === 'agentPlus.tokenMode').tooltip.split('\n')[1], 'Adds to the agent\'s context: work plan, time-zone note, conversation brief',
-      'with only OpenCode Plus installed, only its three are listed');
+      'with only OpenCode Agent Plus installed, only its three are listed');
     oc.control.state.onQuickPick = (qp) => qp.accept(qp.items.find((i) => i.mode === 'custom'));
     await oc.control.state.handlers['agentPlus.chooseTokenMode']();
-    eq(oc.control.state.commands.filter((c) => c[0] === 'workbench.action.openSettings'), [['workbench.action.openSettings', '@id:opencodePlus.workPlan,opencodePlus.tellOpenCodeYourTimeZone,opencodePlus.conversationBrief']],
+    eq(oc.control.state.commands.filter((c) => c[0] === 'workbench.action.openSettings'), [['workbench.action.openSettings', '@id:opencodeAgentPlus.workPlan,opencodeAgentPlus.tellOpenCodeYourTimeZone,opencodeAgentPlus.conversationBrief']],
       'and picking Custom opens the Settings editor on those three settings');
     oc.close();
-    const both = host({ memento: earlier(), extensions: [CODEX(), OPENCODE()], config: { 'agentPlus.tokenMode': 'custom', 'opencodePlus.workPlan': false } });
+    const both = host({ memento: earlier(), extensions: [CODEX(), OPENCODE()], config: { 'agentPlus.tokenMode': 'custom', 'opencodeAgentPlus.workPlan': false } });
     await wait(20);
     eq(both.control.state.status.find((s) => s.id === 'agentPlus.tokenMode').tooltip.split('\n').slice(1, 3), [
       'Adds to the agent\'s context: work plan (Codex Plus), time-zone note, conversation brief, wake-ups, notices when a detached command stops',
-      'Left out: work plan (OpenCode Plus)'], 'an extension not offered when this one is alone is named as its manifest names it');
+      'Left out: work plan (OpenCode Agent Plus)'], 'an extension not offered when this one is alone is named as its manifest names it');
     both.close();
     const alone = host({ memento: earlier(), extensions: [] });
     await wait(20);

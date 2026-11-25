@@ -14,8 +14,8 @@ const CODEX = (over = {}) => ({ id: 'xnervwang.codex-plus', packageJSON: { name:
   version: '0.1.0', extensionDependencies: ['openai.chatgpt', 'xnervwang.agent-plus'], agentPlus: { protocol: 1 }, ...over } });
 const CLAUDE = (over = {}) => ({ id: 'xnervwang.claude-code-plus', packageJSON: { name: 'claude-code-plus',
   displayName: 'Claude Code Plus', version: '1.1.0', extensionDependencies: ['xnervwang.agent-plus'], agentPlus: { protocol: 1 }, ...over } });
-const OPENCODE = (over = {}) => ({ id: 'xnervwang.opencode-plus', packageJSON: { name: 'opencode-plus',
-  displayName: 'OpenCode Plus', version: '0.0.1', extensionDependencies: ['xnervwang.agent-plus'], agentPlus: { protocol: 1 }, ...over } });
+const OPENCODE = (over = {}) => ({ id: 'xnervwang.opencode-agent-plus', packageJSON: { name: 'opencode-agent-plus',
+  displayName: 'OpenCode Agent Plus', version: '0.0.1', extensionDependencies: ['xnervwang.agent-plus'], agentPlus: { protocol: 1 }, ...over } });
 const SELF = () => ({ id: 'xnervwang.agent-plus', packageJSON: { name: 'agent-plus', version: require('../package.json').version } });
 
 function boot(root, tmp, { extensions = [CODEX()], trusted = true, config = {}, fetch, noticeDelayMs = 0, version, views, memento, home,

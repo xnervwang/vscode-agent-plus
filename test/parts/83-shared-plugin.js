@@ -91,7 +91,7 @@ print(json.dumps(missing))`, path.join(shared, 'hooks'), shared, JSON.stringify(
     `with ${agent}'s plan_agent.py the image note is said in the panel and names the conversation's own folder`);
   }
 
-  /* OpenCode's folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>, and none for an id of another
+  /* OpenCode's folder: <OPENCODE_AGENT_PLUS_HOME, else ~/.opencode-agent-plus>/scratch/<session id>, and none for an id of another
      shape, such as one with ../ in it. */
   {
     const probe = `
@@ -106,12 +106,12 @@ print(json.dumps([A.scratch_dir({"session_id": s} if s is not None else {}) for 
       const r = run(['-c', probe, hooksOf.opencode, JSON.stringify(ids)], '', env);
       try { return JSON.parse(r.stdout); } catch (_) { return r.stderr || r.stdout; }
     };
-    const home = tmp('opencode-plus-home');
-    eq(where({ OPENCODE_PLUS_HOME: home }), [path.join(home, 'scratch', SES), null, null, null, null, null],
-      "opencode's scratch_dir is OPENCODE_PLUS_HOME/scratch/<session id>, and none for an id not of OpenCode's shape");
+    const home = tmp('opencode-agent-plus-home');
+    eq(where({ OPENCODE_AGENT_PLUS_HOME: home }), [path.join(home, 'scratch', SES), null, null, null, null, null],
+      "opencode's scratch_dir is OPENCODE_AGENT_PLUS_HOME/scratch/<session id>, and none for an id not of OpenCode's shape");
     const user = tmp('opencode-user');
-    eq(where({ OPENCODE_PLUS_HOME: '', HOME: user, USERPROFILE: user })[0], path.join(user, '.opencode-plus', 'scratch', SES),
-      'and ~/.opencode-plus/scratch/<session id> without OPENCODE_PLUS_HOME');
+    eq(where({ OPENCODE_AGENT_PLUS_HOME: '', HOME: user, USERPROFILE: user })[0], path.join(user, '.opencode-agent-plus', 'scratch', SES),
+      'and ~/.opencode-agent-plus/scratch/<session id> without OPENCODE_AGENT_PLUS_HOME');
   }
 
   for (const agent of AGENTS) {

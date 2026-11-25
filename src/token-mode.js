@@ -6,7 +6,7 @@
 'use strict';
 /*
  * The token mode, agentPlus.tokenMode: one setting in Agent Plus that decides which of the features that add text to an
- * agent's context run, in Claude Code Plus, Codex Plus and OpenCode Plus alike. Each extension reads such a feature
+ * agent's context run, in Claude Code Plus, Codex Plus and OpenCode Agent Plus alike. Each extension reads such a feature
  * through effective() below, so the table of what each mode turns on is written once. Agent Plus's package.json repeats
  * the labels and the descriptions for the Settings editor, and its tests check that the two agree.
  *
@@ -53,9 +53,9 @@ const SWITCHES = Object.freeze([
   { key: 'codexPlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.wakeUps', feature: 'wakeUps', extension: 'xnervwang.codex-plus', default: true },
   { key: 'codexPlus.detachedEndNotices', feature: 'detachedEndNotices', extension: 'xnervwang.codex-plus', default: true },
-  { key: 'opencodePlus.workPlan', feature: 'workPlan', extension: 'xnervwang.opencode-plus', default: true },
-  { key: 'opencodePlus.tellOpenCodeYourTimeZone', feature: 'timeZone', extension: 'xnervwang.opencode-plus', default: true },
-  { key: 'opencodePlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.opencode-plus', default: true },
+  { key: 'opencodeAgentPlus.workPlan', feature: 'workPlan', extension: 'xnervwang.opencode-agent-plus', default: true },
+  { key: 'opencodeAgentPlus.tellOpenCodeYourTimeZone', feature: 'timeZone', extension: 'xnervwang.opencode-agent-plus', default: true },
+  { key: 'opencodeAgentPlus.conversationBrief', feature: 'conversationBrief', extension: 'xnervwang.opencode-agent-plus', default: true },
 ].map((s) => Object.freeze(s)));
 
 /* The sentence each of those settings ends its description with. */

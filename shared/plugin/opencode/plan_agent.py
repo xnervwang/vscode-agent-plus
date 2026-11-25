@@ -3,8 +3,8 @@
 # All rights reserved.
 # Source: vscode-agent-plus shared/plugin/opencode/plan_agent.py; sync-shared.js copies it, so edit it there.
 
-"""The OpenCode side of the work plan hooks, run by the OpenCode Plus extension's plugin: where the plans are, how the
-plugin's turn record is read, and what the model is told to change rows with. plan_common.py imports this module,
+"""The OpenCode side of the work plan hooks, run by the OpenCode Agent Plus extension's plugin: where the plans are, how
+the plugin's turn record is read, and what the model is told to change rows with. plan_common.py imports this module,
 which imports nothing from the plugin.
 
 OpenCode has no hook commands and no transcript file. Its plugin (opencode-plugin/agent-work-plan/index.js in the OpenCode
@@ -18,27 +18,27 @@ it is about, one JSON object per line, in the shape fixture_* below write.
   {"type": "usage", "timestamp": TIME, "tokens": N, "window": N}
 
 The model changes rows with the plugin's set_row, add_row, set_summary and set_status tools on OpenCode 2, and with the
-row command from a shell where the plugin cannot add tools. The plugin says which in OPENCODE_PLUS_PLAN_TOOLS ("tools" or
-"shell").
+row command from a shell where the plugin cannot add tools. The plugin says which in OPENCODE_AGENT_PLUS_PLAN_TOOLS
+("tools" or "shell").
 """
 import json
 import os
 import re
 
 AGENT = "OpenCode"
-SETTING_PREFIX = "opencodePlus"
+SETTING_PREFIX = "opencodeAgentPlus"
 
 
-def opencode_plus_home():
-    """The extension's folder (paths.root() there): OPENCODE_PLUS_HOME, else ~/.opencode-plus. The plugin runs these
-    scripts with the extension's OPENCODE_PLUS_HOME in their environment."""
-    return os.environ.get("OPENCODE_PLUS_HOME") or os.path.join(os.path.expanduser("~"), ".opencode-plus")
+def opencode_agent_plus_home():
+    """The extension's folder (paths.root() there): OPENCODE_AGENT_PLUS_HOME, else ~/.opencode-agent-plus. The plugin
+    runs these scripts with the extension's OPENCODE_AGENT_PLUS_HOME in their environment."""
+    return os.environ.get("OPENCODE_AGENT_PLUS_HOME") or os.path.join(os.path.expanduser("~"), ".opencode-agent-plus")
 
 
 # The folder for a caller started without one as its first argument: the extension's own plans folder
 # (paths.plansDir() there).
 DATA_ENV = ()
-FALLBACK = os.path.join(opencode_plus_home(), "plans")
+FALLBACK = os.path.join(opencode_agent_plus_home(), "plans")
 
 EXTRA_DEFAULTS = {}
 
@@ -52,7 +52,7 @@ EXAMPLE_SESSION_ID = "ses_df3c28ab2ffe0TYFbXAnoBpqy6"
 TURN_FIELD = "turn_id"
 NO_GROUPING = "OpenCode keeps its sessions in a database, so there is no transcript path to group by"
 
-TOOLS = os.environ.get("OPENCODE_PLUS_PLAN_TOOLS", "tools") != "shell"
+TOOLS = os.environ.get("OPENCODE_AGENT_PLUS_PLAN_TOOLS", "tools") != "shell"
 PLAN_TOOLS = ("set_row", "add_row", "set_summary", "set_status")
 
 
@@ -256,13 +256,14 @@ def in_panel(payload):
 
 
 def scratch_dir(payload):
-    """The conversation's own folder: <OPENCODE_PLUS_HOME, else ~/.opencode-plus>/scratch/<session id>/, outside the
-    user's workspace and on the machine OpenCode runs on, which is where the extension reads a reply's images. None
-    unless the session id has OpenCode's shape, which keeps a name such as ../x from pointing outside the folder."""
+    """The conversation's own folder: <OPENCODE_AGENT_PLUS_HOME, else ~/.opencode-agent-plus>/scratch/<session id>/,
+    outside the user's workspace and on the machine OpenCode runs on, which is where the extension reads a reply's
+    images. None unless the session id has OpenCode's shape, which keeps a name such as ../x from pointing outside the
+    folder."""
     session = str(payload.get("session_id") or "").strip()
     if not re.match(r"^%s$" % SESSION_ID, session):
         return None
-    return os.path.join(opencode_plus_home(), "scratch", session)
+    return os.path.join(opencode_agent_plus_home(), "scratch", session)
 
 
 def fixture_scratch_suffix(session_id):

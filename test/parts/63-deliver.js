@@ -39,7 +39,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const b = start();
     const got = [];
     let next = { outcome: 'submitted' };
-    b.api.registerSource({ protocol: 1, id: 'opencode-plus', label: 'OpenCode Plus', listConversations: async () => [],
+    b.api.registerSource({ protocol: 1, id: 'opencode-plus', label: 'OpenCode Agent Plus', listConversations: async () => [],
       canDeliver: (id) => id === 'ses_A',
       deliverAnswer: async (id, text, opts) => { got.push([id, text, opts && opts.deliveryId]); return next; } });
     await wait(60);
@@ -168,7 +168,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const b = start({ trusted: false });
     const plans = tmp('plans');
     let asked = 0;
-    b.api.registerSource({ protocol: 1, id: 'opencode-plus', label: 'OpenCode Plus', listConversations: async () => [],
+    b.api.registerSource({ protocol: 1, id: 'opencode-plus', label: 'OpenCode Agent Plus', listConversations: async () => [],
       planPath: (id) => path.join(plans, id + '.json'), canDeliver: () => true, deliverAnswer: async () => { asked++; return { outcome: 'submitted' }; } });
     await wait(60);
     const r = await within(b.api.deliver({ sourceId: 'opencode-plus', sessionId: 'ses_A', text: 'hi' }));

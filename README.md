@@ -29,9 +29,9 @@ A dependency of Claude Code Plus and Codex Plus: installing either one installs 
 
 | Feature | What it adds to the agent's context | Interface features | Essential features | All features | Custom |
 | --- | --- | --- | --- | --- | --- |
-| Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | `claudeCodePlus.workPlan`, `codexPlus.workPlan`, `opencodePlus.workPlan` |
-| Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | `claudeCodePlus.tellClaudeYourTimeZone`, `codexPlus.tellCodexYourTimeZone`, `opencodePlus.tellOpenCodeYourTimeZone` |
-| Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | `claudeCodePlus.conversationBrief`, `codexPlus.conversationBrief`, `opencodePlus.conversationBrief` |
+| Work plan | The plan's open rows each turn, reminders to keep the plan, and the descriptions of the plan tools, from a plugin Claude Code Plus and Codex Plus install into their agents | Off, plugin unloaded | On | On | `claudeCodePlus.workPlan`, `codexPlus.workPlan`, `opencodeAgentPlus.workPlan` |
+| Time-zone note | Your time zone, when it differs from the machine the agent runs on | Off | On | On | `claudeCodePlus.tellClaudeYourTimeZone`, `codexPlus.tellCodexYourTimeZone`, `opencodeAgentPlus.tellOpenCodeYourTimeZone` |
+| Conversation brief | A request to keep a summary of the conversation and where it stands | Off | Off | On | `claudeCodePlus.conversationBrief`, `codexPlus.conversationBrief`, `opencodeAgentPlus.conversationBrief` |
 | Wake-ups (Codex Plus) | A prompt the model scheduled, sent to its conversation when due | Off | Off | On | `codexPlus.wakeUps` |
 | Detached-command notices | A notice to the conversation that left a command running detached, once that command is no longer running | Off | Off | On | `claudeCodePlus.detachedEndNotices`, `codexPlus.detachedEndNotices` |
 

@@ -133,11 +133,11 @@ def selftest():
 
     tmp = tempfile.mkdtemp()
     saved = {k: os.environ.get(k) for k in ("CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "CLAUDE_CONFIG_DIR",
-                                            "OPENCODE_PLUS_HOME")}
+                                            "OPENCODE_AGENT_PLUS_HOME")}
     try:
         os.environ["CODEX_HOME"] = os.path.join(tmp, "codex-home")
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(tmp, "claude-home")
-        os.environ["OPENCODE_PLUS_HOME"] = os.path.join(tmp, "opencode-plus-home")
+        os.environ["OPENCODE_AGENT_PLUS_HOME"] = os.path.join(tmp, "opencode-agent-plus-home")
         project = os.path.join(tmp, "projects", "-work-repo")
         os.makedirs(project)
         transcript = os.path.join(project, example_id(0) + ".jsonl")
