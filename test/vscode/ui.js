@@ -164,10 +164,12 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     if (small && !maximized) { await exec('workbench.action.toggleMaximizedPanel'); await sleep(500); }
   };
   /* A row the tree has not drawn, or has drawn outside the list's visible box, is scrolled to before it is clicked: from
-     the top, a step at a time. The tree scrolls itself, so Playwright cannot bring such a row into view on its own. */
+     the top, a step at a time. The tree scrolls itself, so Playwright cannot bring such a row into view on its own. The
+     pointer is moved off the trees first, since the hover box of a row the previous step pointed at can cover this one. */
   const clickRow = async (view, title, opts) => {
     if (view === 'agentPlus.conversations') await showConversations();
     await clearToasts();
+    await unhover();
     const row = rowLoc(view, title), list = pane(view).locator('.monaco-list').first();
     const shown = async () => {
       if (!await row.count()) return false;
@@ -179,6 +181,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       await page.mouse.wheel(0, -5000);
       await sleep(150);
       for (let i = 0; i < 20 && !await shown(); i++) { await page.mouse.wheel(0, 60); await sleep(150); }
+      await unhover();
     }
     return row.click(opts);
   };
