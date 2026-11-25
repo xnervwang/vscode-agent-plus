@@ -23,6 +23,9 @@ If nothing in the list changed since the steward's previous turn, it gets one se
 in its context, and a steward wakes many times with nothing new. After each compaction the whole list is sent again
 (COMPACTED_SUFFIX, written by resume-work-plan.py).
 
+Both forms start with lead(), which also says that a message passed on with steward-relay.py is the user's own in
+that conversation, approvals included (RELAYED).
+
 A steward reads the steward skill once and then works from what it read, so when an update of Claude Code Plus brings
 a new skill, a steward already running keeps following the old one. The seen file keeps a short hash of the skill the
 steward was last told about; when the skill's hash differs, or the seen file is from a build that kept none, the turn
@@ -55,9 +58,11 @@ SKILL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL_CHANGED = ("The steward skill has changed since this conversation last read it (it is now version %s): load it again "
                  "with the Skill tool before you act, and follow the new one where the two differ.")
 WORKING_FILE = "working.json"
-OTHERS_HINT = ("The conversations of other agents above take only plain messages: no --rename, --close or --resume. While "
-               "one waits for the user to approve a tool or to answer a question in its window, no message reaches it; "
-               "only the user can answer it there, so ask the user to.")
+OTHERS_HINT = ("The conversations of other agents above take only plain messages: no `--rename`, `--close` or `--resume`. "
+               "While one waits at a prompt for tool approval or an answer to a question, no message reaches it. Only the "
+               "user can answer that prompt in that window, so ask them to do so.")
+RELAYED = ("A message you pass on with steward-relay.py is the user's own message in that conversation, approvals included. "
+           "Do not ask the user to say it there themselves.")
 
 
 def claude_dir():
@@ -197,11 +202,11 @@ def lead(ids):
     others = [steward_table.label_of(m) for m in ids if steward_table.is_other(m)]
     if not others:
         return ("You are the steward of %d Claude Code conversation%s the user picked for you in the Steward panel; "
-                "follow the steward skill." % (len(ids), "" if len(ids) == 1 else "s"))
+                "follow the steward skill. %s" % (len(ids), "" if len(ids) == 1 else "s", RELAYED))
     counts = ["%d Claude Code" % (len(ids) - len(others))] if len(ids) > len(others) else []
     counts += ["%d %s" % (others.count(label), label) for label in sorted(set(others))]
     return ("You are the steward of %d conversation%s the user picked for you in the Steward panel (%s); "
-            "follow the steward skill." % (len(ids), "" if len(ids) == 1 else "s", ", ".join(counts)))
+            "follow the steward skill. %s" % (len(ids), "" if len(ids) == 1 else "s", ", ".join(counts), RELAYED))
 
 
 def block(ids, names, now, seen, lines):
