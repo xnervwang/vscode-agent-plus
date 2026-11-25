@@ -95,8 +95,7 @@ message only to conversations that still have work. A conversation has work if:
 - The list says it has background work running.
 
 Leave out conversations that are idle with no work, have only questions waiting for the user, or have nothing to do.
-Each message makes a conversation run a whole turn and read its whole context again. One night, "I'm going to bed"
-went to 16 conversations, and 12 had no work.
+Each message makes a conversation run a whole turn and read its whole context again.
 
 Apply the same rule to a message about a reload or restart, such as "the windows were reloaded, check your task
 status". Use your earlier lists to find which conversations had work in progress or background work before it
