@@ -83,13 +83,13 @@ DEFAULTS = {
     # on right now, and the injection counts looking into something as work to mark. So reading and searching count
     # here, and nudgeMinChanges still lets two changes in a turn's first batch be enough on their own.
     "remindMinCalls": 3,
-    # What a turn has to cost, in tool calls, before a conversation with no plan at all is told it could keep one: high
-    # enough that the offer follows a turn big enough to have needed a plan rather than an ordinary one. Lower, it reaches
-    # conversations that have no use for it; higher, it comes later.
+    # What a turn has to cost, in tool calls, before a conversation with no plan at all is told it could keep one. Only
+    # a turn long enough to have needed a plan should draw the offer; a lower value would also reach conversations with
+    # no use for one.
     "offerMinToolCalls": 25,
     # How many times the user has to have spoken first. A plan is for a conversation that branches, and a session handed
     # one task and left to do it cannot branch. Such a worker counts one user turn, so a threshold of three keeps it from
-    # being offered a plan, while a conversation the user keeps steering reaches the threshold within a few messages.
+    # being offered a plan. A conversation the user keeps steering reaches three within a few messages.
     "offerMinTurns": 3,
     # A regular expression for the conversation's latest reply. When it matches, the two hooks around a compaction say
     # nothing. It is for a conversation that relays another model's replies word for word: an instruction injected there

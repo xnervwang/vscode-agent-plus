@@ -50,8 +50,8 @@ var agentPlusPlanBar = (function () {
     todo: 'var(--vscode-charts-purple, #b180d7)',
     parked: 'var(--vscode-descriptionForeground, #8c8c8c)'
   };
-  /* The yellow of Agent Plus's status bar entry that counts the conversations waiting for the user, so that the questions
-     of this conversation read as the same kind of thing. */
+  /* The warning yellow that Agent Plus's status bar entry takes while conversations wait for the user. The questions
+     part uses it too. */
   var ASK = 'var(--vscode-statusBarItem-warningBackground, #b89500)';
   var MUTED = 'var(--vscode-descriptionForeground, #8c8c8c)';
 

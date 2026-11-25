@@ -70,8 +70,7 @@ MAX_CHARS = 6000
 TITLE_CHARS = 80
 NOTED_CHARS = 200
 # The two states a row is meant to leave soon, so how long one has been in either is worth saying: a row `doing` for
-# three days is not being done, and nothing else on the row shows that. A row left `doing` after the work moved on, or
-# one whose note says it is waiting on someone, looks like work in hand until its age is shown beside it.
+# three days is not being done, and nothing else on the row shows that.
 TIMED = ("doing", "waiting")
 
 
