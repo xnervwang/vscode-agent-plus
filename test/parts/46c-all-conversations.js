@@ -94,7 +94,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await until(() => items(q.home).length);
     await wait(150);
     eq([before, items(q.home), q.control.state.said.filter((m) => String(m.message).includes('Waits for approval')).length,
-      q.control.state.status.find((x) => x.id === 'agentPlus.attention').shown], [[], [['opencode-plus', W, 'waiting']], 0, false],
+      /need you/.test(q.control.state.status.find((x) => x.id === 'agentPlus.conversations').text)], [[], [['opencode-plus', W, 'waiting']], 0, false],
       'with the notifications off, the attention file lists the running conversations once something listens, and this window still shows no notification and no count');
     listening.dispose();
     q.close();

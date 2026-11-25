@@ -242,7 +242,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', onDidChangeConversations: changed.event,
       listConversations: async () => listed.map((c) => Object.assign({}, c)) });
     await wait(300);
-    const bell = () => { const it = control.state.status.find((s) => s.id === 'agentPlus.attention'); return it && it.shown ? it.text : ''; };
+    /* How many conversations the status bar entry says need the user, and whether its background is the warning one. */
+    const bell = () => {
+      const it = control.state.status.find((s) => s.id === 'agentPlus.conversations');
+      const m = it && it.shown && /(\d+) conversations? needs? you/.exec(it.text);
+      return m ? [Number(m[1]), (it.backgroundColor || {}).id] : [0, (it && it.backgroundColor || {}).id];
+    };
     const turn = async (on) => { control.state.config['agentPlus.notifications.enabled'] = on; control.changeConfig(['agentPlus.notifications.enabled']); await wait(300); };
     const seen = [bell()];
     await turn(false);
@@ -256,8 +261,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     seen.push(bell());
     await turn(true);
     seen.push(bell());
-    eq(seen, ['$(bell-dot) 1', '', '$(bell-dot) 1', '', '$(bell-dot) 2'],
-      'the bell goes when the notifications are turned off and comes back as soon as they are turned on again, even if a conversation changed while they were off');
+    const W = 'statusBarItem.warningBackground';
+    eq(seen, [[1, W], [0, undefined], [1, W], [0, undefined], [2, W]],
+      'the status bar stops counting them when the notifications are turned off and counts them again as soon as they are turned on, even if a conversation changed while they were off');
     b.close();
   }
 };

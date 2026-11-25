@@ -298,8 +298,8 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       'alone, no view and no status bar entry is created');
     b.control.state.extensions.push(CODEX());
     b.control.fireExtensions();
-    eq([Object.keys(b.control.state.views).length, b.control.state.status.length], [2, 2],
-      'they are created when an extension that uses it is installed: the Conversations entry and the one for conversations that need the user');
+    eq([Object.keys(b.control.state.views).length, b.control.state.status.length], [2, 1],
+      'they are created when an extension that uses it is installed, with one status bar entry, Conversations');
     b.close();
     /* A source registering in a window where nothing declared the dependency builds the views, and is attached once. */
     const c = boot(root, tmp, { extensions: [], viewOptions: timing });

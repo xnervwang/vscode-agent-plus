@@ -208,11 +208,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       listAllConversations: async () => listed, shows: (id) => shownHere.has(id), onDidChangeConversations: changed.event });
     const said = () => control.state.said.filter((m) => /need|waiting|question|finished|approve/.test(m.message)).map((m) => m.message);
     for (let i = 0; i < 100 && !said().length; i++) await wait(50);
-    const tip = () => { const it = control.state.status.find((s) => s.id === 'agentPlus.attention'); return it ? it.tooltip : ''; };
+    const tip = () => { const it = control.state.status.find((s) => s.id === 'agentPlus.conversations'); return it ? it.tooltip : ''; };
     let picked = null;
     vscode.window.showQuickPick = async (items) => { picked = items.map((x) => [x.label, x.description]); return undefined; };
     await vscode.commands.executeCommand('agentPlus.showAttention');
-    eq([said(), tip(), picked], [['"Needs you" is waiting for you to approve Bash.'], '1 conversation needs you:\nWaiting: Needs you (approve Bash)',
+    eq([said(), tip(), picked], [['"Needs you" is waiting for you to approve Bash.'], '1 conversation needs you:\nFinished or waiting for you, not looked at yet:\nWaiting: Needs you (approve Bash)',
       [['Needs you', 'waiting for you to approve Bash']]],
     'a source\'s waitingFor reaches the notice, the hover of the count and the list of conversations that need you');
     control.state.said.length = 0;

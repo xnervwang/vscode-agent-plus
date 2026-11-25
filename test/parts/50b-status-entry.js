@@ -4,8 +4,9 @@
 
 'use strict';
 /*
- * The Conversations entry in the status bar (src/views.js): the number of running conversations with a question for the
- * user, the list of them in its tooltip and its red background, or the number running when none has a question.
+ * The Conversations entry in the status bar (src/views.js): the number of conversations that need the user, the list of
+ * them in its tooltip and its warning background, or the number running when none does. It counts the running
+ * conversations with a question in their plan and those the attention watcher counts (src/attention.js), each once.
  */
 const fs = require('fs');
 const path = require('path');
@@ -45,23 +46,60 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   plan('b', 1);
   plan('c', 3);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta'), conv('c', 'Gamma', false)], '2 conversations need you'),
-    [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.warningBackground'],
+    [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.warningBackground'],
     'it counts the running conversations with a question, not the questions, lists them in its tooltip, and is yellow; a stopped one is not counted');
 
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 conversation needs you'),
-    [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nAlpha · 2 questions', 'statusBarItem.warningBackground'],
+    [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions', 'statusBarItem.warningBackground'],
     'one conversation is written in the singular');
 
   const many = Array.from({ length: 12 }, (_, i) => { plan(`m${i}`, 1); return conv(`m${i}`, `Task ${i + 1}`); });
   const [, text, tip] = await look(many, '12 conversations need you');
-  eq([text, tip.split('\n').length, tip.split('\n')[10], tip.split('\n').pop()],
-    ['$(comment-discussion) 12 conversations need you', 12, 'Task 10 · 1 question', 'and 2 more'],
+  eq([text, tip.split('\n').length, tip.split('\n')[11], tip.split('\n').pop()],
+    ['$(comment-discussion) 12 conversations need you', 13, 'Task 10 · 1 question', 'and 2 more'],
     'the tooltip lists ten of them, then says how many more there are');
 
   vscode.env.language = 'zh-cn';
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 个对话等你'),
-    [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\nAlpha · 2 个问题', 'statusBarItem.warningBackground'],
+    [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\n在等你回答计划里问题的：\nAlpha · 2 个问题', 'statusBarItem.warningBackground'],
     'in Chinese it says how many conversations wait for the user');
   b.close();
+
+  /* With the attention watcher counting too. */
+  {
+    const ws2 = tmp('ws2'), plans2 = tmp('plans2');
+    const q = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20,
+      attentionWarmupMs: 0, attentionBatchMs: 10, debounceMs: 10 } });
+    q.vscode.workspace.workspaceFolders = [{ uri: q.vscode.Uri.file(ws2) }];
+    const ask = (id) => fs.writeFileSync(path.join(plans2, id + '.json'), JSON.stringify({ nodes: [{ title: 'build', state: 'doing' },
+      { title: 'ask', state: 'waiting', waitingOn: 'user', question: 'Which one?' }] }));
+    ask('a');
+    ask('b');
+    const at = Date.now() - 60e3;
+    const listed = [
+      { sessionId: 'a', title: 'Alpha', cwd: ws2, state: 'prompt', activity: 'waiting', running: true, lastActiveAt: at, waitingFor: { kind: 'permission', tool: 'Bash' } },
+      { sessionId: 'b', title: 'Beta', cwd: ws2, state: 'idle', running: true, lastActiveAt: at - 1000 },
+      { sessionId: 'c', title: 'Gamma', cwd: ws2, state: 'prompt', activity: 'waiting', running: true, lastActiveAt: at - 2000 },
+    ];
+    const moved = new q.vscode.EventEmitter();
+    q.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', planPath: (id) => path.join(plans2, id + '.json'), planDir: () => plans2,
+      listConversations: async () => listed.map((c) => Object.assign({}, c)), onDidChangeConversations: moved.event });
+    const it = () => q.control.state.status.find((i) => i.id === 'agentPlus.conversations');
+    const settle = async (want) => { for (let t = 0; t < 5000 && !(it().shown && it().text.includes(want)); t += 50) await wait(50); return it(); };
+    const both = await settle('3 conversations need you');
+    eq([both.text, both.tooltip, both.command, both.backgroundColor && both.backgroundColor.id],
+      ['$(comment-discussion) 3 conversations need you',
+        '3 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 1 question\nBeta · 1 question'
+        + '\nFinished or waiting for you, not looked at yet:\nWaiting: Alpha (approve Bash)\nWaiting: Gamma',
+        'agentPlus.showConversations', 'statusBarItem.warningBackground'],
+      'one entry counts the conversations with a question in their plan and those waiting for the user, a conversation of both kinds once, and lists the two kinds apart');
+    q.control.state.config['agentPlus.conversationsView'] = false;
+    q.control.changeConfig(['agentPlus.conversationsView']);
+    const off = await settle('2 conversations need you');
+    eq([off.text, off.tooltip.split('\n')[1], off.command],
+      ['$(comment-discussion) 2 conversations need you', 'Finished or waiting for you, not looked at yet:', 'agentPlus.showAttention'],
+      'with the Conversations view turned off, it counts only the waiting ones and opens their list');
+    q.close();
+  }
 };

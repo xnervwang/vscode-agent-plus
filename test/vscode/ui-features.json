@@ -49,7 +49,7 @@
     "settings": [], "commands": [], "views": [] },
   { "id": "notification-open", "what": "Open on a notification bringing its conversation to the front, and two conversations that start to wait together getting one notification each, whose Open brings that conversation to the front",
     "steps": ["notify-open", "notify-several"], "looks": ["notify-several"], "settings": [], "commands": ["agentPlus.openAttention"], "views": [] },
-  { "id": "attention-count", "what": "The bell and number in the status bar: the count of conversations that wait or stopped with a reply not read, less the one in front, which falls by one when one is read; a click lists them to open one",
+  { "id": "attention-count", "what": "The Conversations entry in the status bar counting the conversations that wait or stopped with a reply not read, less the one in front, which falls by one when one is read, and Show the Conversations That Need You listing them to open one",
     "steps": ["notify-waiting", "attention-count", "attention-list"], "looks": ["attention-count", "attention-list"], "settings": [], "commands": ["agentPlus.showAttention"], "views": [] },
   { "id": "notification-settings", "what": "agentPlus.notifications.waiting and .finished each turning off their kind of notification, and agentPlus.notifications.enabled turning off the notifications and the count",
     "steps": ["notify-settings"], "looks": ["notify-settings"],
