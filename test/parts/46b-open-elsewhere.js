@@ -14,7 +14,7 @@ const { boot } = require('../boot');
 
 module.exports = async ({ eq, tmp, root, wait }) => {
   const viewOptions = { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 300, attentionMs: 20 };
-  const S = '01a20228-9021-7920-a3bf-466905cf47ea';
+  const S = '01a10000-0000-7000-8000-000000000002';
   {
     const b = boot(root, tmp, { viewOptions });
     const revealed = [], here = [];

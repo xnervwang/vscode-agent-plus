@@ -18,7 +18,7 @@ module.exports = async ({ eq, root }) => {
   const SELF = { sourceId: CC, sessionId: id(99) };
   const ixOf = (known, self = SELF) => kit.mentionIndex(known, self);
   const find = (text, known, opts, self) => kit.mentions(text, ixOf(known, self), opts).map((r) => [text.slice(r.start, r.end), r.kind, r.sessionId.slice(0, 8)]);
-  const BLACK = '黑盒测试 ADV和 AUV';
+  const BLACK = '回归测试 CSV和 JSON';
   const TEST = '测试', LQ = '「', RQ = '」';
 
   {
@@ -34,9 +34,9 @@ module.exports = async ({ eq, root }) => {
     find('see Fix redirect now', [conv(5, 'Fix redirect')]), find('see Fix redir now', [conv(5, 'Fix redir')])],
   [[], [['Fix redirect', 'title', '00000005']], []],
   'standing on its own a title needs a width of 10: Docs or two CJK characters never, Fix redirect (12) yes, Fix redir (9) no');
-  eq([find(`看一下${BLACK}的进度`, [conv(6, BLACK)]), find('黑盒测试报告', [conv(7, '黑盒测试报')]),
-    find('黑盒测试', [conv(8, '黑盒测试')])],
-  [[[BLACK, 'title', '00000006']], [['黑盒测试报', 'title', '00000007']], []],
+  eq([find(`看一下${BLACK}的进度`, [conv(6, BLACK)]), find('回归测试报告', [conv(7, '回归测试报')]),
+    find('回归测试', [conv(8, '回归测试')])],
+  [[[BLACK, 'title', '00000006']], [['回归测试报', 'title', '00000007']], []],
   'a CJK character counts 2 towards that width, and CJK text right next to a title does not stop the match');
   eq([find('xFix redirect', [conv(5, 'Fix redirect')]), find('Fix redirects', [conv(5, 'Fix redirect')]), find('Fix redirect2', [conv(5, 'Fix redirect')]),
     find('(Fix redirect).', [conv(5, 'Fix redirect')]), find('caféFix redirect', [conv(5, 'Fix redirect')])],

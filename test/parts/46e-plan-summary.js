@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { boot } = require('../boot');
 
-const C = '2bffe83d-78b2-4e4a-b15d-72b98b724ae2', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199a213-81c0-7800-8aa1-bbab2a035a53';
+const C = 'dddddddd-0000-4000-8000-000000000004', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199a213-81c0-7800-8aa1-bbab2a035a53';
 const row = (title, state, more = {}) => Object.assign({ title, state }, more);
 
 module.exports = async ({ eq, tmp, root, wait }) => {
@@ -111,7 +111,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     { children: [row('Ask the user', 'done'), row('Read the old exporter', 'done')] }), { row: '1' })] });
   write(codexDir, X, { nodes: [row('Fix the login redirect', 'done'), row('Handle refunds later', 'parked')] });
   b.api.registerSource({ protocol: 1, id: 'claude-code', label: 'Claude Code', planPath: (id) => path.join(claudeDir, id + '.json'), planDir: () => claudeDir,
-    listConversations: async () => [{ sessionId: C, title: 'Black-box testing', cwd: ws, state: 'idle', running: true }] });
+    listConversations: async () => [{ sessionId: C, title: 'Tidy the import script', cwd: ws, state: 'idle', running: true }] });
   b.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', planPath: (id) => path.join(codexDir, id + '.json'), planDir: () => codexDir,
     listConversations: async () => [{ sessionId: X, title: 'Login redirect', cwd: '/elsewhere', state: 'idle', running: true }] });
   await wait(120);
