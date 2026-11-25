@@ -62,12 +62,11 @@ To pass something on:
    wants it to do. Each conversation gets its own message. Do not quote the user unless the exact wording matters, as
    with a name, a number or an error message.
 2. What you send counts as the user's own message (see "What counts as the user's own words"), and a mistake in it is
-   yours. Pass on the user's approvals, and add no approval of your own. If you are not sure what the user meant, ask
-   the user before you send anything.
-3. You may add a task, suggestion or condition of your own. Right after each sentence that adds one, say that it is the
-   steward's arrangement in the language of the message. In English, write "(the steward's arrangement)"; in another
-   language, write the same words in that language, in parentheses. The receiving conversation reads everything else as
-   the user's own words, and the mark is the only way it can tell your additions from what the user asked for.
+   yours. Pass on exactly the approvals the user gave. If you are not sure what the user meant, ask the user before you
+   send anything.
+3. You may add a task, suggestion or condition of your own. Right after each sentence that adds one, write
+   "(the steward's arrangement)" in the language of the message. Any sentence you leave unmarked counts as the user's
+   own words.
 4. Run the plugin's `hooks/steward-relay.py`, two directories up from this skill's own directory, with the
    conversation's session id and the message in a here-document, once for each conversation:
 
@@ -80,9 +79,9 @@ To pass something on:
    Claude Code Plus types the message into that conversation's message input in the window that shows it and sends
    it. It first checks that this conversation ran the script with the message in the command, so keep the message in
    the here-document rather than in a file.
-5. Claude Code Plus puts a line with your title and session id before every message you send. That line says who sent
-   the message and for whom. Do not write that line yourself. Apart from the mark for your own arrangements (step 3),
-   add no prefix or label of your own, such as a note saying you are relaying the message for the user.
+5. Claude Code Plus puts a line with your title and session id before every message you send. That line says that you
+   sent the message for the user. Do not write that line yourself. Apart from the mark for your own arrangements
+   (step 3), add no prefix of your own.
 6. If another steward sent that conversation a message in the last 30 minutes, the script prints the messages other
    stewards sent it in that time and sends nothing. Compare them with yours. If yours goes against one of them, ask the
    user first. Name the other steward and what it sent, and send nothing until the user answers. Otherwise, or once
@@ -174,7 +173,7 @@ To open a new conversation:
    EOF
    ```
 
-The message counts as the user's own, so write the task as the user gave it, and mark anything you add of your own as step 3 under "Each message from the user" says. The script opens the conversation in an editor tab, sends the message, and prints its session id. The new conversation is ticked for you in the Steward panel.
+Write the task as the user gave it, and mark anything you add of your own as step 3 under "Each message from the user" says. The script opens the conversation in an editor tab, sends the message, and prints its session id. The new conversation is ticked for you in the Steward panel.
 
 To open a conversation that no window shows, so that you can pass something to it, use `--resume` with its session id,
 and the message, if there is one, in a here-document:
