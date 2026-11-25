@@ -72,13 +72,10 @@ DEFAULTS = {
     # whole cost still paid every turn, with nothing to show for it.
     "enabled": True,
     # How many things a turn has to have CHANGED before it owes the plan anything - asked by the reminder at the end of a
-    # turn, and by the one that speaks when a turn starts working with nothing marked `doing`. Counting tool calls
-    # instead was the first shape of this and it was the wrong measure: reading, grepping and measuring are all tool
-    # calls, so a turn spent explaining or investigating tripped the same threshold as a turn that finished three tasks.
-    # Measured over one conversation, 29 reminders produced 10 entries and 18 produced nothing, and the densest run of
-    # them landed on turns that had changed nothing at all. Meanwhile 14 other conversations kept a plan, wrote to it 269
-    # times between them, and never saw one reminder - what maintains a plan is having it in front of the model every
-    # turn, not this.
+    # turn, and by the one that speaks when a turn starts working with nothing marked `doing`. Tool calls are the wrong
+    # measure: reading, grepping and measuring are all tool calls, so a turn spent explaining or investigating would trip
+    # the same threshold as a turn that finished three tasks. The reminder is a backstop; what maintains a plan is having
+    # it in front of the model every turn.
     "nudgeMinChanges": 2,
     # How many tool calls a turn makes, besides the plan's own, before the reminder that work has started with nothing
     # marked `doing` speaks, whether or not those calls changed anything. That reminder asks a different question from
@@ -86,12 +83,13 @@ DEFAULTS = {
     # on right now, and the injection counts looking into something as work to mark. So reading and searching count
     # here, and nudgeMinChanges still lets two changes in a turn's first batch be enough on their own.
     "remindMinCalls": 3,
-    # What a turn has to cost before a conversation with no plan at all is told it could keep one. The upper quartile of
-    # turns begins at 25 tool calls, measured over 691 of them.
+    # What a turn has to cost, in tool calls, before a conversation with no plan at all is told it could keep one: high
+    # enough that the offer follows a turn big enough to have needed a plan rather than an ordinary one. Lower, it reaches
+    # conversations that have no use for it; higher, it comes later.
     "offerMinToolCalls": 25,
     # How many times the user has to have spoken first. A plan is for a conversation that branches, and a session handed
-    # one task and left to do it cannot branch - measured over 61 offers, 53 went to single-turn workers and none of
-    # them wanted a plan, while every conversation that did want one had spoken at least three times.
+    # one task and left to do it cannot branch. Such a worker counts one user turn, so a threshold of three keeps it from
+    # being offered a plan, while a conversation the user keeps steering reaches the threshold within a few messages.
     "offerMinTurns": 3,
     # A regular expression for the conversation's latest reply. When it matches, the two hooks around a compaction say
     # nothing. It is for a conversation that relays another model's replies word for word: an instruction injected there

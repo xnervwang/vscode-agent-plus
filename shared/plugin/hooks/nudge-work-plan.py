@@ -16,37 +16,34 @@ AND this has not already been said about a plan in exactly this state.
 
 "Changed something" is counted as things altered, not tool calls made. That distinction is the whole difference between
 a reminder worth reading and one worth skipping: a turn spent reading, searching and measuring makes plenty of calls and
-owes the plan nothing, and 18 of 29 reminders in the conversation that prompted this went to turns of exactly that kind.
+owes the plan nothing, and counting calls would send the reminder to exactly those turns.
 
 That last condition is what lets the reminder be answered. Reading the plan and finding nothing owed is a complete
 reconciliation, but it leaves no mark on the file - so judging by the file's age alone, a turn that had looked and a
-turn that had forgotten were the same turn. The reminder then repeated on every working turn for the rest of a
-conversation whose plan was already correct, and each repeat cost a round of explaining that nothing was owed. Three in
-a row is what prompted this.
+turn that had forgotten are the same turn, and the reminder would repeat on every working turn for the rest of a
+conversation whose plan is already correct, each repeat costing a round of explaining that nothing was owed.
 
 Where no plan exists at all it speaks once, and then never again in that conversation. This is the harder case, because
 until something writes a plan the injection hook has nothing to inject and the skill is only found when its description
-happens to match - so a conversation can run to its end without the facility ever being mentioned. Measured across 1835
-transcripts on the machine this was written on, 4 of them had a plan. A hook staying quiet to cost nothing is how that
-happens, so the cost is now one sentence, once, after a turn big enough to have needed it.
+happens to match - so a conversation can run to its end without the facility ever being mentioned. A hook staying quiet
+to cost nothing is how that happens, so the cost is one sentence, once, after a turn big enough to have needed it.
 
 WHICH SESSIONS THIS REACHES, and why detached agents are not a cost worth engineering against.
 
-A sub-agent started in-process shares the main session's id, and these hooks do not run for it at all: measured over
-three of them in one conversation, zero injections against the main session's 330. So a sub-agent neither sees the plan
-nor is reminded of it, and whatever it did has to be recorded by the session that dispatched it.
+A sub-agent started in-process shares the main session's id, and these hooks do not run for it at all. So a sub-agent
+neither sees the plan nor is reminded of it, and whatever it did has to be recorded by the session that dispatched it.
 
 A detached agent - one started as its own process - does get the hooks, because it has a session id of its own. It
-therefore has no plan file, which puts it on the branch above, and that was briefly expensive: 53 of them were offered a
-plan inside half an hour. What stopped it was not a check for detached agents but the requirement that the user have
-spoken several times, added three hours later. A detached agent is handed one task and nothing else, so it counts one
-user turn against a threshold of three and is silent for the rest of its life. No measured offer to one has happened
-since, and nothing here identifies such a session or needs to.
+therefore has no plan file, which puts it on the branch above, and a batch of them started together would each be
+offered a plan. What keeps that from happening is not a check for detached agents but the requirement that the user
+have spoken several times (offerMinTurns): a detached agent is handed one task and nothing else, so it counts one user
+turn against a threshold of three and is silent for the rest of its life. Nothing here identifies such a session or
+needs to.
 
-Which is the part worth keeping: the question "can this conversation branch" subsumes "is this a detached worker", so
-there is no second mechanism to maintain. Tightening the first threshold is what to reach for if these ever turn up
-again, rather than adding a way to recognise them - there is no payload field verified to distinguish one, and looking
-for a signal that happens to correlate is how a check starts passing for the wrong reason.
+The question "can this conversation branch" subsumes "is this a detached worker", so there is no second mechanism to
+maintain. If offers to such sessions turn up, tightening the first threshold is what to reach for, rather than adding a
+way to recognise them - there is no payload field verified to distinguish one, and looking for a signal that happens
+to correlate is how a check starts passing for the wrong reason.
 """
 import json
 import os
@@ -162,8 +159,7 @@ def said_already(path, touched):
 
     What is remembered is the plan's modification time at the moment of speaking. If the plan has not been written to
     since, the reminder would be the same sentence about the same unrecorded state - and a reminder that did not work
-    the first time does not work on the fifth. Measured over one conversation, the reminder fired 29 times and ten of
-    those were runs of it repeating within a few turns; not one of the repeats produced an entry that the first had not.
+    the first time does not work on the fifth.
 
     A plan that HAS been written to since resets this, so forgetting again is caught again.
 
@@ -272,8 +268,8 @@ def asked_since(nodes, began):
 def unrecorded_question(payload, path, tail):
     """Speaks when the last reply asks the user something and the plan has no record of it.
 
-    The Conversations view lists only the questions written on rows. Measured over one day, conversations that had been
-    told to put their questions there still left about four in ten in the reply only.
+    The Conversations view lists only the questions written on rows, and a conversation told to put its questions there
+    can still leave one in the reply only, where the view never shows it.
 
     The reply comes from the Stop event's `last_assistant_message`. A question counts as recorded when a row command or tool
     stamped its `asked` during the turn; one written straight into the file has no `asked`, so it draws the reminder

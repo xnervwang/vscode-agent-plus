@@ -159,9 +159,9 @@ def spoke(row):
 
     All of these are recorded as `user`. Rows the client writes are marked isMeta (skill text, scheduled wake-ups,
     image-resize notes) or isCompactSummary (compaction summaries), and an interruption is a line of its own that starts
-    "[Request interrupted". Counted as the user, one transcript showed 180 more turns than were spoken, a skill loaded
-    at the end of a turn would move the turn's start past all its work, and a worker addressed once looked addressed
-    three times after two compactions.
+    "[Request interrupted". Counted as the user, every skill load, scheduled wake-up and compaction would be a turn: a
+    skill loaded at the end of a turn would move the turn's start past all its work, and a worker addressed once would
+    look addressed three times after two compactions.
     """
     if row.get("type") != "user" or row.get("isMeta") or row.get("isCompactSummary"):
         return False

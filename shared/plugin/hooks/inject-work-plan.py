@@ -7,10 +7,9 @@
 """Put this conversation's work plan in front of the model, every turn.
 
 This is the load-bearing half of the plugin, and the reason it is a hook rather than part of the skill: a skill is
-loaded when its description matches the request, so it is absent on exactly the turn that wanders off - which is the
-only turn where being reminded of the main line matters. Measured over 1324 turns that had a plan put in front of them,
-the skill was loaded 12 times. So whatever a model has to know in order to keep the plan right is said here, and the
-skill is where it is explained at length.
+loaded only when its description matches the request, so it is usually absent on exactly the turn that wanders off -
+which is the only turn where being reminded of the main line matters. So whatever a model has to know in order to keep
+the plan right is said here, and the skill is where it is explained at length.
 
 Only the open rows are injected. The closed ones are history; sending them every turn would cost context to say
 nothing, and the file itself is there for anyone who wants the whole thing.
@@ -71,8 +70,8 @@ MAX_CHARS = 6000
 TITLE_CHARS = 80
 NOTED_CHARS = 200
 # The two states a row is meant to leave soon, so how long one has been in either is worth saying: a row `doing` for
-# three days is not being done, and nothing else on the row shows that. Measured on the machine this was written on, the
-# six rows then `doing` included two added four days earlier, and four whose own notes said they were waiting on someone.
+# three days is not being done, and nothing else on the row shows that. A row left `doing` after the work moved on, or
+# one whose note says it is waiting on someone, looks like work in hand until its age is shown beside it.
 TIMED = ("doing", "waiting")
 
 

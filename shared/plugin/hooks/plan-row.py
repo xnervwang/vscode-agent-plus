@@ -16,11 +16,10 @@ the second. `summary` and `status` write the conversation's brief (plan_common.B
 it, and the injected block gives its full path every turn. In Codex, plan-mcp.py also calls run() for the model's
 set_row, add_row, set_summary and set_status tools.
 
-It exists because a change of state is one simple action and was being paid for as a large one. Done by hand it means
-reading the whole file, changing one field and writing all of it back - of 884 writes to plans measured on the machine
-this was written on, 643 went through the shell, mostly as a script composed for the occasion - and reading the clock
-first, which is the step that gets skipped or invented. A cost like that is a reason to save every change for one write
-at the end of the turn, and `doing` is the one state that cannot wait that long.
+It exists because a change of state is one simple action and, done by hand, costs as much as a large one: reading the
+whole file, changing one field and writing all of it back, typically with a script composed for the occasion, and
+reading the clock first, which is the step that gets skipped or invented. A cost like that is a reason to save every
+change for one write at the end of the turn, and `doing` is the one state that cannot wait that long.
 
 The caller picks the row and the state. The file is read just before the write and plan_lock is held from that read
 through the write, so neither a manual edit made a moment earlier nor a concurrent change by another run or the
