@@ -6,8 +6,8 @@
 """The stewards table: stewards.json in this plugin's data directory, read with the same rules the extension uses
 (settle in src/stewards.js), so that a table written by an older build reads the same here.
 
-A conversation can have several stewards; a steward has no steward of its own. An entry's "ticked" is the part of its
-list ticked by hand rather than added by "all"; it is written only for a steward with "all" on. "title" is the
+Several stewards can manage the same conversation, but a steward is never on a list. An entry's "ticked" is the part
+of its list ticked by hand rather than added by "all"; it is written only for a steward with "all" on. "title" is the
 steward's own title, and "newSince", "newSkip" and "newBefore" belong to its "New conversations" switch.
 
 A managed conversation is a key: a Claude Code session id in lower case, or "<source id>:<session id>" for another
@@ -110,9 +110,9 @@ def is_steward(e):
 
 
 def settle(entries):
-    """The table after the rules are applied. The entries are taken oldest first; each keeps what it manages except
-    conversations that are stewards by then. An entry that keeps anything, or has a switch on, is a steward, so it is
-    taken off every list it was on."""
+    """Apply the rules to `entries`, oldest entry first. Each entry keeps the conversations it manages that are not
+    stewards yet. An entry that keeps anything, or has a switch on, is a steward, so it is taken off every list it was
+    on."""
     order = sorted(entries, key=lambda s: (entries[s]["at"], s))
     out = {}
 
@@ -171,7 +171,7 @@ def stewards_of(table, sid):
     return [s for s in table if manages(table, s, sid)]
 
 
-# The line a steward's message starts with (fromLine in src/stewards.js).
+# The first line that fromLine in src/stewards.js puts on a steward's message.
 FROM = re.compile(r'^Sent by the steward (?:"(.*)" )?\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)'
                   r' for the user:[ \t]*$')
 

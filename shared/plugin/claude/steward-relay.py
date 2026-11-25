@@ -10,7 +10,7 @@
     <the message, worded for that conversation>
     EOF
     python3 steward-relay.py --anyway <session id> [<plugin data directory>] <<'EOF'
-    <the same message, sent although another steward's is recent>
+    <the same message>
     EOF
     python3 steward-relay.py --rename <session id> [<plugin data directory>] <<'EOF'
     <the new title>
@@ -35,8 +35,8 @@ Run from the steward conversation: its session id comes from CLAUDE_CODE_SESSION
 message into that conversation's input in the VS Code window that has it open and sends it, so it arrives as the
 user's own message, approvals included, after a first line naming this steward. The window first looks for this
 command in the steward's transcript, so give the message in a here-document as above. When another steward sent the
-same conversation a message in the last 30 minutes, the message is not sent: the script prints those messages, and
---anyway sends it after all.
+same conversation a message in the last 30 minutes, the script sends nothing and prints what was sent; --anyway sends
+yours after all.
 
 --rename gives the conversation a new title. --close closes its editor tab; the conversation is not deleted and can be
 opened again from the session list. A conversation that is working, waiting for an answer or running background work is
@@ -52,13 +52,13 @@ printed answer mentions the tick.
 
 --handoff is run from a conversation a steward manages, not from the steward: it gives a steward something the
 conversation thinks belongs elsewhere, as a notice that is not the user's message. It goes to the steward named with
---to, which must be one of the conversation's stewards; without --to, to the steward whose message started this turn,
-else to the one the user last typed to.
+--to, which must be one of the conversation's stewards. Without --to, it goes to the steward whose message started
+this turn, or else to the one the user last typed to.
 
 --take and --drop tick or untick one conversation for this steward in the Steward panel, named by its session id, its
 key, or its exact title (in a here-document instead, when it is awkward in a command line). --all turns "All, including
-new ones" on or off, and --new "New conversations". The window that shows the steward does it only when the user typed
-the message that led to this command in the steward conversation; it prints the reason otherwise.
+new ones" on or off, and --new "New conversations". The window that shows the steward makes the change only when the
+latest message before this command in the steward conversation is one the user typed there; otherwise it prints why.
 
 A key "<source id>:<session id>" (steward_table.py) names another agent's conversation, which takes only a plain
 message. The request goes to Agent Plus through the window that shows the steward, and Agent Plus sends the message as
@@ -249,22 +249,22 @@ def resume_check(data, sid):
 
 
 def handoff_check(data, me, to=""):
-    """Why no steward can be given a handoff from conversation `me`, or not steward `to`, as a line to print, or ''."""
     table = stewards_table(data)
     theirs = steward_table.stewards_of(table, me)
     if not theirs:
         return "Not done: no steward manages this conversation, so it cannot be handed off." + NOT_HANDED
     if to and to not in theirs:
-        return ("Not done: %s is not a steward of this conversation; its stewards are %s."
+        return ("Not done: %s does not manage this conversation. Its stewards are %s."
                 % (to, ", ".join(steward_table.name_of(table, s) for s in theirs)))
     if not any(shows(w, s) for w in windows(data) for s in ([to] if to else theirs)):
-        return ("Not done: that steward is not open in a VS Code window, so it cannot be told." if to else
+        return ("Not done: that steward is not open in a VS Code window." if to else
                 "Not done: no steward of this conversation is open in a VS Code window, so none can be told.") + NOT_HANDED
     return ""
 
 
 def recent_sends(data, target, me, now):
-    """Messages other stewards sent `target` in the last RECENT_SECONDS, newest first, as the window recorded them."""
+    """Messages other stewards sent `target` in the last RECENT_SECONDS, newest first. The window records them in
+    SENDS_FILE."""
     try:
         with open(os.path.join(data, RELAY_DIR, SENDS_FILE), encoding="utf-8") as fh:
             found = json.load(fh)
@@ -284,8 +284,8 @@ def recent_lines(sends, now):
         text = " ".join(str(e.get("text") or "").split())
         lines.append("  - %s, %s: %s" % (who, "just now" if minutes < 1 else "%d minute%s ago" % (minutes, "" if minutes == 1 else "s"),
                                            text[:RECENT_CHARS] + ("..." if len(text) > RECENT_CHARS else "")))
-    lines.append("Compare yours with it. If yours goes against it, ask the user before you send anything. To send yours "
-                 "anyway, run the same command with --anyway.")
+    lines.append("If your message goes against a message above, ask the user before you send anything. Otherwise run the "
+                 "same command again with --anyway.")
     return lines
 
 
@@ -349,10 +349,9 @@ def main(argv):
     switching = action in SWITCHES
     naming = action in ("--take", "--drop")
     to_steward = valued.get("--to", "")
-    # --take and --drop name the conversation in a here-document when it is awkward in a command line.
     named = " ".join(read_input().split()) if naming and not sys.stdin.isatty() else ""
-    # A handoff, a switch and a conversation named in a here-document leave the first argument, if any, to the plugin
-    # data directory.
+    # With --handoff, --all, --new, or a conversation named in a here-document, the first argument, if any, is the
+    # plugin data directory.
     if handing or switching or named:
         rest = [""] + rest
     target = named or (rest[0] if rest else "")

@@ -14,7 +14,7 @@ for the user, and the text it wrote after the user's last message, without tool 
 
 --said prints the user's latest messages in that conversation instead, oldest first, each with its time: what was
 typed into it, also while a turn ran, and not messages from other sessions or notices. A steward checks a handoff
-against them. A message a steward typed there for the user is marked with that steward. Read-only.
+against them. Read-only.
 
 For another agent's conversation, whose key is "<source id>:<session id>" (steward_table.py), the state comes from
 Agent Plus's attention files (agent_states.py) and the plan from the path the Steward panel recorded in stewards.json.

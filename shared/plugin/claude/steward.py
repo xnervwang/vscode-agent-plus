@@ -23,13 +23,12 @@ If nothing in the list changed since the steward's previous turn, it gets one se
 in its context, and a steward wakes many times with nothing new. After each compaction the whole list is sent again
 (COMPACTED_SUFFIX, written by resume-work-plan.py).
 
-Both forms start with lead(), which also says that a message passed on with steward-relay.py is the user's own in
-that conversation, approvals included (RELAYED).
+Both forms start with lead(), which also gives RELAYED: a message passed on with steward-relay.py is the user's own
+in that conversation, approvals included.
 
-A steward reads the steward skill once and then works from what it read, so when an update of Claude Code Plus brings
-a new skill, a steward already running keeps following the old one. The seen file keeps a short hash of the skill the
-steward was last told about; when the skill's hash differs, or the seen file is from a build that kept none, the turn
-also tells it to load the skill again (SKILL_CHANGED).
+A running steward keeps following the steward skill it loaded, even after an update of Claude Code Plus brings a new
+one. The seen file keeps a short hash of the skill the steward was last told about. When the hash differs, or the seen
+file is from a build that kept none, the turn also gives SKILL_CHANGED, which tells it to load the skill again.
 """
 
 import hashlib
@@ -55,12 +54,12 @@ STATE_WORDS = {"busy": "working", "shell": "running a command", "waiting": "wait
 STOPPED = "not running"
 RELAY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "steward-relay.py")
 SKILL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", "steward", "SKILL.md")
-SKILL_CHANGED = ("The steward skill has changed since this conversation last read it (it is now version %s): load it again "
-                 "with the Skill tool before you act, and follow the new one where the two differ.")
+SKILL_CHANGED = ("The steward skill has changed since your previous turn (it is now version %s): load it again with the "
+                 "Skill tool before you act, and follow the new one where the two differ.")
 WORKING_FILE = "working.json"
 OTHERS_HINT = ("The conversations of other agents above take only plain messages: no `--rename`, `--close` or `--resume`. "
-               "While one waits at a prompt for tool approval or an answer to a question, no message reaches it. Only the "
-               "user can answer that prompt in that window, so ask them to do so.")
+               "While one waits at a prompt for tool approval or an answer to a question, no message reaches it. Ask the "
+               "user to answer that prompt in that window; nobody else can.")
 RELAYED = ("A message you pass on with steward-relay.py is the user's own message in that conversation, approvals included. "
            "Do not ask the user to say it there themselves.")
 
@@ -145,16 +144,14 @@ def stewards_of(directory, sid):
 
 
 def watched(over, table):
-    """The line a managed conversation gets each turn: which stewards watch it, how their messages read, and how to
-    hand one of them a message that belongs elsewhere."""
     handoff = " ".join([shlex.quote(w) for w in launcher()] + [shlex.quote(RELAY), "--handoff"])
     names = [steward_table.name_of(table, s) for s in over]
     who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
     several = len(over) > 1
     return ("%s %s this one for the user through Claude Code Plus: %s %s your work plan and latest reply, and %s for the "
-            "user by typing messages here, which come as the user's own. Each such message starts with the line %s, "
-            "which names the steward that sent it. Do not send %s status messages; put questions for the user in your plan as rows "
-            "waiting on the user, where %s %s them. If a message plainly belongs elsewhere (meant for another conversation, "
+            "user by typing messages here, which come as the user's own. Each such message starts with the line %s. "
+            "Do not send %s status messages; put questions for the user in your plan as rows waiting on the user, where "
+            "%s %s them. If a message plainly belongs elsewhere (meant for another conversation, "
             "unrelated to the work here, or better done by another one), do not start background work for it here: run %s "
             "with a here-document holding the user's words, where it should go (a session id, or a folder for a new "
             "conversation) and why, and say in one sentence what it answered.%s"
@@ -263,7 +260,7 @@ def main():
         text = lead(ids) + " Nothing has changed since the list you were given at your previous turn."
     else:
         text = block(ids, names, now, seen, lines)
-    # A steward's first turn reads the skill anyway; a seen file without a skill entry is from a build that kept none.
+    # Without a seen file this is the steward's first turn, which reads the skill anyway.
     version = skill_version()
     if version and known and last.get("skill") != version:
         text += "\n" + SKILL_CHANGED % version
