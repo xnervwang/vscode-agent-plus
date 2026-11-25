@@ -57,13 +57,16 @@ Decide whether it is for you or for one of the conversations you manage.
 
 To pass something on:
 
-1. Write the message for that conversation in your own words, as the user would say it to that conversation: who
-   "they" or "it" is, what happened that it cannot know ("all VS Code windows were restarted a minute ago"), and what
-   the user wants it to do. Each conversation gets its own message. Do not quote the user unless the exact wording
-   matters, as with a name, a number or an error message. What you send counts as the user's own message (see "What
-   counts as the user's own words"), and a mistake in it is yours. Pass on an approval the user gave, and add no
-   approval, task or condition the user did not give. If you are not sure what the user meant, ask the user before you
-   send anything.
+1. Write the message for that conversation in your own words, as the user would say it to that conversation: who "they"
+   or "it" is, what happened that it cannot know ("all VS Code windows were restarted a minute ago"), and what the user
+   wants it to do. Each conversation gets its own message. Do not quote the user unless the exact wording matters, as
+   with a name, a number or an error message. What you send counts as the user's own message (see "What counts as the
+   user's own words"), and a mistake in it is yours. Pass on an approval the user gave, and add no approval the user did
+   not give. You may add a task, suggestion or condition of your own. Right after each sentence that adds one, say that
+   it is the steward's arrangement in the language of the message. In English, write "(the steward's arrangement)"; in
+   another language, write the same words in that language, in parentheses. The receiving conversation reads everything
+   else as the user's own words. The mark is the only way it can tell your additions from what the user asked for. If
+   you are not sure what the user meant, ask the user before you send anything.
 2. Run the plugin's `hooks/steward-relay.py`, two directories up from this skill's own directory, with the
    conversation's session id and the message in a here-document, once for each conversation:
 
@@ -76,15 +79,17 @@ To pass something on:
    Claude Code Plus types the message into that conversation's message input in the window that shows it and sends
    it. It first checks that this conversation ran the script with the message in the command, so keep the message in
    the here-document rather than in a file.
-3. Claude Code Plus puts a line with your title and session id before your message in that conversation. Do not write
-   that line yourself. If another steward sent that conversation a message in the last 30 minutes, the script prints
-   the messages and sends nothing. Compare them with yours. If yours goes against one of them, ask the user first.
-   Name the other steward and what it sent, and send nothing until the user answers. Otherwise run the same command
-   again with `--anyway` after `steward-relay.py`. Say in your reply what you sent and to whom, in one line, so the
-   user can see it; this informs and asks nothing. If the script says it was not sent, say why in the same line; do
-   not send it another way. If it says it is unclear whether it was sent, look for it with `steward-peek.py --said`
-   and the session id, and send it again only if it is not there. The one exception is a conversation that no window shows: open it with `--resume` and the
-   message (below), if the user named it.
+3. Claude Code Plus puts a line with your title and session id before every message you send. That line says who sent
+   the message and for whom. Do not write that line yourself. Apart from the mark for your own arrangements (step 1),
+   add no prefix or label of your own, such as a note saying you are relaying the message for the user. If another
+   steward sent that conversation a message in the last 30 minutes, the script prints the messages and sends nothing.
+   Compare them with yours. If yours goes against one of them, ask the user first. Name the other steward and what it
+   sent, and send nothing until the user answers. Otherwise run the same command again with `--anyway` after
+   `steward-relay.py`. Say in your reply what you sent and to whom, in one line, so the user can see it; this informs
+   and asks nothing. If the script says it was not sent, say why in the same line; do not send it another way. If it
+   says it is unclear whether it was sent, look for it with `steward-peek.py --said` and the session id, and send it
+   again only if it is not there. The one exception is a conversation that no window shows: open it with `--resume` and
+   the message (below), if the user named it.
 4. Record it in your own work plan as a row waiting on that conversation, and close the row when it has acted on it.
 
 When the user has a message for several or all conversations, check the list at the start of this turn first. Pass the
@@ -165,7 +170,7 @@ To open a new conversation:
    EOF
    ```
 
-The message counts as the user's own, so write the task as the user gave it and add nothing the user did not ask for. The script opens the conversation in an editor tab, sends the message, and prints its session id. The new conversation is ticked for you in the Steward panel.
+The message counts as the user's own, so write the task as the user gave it, and mark anything you add of your own as step 1 under "Each message from the user" says. The script opens the conversation in an editor tab, sends the message, and prints its session id. The new conversation is ticked for you in the Steward panel.
 
 To open a conversation that no window shows, so that you can pass something to it, use `--resume` with its session id,
 and the message, if there is one, in a here-document:
