@@ -148,9 +148,10 @@ function start(context, log, opts = {}) {
   };
 
   /*
-   * stewardOf() and onDidChangeStewards (docs/protocol.md): the steward that looks after a conversation. The answer is
-   * the first one given by a source registered here that lists 'stewards'. However many things change the answer in one
-   * turn, the event fires once.
+   * stewardOf(), stewardsOf() and onDidChangeStewards (docs/protocol.md): the stewards that look after a conversation.
+   * stewardOf() is the first answer given by a source registered here that lists 'stewards'; stewardsOf() joins the
+   * lists of every source that lists 'stewardList'. However many things change the answers in one turn, the event fires
+   * once.
    */
   const stewardChanges = sources.emitter();
   let stewardsDue = false;
@@ -166,18 +167,37 @@ function start(context, log, opts = {}) {
     if (Array.isArray(disposables)) disposables.push(sub);
     return sub;
   };
-  /* Null in Restricted Mode, where deliver() could not hand anything to the steward either. */
-  const stewardOf = (a, b) => {
+  /* The conversation asked about, from two ids or one { sourceId, sessionId }, or null. Null in Restricted Mode too,
+     where deliver() could not hand anything to a steward either. */
+  const stewardQuery = (a, b) => {
     const one = a && typeof a === 'object';
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
-    if (!host.trusted() || !sources.usableId(sourceId) || !sources.usableId(sessionId)) return null;
+    return host.trusted() && sources.usableId(sourceId) && sources.usableId(sessionId) ? { sourceId, sessionId } : null;
+  };
+  const stewardOf = (a, b) => {
+    const q = stewardQuery(a, b);
+    if (!q) return null;
     for (const entry of registry.list()) {
-      const steward = sources.stewardOf(entry.source, sourceId, sessionId);
+      const steward = sources.stewardOf(entry.source, q.sourceId, q.sessionId);
       if (steward) return steward;
     }
     return null;
   };
-  const anyStewards = () => registry.list().some((entry) => sources.supports(entry.source, 'stewards'));
+  /* The sources' lists in the order the sources registered, a steward named twice kept where it first appears. */
+  const stewardsOf = (a, b) => {
+    const q = stewardQuery(a, b), out = [], seen = new Set();
+    for (const entry of q ? registry.list() : []) {
+      for (const s of sources.stewardsOf(entry.source, q.sourceId, q.sessionId)) {
+        const key = sources.keyPart(s.sourceId) + '/' + sources.keyPart(s.sessionId);
+        if (seen.has(key) || out.length >= sources.MAX_STEWARDS) continue;
+        seen.add(key);
+        out.push(s);
+      }
+      if (out.length >= sources.MAX_STEWARDS) break;
+    }
+    return Object.freeze(out);
+  };
+  const anyStewards = () => registry.list().some((entry) => sources.keepsStewards(entry.source));
 
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
   const limit = typeof opts.limit === 'function' ? opts.limit(host, { home: opts.home }) : null;
@@ -318,7 +338,7 @@ function start(context, log, opts = {}) {
     setActive(true);
     if (views && built) attachSafely(entry);
     let gone = false;
-    const looksAfter = sources.supports(source, 'stewards');
+    const looksAfter = sources.keepsStewards(source);
     if (looksAfter) {
       const d = sources.listen(source, 'onDidChangeStewards', () => { if (!gone) stewardsMoved(); });
       if (d) entry.subs.push(d);
@@ -368,7 +388,9 @@ function start(context, log, opts = {}) {
     planPathOf,
     /* With 'stewards': the steward of that conversation as a frozen { sourceId, sessionId }, or null. */
     stewardOf,
-    /* With 'stewards': vscode.Event<void>, stewardOf() may answer differently. */
+    /* With 'stewardList': every steward of that conversation, a frozen array of frozen { sourceId, sessionId, title }. */
+    stewardsOf,
+    /* With 'stewards' or 'stewardList': vscode.Event<void>, stewardOf() or stewardsOf() may answer differently. */
     onDidChangeStewards: listenStewards,
     /* Whether this window shows its own notification when a conversation starts waiting for the user (feature
        'waitingFor'). */

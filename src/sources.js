@@ -24,8 +24,9 @@ const ACCEPTS = [1];
    announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
    methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards; a source that answers them lists it
-   too. */
-const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards'];
+   too. 'stewardList' adds stewardsOf(), which onDidChangeStewards covers as well; a source that answers stewardsOf() lists
+   it. */
+const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
 /* What a conversation is doing; whether it has an unread reply is separate. A source that gives no activity has one
@@ -34,6 +35,11 @@ const ACTIVITIES = ['working', 'background', 'waiting', 'stopped'];
 const ACTIVITY_OF_STATE = { prompt: 'waiting', working: 'working', unread: 'stopped', idle: 'stopped' };
 const MAX_ID = 200;
 const MAX_CONVERSATIONS = 2000;
+/* The most stewards stewardsOf() gives for one conversation, how many entries of a source's answer are looked at to find
+   them, and the longest title kept. */
+const MAX_STEWARDS = 20;
+const MAX_STEWARD_ENTRIES = 200;
+const MAX_STEWARD_TITLE = 200;
 
 /* Why a registration was refused, as `code` in the result of registerSource(). */
 const REFUSED = {
@@ -192,6 +198,27 @@ function stewardOf(source, sourceId, sessionId) {
   const by = get(s, 'sourceId'), id = get(s, 'sessionId');
   return usableId(by) && usableId(id) ? Object.freeze({ sourceId: by, sessionId: id }) : null;
 }
+
+/* The stewards the source gives for (sourceId, sessionId), in its order, each a frozen { sourceId, sessionId, title }.
+   An entry without two usable ids is left out and the others are kept. Empty when the source does not list
+   'stewardList' or its answer is not an array. */
+function stewardsOf(source, sourceId, sessionId, max = MAX_STEWARDS) {
+  if (!supports(source, 'stewardList')) return [];
+  const list = call(source, 'stewardsOf', [sourceId, sessionId], null);
+  let n = 0;
+  try { n = Array.isArray(list) ? Math.min(list.length, MAX_STEWARD_ENTRIES) : 0; } catch (_) { n = 0; }
+  const out = [];
+  for (let i = 0; i < n && out.length < max; i++) {
+    const s = get(list, i);
+    if (!s || typeof s !== 'object') continue;
+    const by = get(s, 'sourceId'), id = get(s, 'sessionId');
+    if (usableId(by) && usableId(id)) out.push(Object.freeze({ sourceId: by, sessionId: id, title: text(get(s, 'title'), MAX_STEWARD_TITLE) }));
+  }
+  return out;
+}
+
+/* Whether the core asks the source about stewards and listens to its onDidChangeStewards. */
+const keepsStewards = (source) => supports(source, 'stewards') || supports(source, 'stewardList');
 
 /* The reader's IANA time zone as the source knows it, or ''. */
 function timeZoneOf(source) {
@@ -403,7 +430,7 @@ class Focus {
 }
 
 module.exports = {
-  PROTOCOL, ACCEPTS, FEATURES, STATES, ACTIVITIES, MAX_ID, MAX_CONVERSATIONS, REFUSED,
+  PROTOCOL, ACCEPTS, FEATURES, STATES, ACTIVITIES, MAX_ID, MAX_CONVERSATIONS, MAX_STEWARDS, MAX_STEWARD_TITLE, REFUSED,
   emitter, get, activityOfState, idOf, usableId, keyPart, verdict, refusal, supports, optional, call, listen, labelOf, extensionOf, logoOf,
-  planFileOf, planDirOf, noticeOf, stewardOf, timeZoneOf, conversation, conversations, Registry, Focus,
+  planFileOf, planDirOf, noticeOf, stewardOf, stewardsOf, keepsStewards, timeZoneOf, conversation, conversations, Registry, Focus,
 };
