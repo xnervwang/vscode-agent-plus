@@ -23,8 +23,8 @@ const ACCEPTS = [1];
    'waitingFor' a conversation's waitingFor is read and named in the notifications, and a source can call
    announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
-   methods of those names. */
-const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf'];
+   methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards, which a source lists too. */
+const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
 /* What a conversation is doing; whether it has an unread reply is separate. A source that gives no activity has one
@@ -180,6 +180,16 @@ function noticeOf(source) {
     command: typeof command === 'string' && command.length <= 200 ? command : '',
     arguments: Array.isArray(args) ? args.slice(0, 8) : [],
   };
+}
+
+/* The steward a source that lists 'stewards' says looks after (sourceId, sessionId), as a frozen copy, or null. An
+   answer whose two ids are not usable ids counts as none. */
+function stewardOf(source, sourceId, sessionId) {
+  if (!supports(source, 'stewards')) return null;
+  const s = call(source, 'stewardOf', [sourceId, sessionId], null);
+  if (!s || typeof s !== 'object') return null;
+  const by = get(s, 'sourceId'), id = get(s, 'sessionId');
+  return usableId(by) && usableId(id) ? Object.freeze({ sourceId: by, sessionId: id }) : null;
 }
 
 /* The reader's IANA time zone as the source knows it, or ''. */
@@ -394,5 +404,5 @@ class Focus {
 module.exports = {
   PROTOCOL, ACCEPTS, FEATURES, STATES, ACTIVITIES, MAX_ID, MAX_CONVERSATIONS, REFUSED,
   emitter, get, activityOfState, idOf, usableId, keyPart, verdict, refusal, supports, optional, call, listen, labelOf, extensionOf, logoOf,
-  planFileOf, planDirOf, noticeOf, timeZoneOf, conversation, conversations, Registry, Focus,
+  planFileOf, planDirOf, noticeOf, stewardOf, timeZoneOf, conversation, conversations, Registry, Focus,
 };

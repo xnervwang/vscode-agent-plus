@@ -42,7 +42,7 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | `version` | The core's marketplace version |
 | `protocol` | The newest protocol major the core implements; also the first number of `version` |
 | `accepts` | The source protocol majors the core accepts |
-| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()`, `onDidChangePlanSummary` (below) and the two commands in Plan bar. The features `'deliver'` and `'planPathOf'` each add a method of the same name. |
+| `features` | Optional core capabilities by name: `'allConversations'` provides `allConversations()` (below). With `'waitingFor'`, the core reads each conversation's `waitingFor`, names the reason in its notices (see Notifications), and provides `announcesWaits()` (below). `'planSummary'` provides `planSummary()`, `onDidChangePlanSummary` (below) and the two commands in Plan bar. The features `'deliver'` and `'planPathOf'` each add a method of the same name. `'stewards'` provides `stewardOf()` and `onDidChangeStewards` (below). |
 | `registerSource(source)` | Registers a source; never throws; returns a frozen result |
 | `allConversations()` | With `'allConversations'`. Returns a frozen array with one entry per conversation from the last time the core read the sources' lists. For each source, the core includes the results of `listConversations()` and, if the source implements it, `listAllConversations()` (see Source members). Each entry has the form `{ sourceId, label, sessionId, title, steward, cwd, lastActiveAt }` (`sourceId` is the source's `id`; the other fields as in Conversations), where `label` is the source's label and `title` is the title displayed in the Conversations view. Kept current only while something listens to `onDidChangeAllConversations` (next row), and empty until then. A link to one of them opens with `agentPlus.openConversation` (see Opening a conversation from another extension) |
 | `onDidChangeAllConversations` | With `'allConversations'`. `vscode.Event<void>`: a conversation came or went, or its title or folder changed. If only `lastActiveAt` changes, the event does not fire, but `allConversations()` returns the new value. Listening starts a pass at once |
@@ -51,6 +51,8 @@ How an extension shows its agent's conversations in Agent Plus (`xnervwang.agent
 | `onDidChangePlanSummary` | With `'planSummary'`. `vscode.Event<{ sourceId, sessionId }>`: a summary requested through `planSummary()` changed, including to or from `null`. While the event has a listener, the core recalculates the summaries each time it rereads the plans: when a plan folder changes, on its 30-second tick, or when a source registers or goes away. When the event's `sourceId` and `sessionId` match the page's conversation, the page calls `planSummary()` again. |
 | `deliver({ sourceId, sessionId, text })` | With `'deliver'`. Sends `text` to that conversation as a message, through the answers folder and whichever window can type into the conversation (see Answers). Returns a `Promise` of a frozen `{ outcome, reason }` and never rejects. `outcome` is one of the four in Answers; `reason` says why for `notReceived` and `uncertain`, and is `''` otherwise. `text` is a non-empty string of at most 20000 characters. Each call is one message: the core neither drops a repeated text nor retries. In Restricted Mode, while the window is closing, or with an argument it cannot use, the call resolves to `notReceived` at once. Each call settles within about 40 seconds (see Timing and limits). When this window closes, pending calls settle immediately. The outcome is `uncertain` for a message a window has already taken and `notReceived` for a message still waiting to be taken. |
 | `planPathOf(sourceId, sessionId)` | With `'planPathOf'`. Like `planSummary()`, it accepts the two IDs separately or as `{ sourceId, sessionId }`. Returns the absolute path the source's `planPath(sessionId)` (see Source members) gives for that conversation, or `''` when the source is not registered in this window, gives nothing or a relative path, or throws |
+| `stewardOf(sourceId, sessionId)` | With `'stewards'`. Like `planSummary()`, it accepts the two IDs separately or as `{ sourceId, sessionId }`. Returns a frozen `{ sourceId, sessionId }`: the steward that looks after that conversation. That is not the conversation's own `steward` field, which says the conversation is a steward itself (see Conversations). The call is synchronous. The core asks each source registered in this window that lists `'stewards'`, in the order they registered, and returns the first answer whose two fields are usable IDs (see Ids in Timing and limits); an answer of any other form, or a source that throws, counts as no answer. Returns `null` when no source answers, which is the case when Claude Code Plus, which keeps the stewards, is not installed or has not registered in this window yet. Also `null` for an ID that is not usable, and in Restricted Mode |
+| `onDidChangeStewards` | With `'stewards'`. `vscode.Event<void>`: `stewardOf()` may answer differently. Fires when a source that lists `'stewards'` fires its own `onDidChangeStewards`, registers or goes away, and when the workspace is trusted while such a source is registered. Several of these in one turn of the event loop fire it once |
 
 ### Result of `registerSource`
 
@@ -80,7 +82,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Member | Meaning |
 | --- | --- |
 | `protocol` | `1` |
-| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation. The core calls `shows` and `openHere` (rows below) only when they are listed here |
+| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation. The core calls `shows` and `openHere` (rows below) only when they are listed here, and `stewardOf` and `onDidChangeStewards` only when `'stewards'` is |
 | `id` | Source id, such as `'codex'` or `'claude-code'` |
 | `label` | Shown in tooltips and in the work plan view's description |
 | `extensionId` | The extension that registered it, such as `'xnervwang.codex-plus'`; used for update notices |
@@ -102,6 +104,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `shows(sessionId)` | Whether this window shows that conversation where `sessionForTab` cannot see it, such as a sidebar (see Opening) |
 | `openHere(sessionId, row)` | `Promise<boolean>`: open the conversation in this window, after no window took the request and the user picked Open it here (see Notifications, Opening) |
 | `open(sessionId, row)` | `Promise<'here'\|'sent'\|'nowhere'>`: bring the conversation to the front in whichever window shows it, and that window with it. Without it the core does this itself through `reveal` in each window (see Notifications) |
+| `stewardOf(sourceId, sessionId)` | With `'stewards'`: `{ sourceId, sessionId }` of the steward that looks after that conversation, or `null`. Asked about a conversation of any source, and the steward may belong to another source. Synchronous: the core asks it each time a caller asks the core |
+| `onDidChangeStewards` | With `'stewards'`: `vscode.Event<void>` when an answer from `stewardOf` may have changed |
 
 ## Conversations
 
@@ -297,7 +301,7 @@ In Claude Code Plus and Codex Plus, `onOpen` runs `agentPlus.showWorkPlanOf` and
 - The views read and draw only.
 - No answer is sent or taken, no icon is written, VS Code's files are left alone.
 - Sources should not type into conversations either (`canDeliver` false).
-- `deliver()` resolves to `notReceived` at once; `planPathOf()` answers as usual.
+- `deliver()` resolves to `notReceived` at once and `stewardOf()` returns `null`; `planPathOf()` answers as usual.
 
 ## Installed with nothing that uses it
 

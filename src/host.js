@@ -147,6 +147,38 @@ function start(context, log, opts = {}) {
     return file && path.isAbsolute(file) ? file : '';
   };
 
+  /*
+   * stewardOf() and onDidChangeStewards (docs/protocol.md): the steward that looks after a conversation, as the first
+   * source registered here that lists 'stewards' says. Every reason the answer may have changed in one turn fires the
+   * event once.
+   */
+  const stewardChanges = sources.emitter();
+  let stewardsDue = false;
+  const stewardsMoved = () => {
+    if (closing || stewardsDue) return;
+    stewardsDue = true;
+    later(() => { stewardsDue = false; if (!closing) stewardChanges.fire(); }, 0);
+  };
+  const listenStewards = (listener, thisArgs, disposables) => {
+    if (typeof listener !== 'function') throw new TypeError('a listener is a function');
+    const d = stewardChanges.event(listener, thisArgs);
+    const sub = disposable(() => d.dispose());
+    if (Array.isArray(disposables)) disposables.push(sub);
+    return sub;
+  };
+  /* Null in Restricted Mode, where deliver() could not hand anything to the steward either. */
+  const stewardOf = (a, b) => {
+    const one = a && typeof a === 'object';
+    const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
+    if (!host.trusted() || !sources.usableId(sourceId) || !sources.usableId(sessionId)) return null;
+    for (const entry of registry.list()) {
+      const steward = sources.stewardOf(entry.source, sourceId, sessionId);
+      if (steward) return steward;
+    }
+    return null;
+  };
+  const anyStewards = () => registry.list().some((entry) => sources.supports(entry.source, 'stewards'));
+
   /* VS Code's webview request limit (src/request-limit.js), when the caller provides one. */
   const limit = typeof opts.limit === 'function' ? opts.limit(host, { home: opts.home }) : null;
   /* Built before the first look for dependents below: that look writes to globalState, and this has to read it as an
@@ -254,7 +286,7 @@ function start(context, log, opts = {}) {
   /* Trusting the workspace is when an extension disabled with the agent it extends comes back, and the first point at
      which being alone means anything. */
   if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
-    context.subscriptions.push(vscode.workspace.onDidGrantWorkspaceTrust(() => { rescan(); armNotice(); }));
+    context.subscriptions.push(vscode.workspace.onDidGrantWorkspaceTrust(() => { rescan(); armNotice(); if (anyStewards()) stewardsMoved(); }));
   }
 
   /* ── Registration ── */
@@ -286,6 +318,12 @@ function start(context, log, opts = {}) {
     setActive(true);
     if (views && built) attachSafely(entry);
     let gone = false;
+    const looksAfter = sources.supports(source, 'stewards');
+    if (looksAfter) {
+      const d = sources.listen(source, 'onDidChangeStewards', () => { if (!gone) stewardsMoved(); });
+      if (d) entry.subs.push(d);
+      stewardsMoved();
+    }
     /*
      * Order matters. Listening stops first and the registry drops the entry next, so that when the views work out which
      * conversation is in front again they cannot offer the tab back to the source that is going away: it is still in
@@ -299,6 +337,7 @@ function start(context, log, opts = {}) {
       remove();
       try { if (views) views.detach(entry); } catch (_) { /* already gone */ }
       say(`conversation source removed: ${entry.id}`);
+      if (looksAfter) stewardsMoved();
       if (!closing) rescan();
     });
     return { accepted: true, code: '', reason: '', registration };
@@ -327,6 +366,10 @@ function start(context, log, opts = {}) {
     deliver: deliverTo,
     /* With 'planPathOf'. */
     planPathOf,
+    /* With 'stewards': a frozen { sourceId, sessionId } of the steward that looks after that conversation, or null. */
+    stewardOf,
+    /* With 'stewards': vscode.Event<void>, stewardOf() may answer differently. */
+    onDidChangeStewards: listenStewards,
     /* Whether this window shows its own notification when a conversation starts waiting for the user (feature
        'waitingFor'). */
     announcesWaits() {
@@ -373,6 +416,7 @@ function start(context, log, opts = {}) {
     registry.clear();
     everyone.changes.dispose();
     summaryChanges.dispose();
+    stewardChanges.dispose();
   } });
   host.api = agentPlus;
   host.views = () => views;
