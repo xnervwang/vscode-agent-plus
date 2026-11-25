@@ -50,8 +50,9 @@ var agentPlusPlanBar = (function () {
     todo: 'var(--vscode-charts-purple, #b180d7)',
     parked: 'var(--vscode-descriptionForeground, #8c8c8c)'
   };
-  /* The dot both extensions draw on a tab whose conversation waits for the user. */
-  var RED = '#ef4444';
+  /* The yellow of Agent Plus's status bar entry that counts the conversations waiting for the user, so that the questions
+     of this conversation read as the same kind of thing. */
+  var ASK = 'var(--vscode-statusBarItem-warningBackground, #b89500)';
   var MUTED = 'var(--vscode-descriptionForeground, #8c8c8c)';
 
   /* 16 by 16 shapes in the spirit of the work plan view's icons; each takes the colour of the text around it. */
@@ -89,10 +90,10 @@ var agentPlusPlanBar = (function () {
     + '.apb-dim{color:' + MUTED + '}'
     + '.apb-gap{flex:1 1 0;min-width:0}'
     + '.apb-q{display:flex;align-items:center;gap:5px;flex:none;padding:0 8px;border-radius:9px;'
-    + 'background:color-mix(in srgb, ' + RED + ' 22%, transparent)}'
-    + '.apb-q:hover{background:color-mix(in srgb, ' + RED + ' 36%, transparent)}'
+    + 'background:color-mix(in srgb, ' + ASK + ' 30%, transparent)}'
+    + '.apb-q:hover{background:color-mix(in srgb, ' + ASK + ' 48%, transparent)}'
     + '.apb-q:focus-visible{outline:1px solid var(--vscode-focusBorder, #007fd4)}'
-    + '.apb-dot{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:' + RED + '}'
+    + '.apb-dot{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:' + ASK + '}'
     + '.apb-chev{display:flex;flex:none;color:' + MUTED + '}'
     + '[' + MARK + ']:hover .apb-chev{color:var(--vscode-foreground, #ccc)}'
     + '[' + MARK + '-list]{position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;max-width:420px;padding:6px 8px;'
@@ -108,7 +109,7 @@ var agentPlusPlanBar = (function () {
 
   /*
    * What the bar draws for `summary` at `width`, or null for no bar: { compact, segments: [{ state, n }], count,
-   * current: { state, text, dim } or null, questions: the red part's text or '', label: the bar's spoken text, list:
+   * current: { state, text, dim } or null, questions: the questions part's text or '', label: the bar's spoken text, list:
    * { now, head, rows: [{ state, text, depth }], more } or null }. `wasCompact` is the form drawn last, for the
    * hysteresis. A width of 0 is one not measured yet, and draws the full bar.
    */
@@ -178,7 +179,7 @@ var agentPlusPlanBar = (function () {
 
   /*
    * A bar for document `doc`. `opts.onOpen()` runs on a click on the bar or Enter on it, `opts.onAnswer()` on a click
-   * on the red part; `opts.css` is added to the bar's own style, for a page that wants it closer to its input box.
+   * on the questions part; `opts.css` is added to the bar's own style, for a page that wants it closer to its input box.
    * Returns { el, update(summary), fit(width), model(), destroy() }.
    */
   function create(doc, opts) {
@@ -338,6 +339,6 @@ var agentPlusPlanBar = (function () {
   }
 
   return { COMPACT_BELOW: COMPACT_BELOW, HYSTERESIS: HYSTERESIS, TRACK_WIDTH: TRACK_WIDTH, SEGMENT_MIN: SEGMENT_MIN, MAX_LIST: MAX_LIST,
-    SEGMENTS: SEGMENTS, COUNT_ROOM: COUNT_ROOM, COLOR: COLOR, RED: RED, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
+    SEGMENTS: SEGMENTS, COUNT_ROOM: COUNT_ROOM, COLOR: COLOR, ASK: ASK, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
 })();
 if (typeof module === 'object' && module) module['exports'] = agentPlusPlanBar;

@@ -174,10 +174,11 @@ function create(host, opts = {}) {
   /* What the attention watcher last counted (paintAttention below): conversations in any window that wait for the user or
      stopped with a reply the user has not read. */
   let attentionItems = [];
-  /* One entry counts both kinds of conversation that need the user: running ones in the Conversations view with a question
-     in their plan, and those the attention watcher counts. A conversation of both kinds is counted once. It counts
-     conversations, not questions: the plan bar a feature extension draws counts the questions of one. With the
-     Conversations view turned off it shows only the second kind, and opens their list rather than the hidden view. */
+  /* One entry counts the conversations held up by the user: running ones in the Conversations view with a question in
+     their plan, and those waiting for the user to approve something or answer, in any window. A conversation of both
+     kinds is counted once. One that stopped with a reply not read is left to its notification. It counts conversations,
+     not questions: the plan bar a feature extension draws counts the questions of one. With the Conversations view turned
+     off it shows only the second kind, and opens their list rather than the hidden view. */
   const paintConversations = () => {
     const t = conversationsText.textFor(conversationsTree.lang);
     const asks = conversationsTree.data.asks;
@@ -185,18 +186,18 @@ function create(host, opts = {}) {
     conversationsView.badge = asks ? { value: asks, tooltip: t.badge(asks) } : undefined;
     const listed = conversationsOn();
     const running = conversationsTree.data.running, asking = listed ? running.filter((c) => c.questions.length) : [];
-    const seen = attentionItems;
+    const seen = attentionItems.filter((it) => it.kind === 'waiting');
     const count = new Set([...asking, ...seen].map((c) => `${c.sourceId}\n${c.sessionId}`)).size;
     if (!active || (!listed && !count)) { statusEntry.hide(); return; }
     statusEntry.command = listed ? 'agentPlus.showConversations' : 'agentPlus.showAttention';
     statusEntry.text = '$(comment-discussion) ' + (count ? t.status(count) : t.statusIdle(running.length));
     const group = (head, list, line) => (list.length
       ? [head, ...list.slice(0, 10).map(line), ...(list.length > 10 ? [t.statusMore(list.length - 10)] : [])] : []);
-    const why = (it) => { const b = it.kind === 'waiting' ? waitReason.brief(it.waitingFor) : ''; return b ? ` (${b})` : ''; };
+    const why = (it) => { const b = waitReason.brief(it.waitingFor); return b ? ` (${b})` : ''; };
     statusEntry.tooltip = count
       ? [t.statusWho(count),
         ...group(t.statusAsking, asking, (c) => `${c.title} · ${t.questions(c.questions.length)}`),
-        ...group(t.statusSeen, seen, (it) => `${it.kind === 'waiting' ? t.statusWaiting : t.statusFinished}: ${it.title}${why(it)}`)].join('\n')
+        ...group(t.statusWaits, seen, (it) => `${it.title}${why(it)}`)].join('\n')
       : t.statusTip;
     statusEntry.backgroundColor = count ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
     statusEntry.show();

@@ -44,16 +44,15 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   {
     const s = summarize(plan([row('A', 'done'), row('B', 'todo'), row('C', 'done', { children: [row('C1', 'waiting', { waitingOn: 'build' }),
       row('C2', 'waiting', { waitingOn: 'user', question: 'Which one?' })] }), row('D', 'discussing')]));
-    eq([s.current, s.questions, s.done, s.total], [{ number: '3.1', title: 'C1', state: 'waiting', dim: false }, 1, 2, 6],
-      'with no row doing, the first waiting row in plan order is current, before any discussing or todo row; a row waiting on a build asks nothing');
+    eq([s.current, s.questions, s.done, s.total], [null, 1, 2, 6],
+      'with no row doing there is no current row, though rows wait, are discussed and are to do; a row waiting on a build asks nothing');
   }
-  eq([summarize(plan([row('A', 'todo'), row('B', 'discussing')])).current, summarize(plan([row('A', 'parked'), row('B', 'todo')])).current],
-    [{ number: '2', title: 'B', state: 'discussing', dim: false }, { number: '2', title: 'B', state: 'todo', dim: false }],
-    'then the first discussing row, then the first todo row, a parked row coming after both');
+  eq([summarize(plan([row('A', 'todo'), row('B', 'doing')])).current, summarize(plan([row('A', 'parked'), row('B', 'todo')])).current],
+    [{ number: '2', title: 'B', state: 'doing', dim: false }, null],
+    'a row doing is current wherever it is in the plan, and rows to do or parked make none');
   {
     const s = summarize(plan([row('A', 'done'), row('B', 'parked'), row('C', 'dropped'), row('D', 'parked')]));
-    eq([s.current, s.allDone, s.total, s.done], [{ number: '2', title: 'B', state: 'parked', dim: true }, false, 3, 1],
-      'with only parked rows left, the first of them is current and drawn dim');
+    eq([s.current, s.allDone, s.total, s.done], [null, false, 3, 1], 'nor do parked rows alone');
   }
   {
     const s = summarize(plan([row('A', 'done'), row('B', 'dropped', { children: [row('B1', 'done')] }), row('C', 'done')]));
@@ -121,7 +120,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     [3, 0, 0, '2.1', 1, true, true],
     'a Claude Code conversation: the closed rows archived beside its plan are left out with their children, and no number moves');
   const cx = b.api.planSummary({ sourceId: 'codex', sessionId: X });
-  eq([cx.total, cx.done, cx.current], [2, 1, { number: '2', title: 'Handle refunds later', state: 'parked', dim: true }],
+  eq([cx.total, cx.done, cx.current], [2, 1, null],
     'a Codex conversation, asked with one object argument');
   eq([b.api.planSummary('codex', D), b.api.planSummary('nobody', C), b.api.planSummary('', ''), b.api.planSummary(null)], [null, null, null, null],
     'a conversation with no plan, an agent not registered and unusable ids give null');

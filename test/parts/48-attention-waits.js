@@ -212,7 +212,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     let picked = null;
     vscode.window.showQuickPick = async (items) => { picked = items.map((x) => [x.label, x.description]); return undefined; };
     await vscode.commands.executeCommand('agentPlus.showAttention');
-    eq([said(), tip(), picked], [['"Needs you" is waiting for you to approve Bash.'], '1 conversation needs you:\nFinished or waiting for you, not looked at yet:\nWaiting: Needs you (approve Bash)',
+    eq([said(), tip(), picked], [['"Needs you" is waiting for you to approve Bash.'], '1 conversation needs you:\nWaiting for you to approve something or answer:\nNeeds you (approve Bash)',
       [['Needs you', 'waiting for you to approve Bash']]],
     'a source\'s waitingFor reaches the notice, the hover of the count and the list of conversations that need you');
     control.state.said.length = 0;

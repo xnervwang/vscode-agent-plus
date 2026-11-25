@@ -101,7 +101,7 @@ module.exports = async ({ eq, root, wait }) => {
     const theirs = Object.keys(bar.COLOR).map((k) => look[k].color.replace('.', '-'));
     eq(theirs, Object.keys(bar.COLOR).map((k) => bar.COLOR[k].replace(/^var\(--vscode-([\w-]+).*$/, '$1')), 'the same as LOOK in src/workplan-view.js says');
   }
-  eq(bar.RED, '#ef4444', 'the red part is the red of a tab whose conversation waits for the user');
+  eq(bar.ASK, 'var(--vscode-statusBarItem-warningBackground, #b89500)', 'the questions part is the yellow of the status bar entry that counts the conversations waiting for the user');
   {
     const css = (text.match(/var CSS = ([\s\S]*?);\n/) || [])[1] || '';
     eq([/\.apb-track\{[^}]*flex:none[^}]*width:' \+ TRACK_WIDTH \+ 'px/.test(css), /\.apb-seg\{[^}]*min-width:' \+ SEGMENT_MIN \+ 'px/.test(css),

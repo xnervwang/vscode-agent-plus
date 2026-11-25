@@ -69,8 +69,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   /* With the attention watcher counting too. */
   {
     const ws2 = tmp('ws2'), plans2 = tmp('plans2');
+    let views = null;
     const q = boot(root, tmp, { viewOptions: { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20,
-      attentionWarmupMs: 0, attentionBatchMs: 10, debounceMs: 10 } });
+      attentionWarmupMs: 0, attentionBatchMs: 10, debounceMs: 10 }, views: (h, o) => (views = require(path.join(root, 'src', 'views.js')).create(h, o)) });
     q.vscode.workspace.workspaceFolders = [{ uri: q.vscode.Uri.file(ws2) }];
     const ask = (id) => fs.writeFileSync(path.join(plans2, id + '.json'), JSON.stringify({ nodes: [{ title: 'build', state: 'doing' },
       { title: 'ask', state: 'waiting', waitingOn: 'user', question: 'Which one?' }] }));
@@ -81,6 +82,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       { sessionId: 'a', title: 'Alpha', cwd: ws2, state: 'prompt', activity: 'waiting', running: true, lastActiveAt: at, waitingFor: { kind: 'permission', tool: 'Bash' } },
       { sessionId: 'b', title: 'Beta', cwd: ws2, state: 'idle', running: true, lastActiveAt: at - 1000 },
       { sessionId: 'c', title: 'Gamma', cwd: ws2, state: 'prompt', activity: 'waiting', running: true, lastActiveAt: at - 2000 },
+      { sessionId: 'd', title: 'Delta', cwd: ws2, state: 'unread', activity: 'stopped', unseen: true, running: true, lastActiveAt: at - 3000 },
     ];
     const moved = new q.vscode.EventEmitter();
     q.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', planPath: (id) => path.join(plans2, id + '.json'), planDir: () => plans2,
@@ -91,14 +93,16 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([both.text, both.tooltip, both.command, both.backgroundColor && both.backgroundColor.id],
       ['$(comment-discussion) 3 conversations need you',
         '3 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 1 question\nBeta · 1 question'
-        + '\nFinished or waiting for you, not looked at yet:\nWaiting: Alpha (approve Bash)\nWaiting: Gamma',
+        + '\nWaiting for you to approve something or answer:\nAlpha (approve Bash)\nGamma',
         'agentPlus.showConversations', 'statusBarItem.warningBackground'],
       'one entry counts the conversations with a question in their plan and those waiting for the user, a conversation of both kinds once, and lists the two kinds apart');
+    eq(views._parts.needs.items().filter((it) => it.sessionId === 'd').map((it) => it.kind), ['finished'],
+      'one that stopped with a reply not read is known to need the user, and is left to its notification rather than counted');
     q.control.state.config['agentPlus.conversationsView'] = false;
     q.control.changeConfig(['agentPlus.conversationsView']);
     const off = await settle('2 conversations need you');
     eq([off.text, off.tooltip.split('\n')[1], off.command],
-      ['$(comment-discussion) 2 conversations need you', 'Finished or waiting for you, not looked at yet:', 'agentPlus.showAttention'],
+      ['$(comment-discussion) 2 conversations need you', 'Waiting for you to approve something or answer:', 'agentPlus.showAttention'],
       'with the Conversations view turned off, it counts only the waiting ones and opens their list');
     q.close();
   }

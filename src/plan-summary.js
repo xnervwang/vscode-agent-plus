@@ -40,9 +40,8 @@ const row = (r, dim) => ({ number: r.number, title: String(r.n.title || '').slic
  * The summary of `plan`, or null when there is nothing for a bar to draw, such as no plan or a plan that does not parse
  * or has no rows.
  *
- * The current row is the deepest `doing` row, the earlier in the file at equal depth; without one, the first row in
- * `waiting`, `discussing` or `todo`, tried in that order. With only parked rows left it is the first of them, marked
- * `dim`.
+ * The current row is the deepest `doing` row, the earlier in the file at equal depth. With no row `doing` there is none:
+ * a row picked from the others would mostly be the oldest one waiting, which says nothing about what is going on.
  */
 function summarize(plan) {
   if (!plan || plan.error || !Array.isArray(plan.nodes) || !plan.nodes.length) return null;
@@ -50,7 +49,6 @@ function summarize(plan) {
   const counts = { discussing: 0, todo: 0, doing: 0, waiting: 0, parked: 0, done: 0 };
   const open = [];
   let deepest = null, unknown = 0;
-  const first = {};
   for (const r of rows) {
     const state = r.n.state;
     if (!COUNTED.includes(state)) { if (state !== 'dropped') unknown++; continue; }
@@ -58,13 +56,11 @@ function summarize(plan) {
     if (state === 'done') continue;
     if (open.length < MAX_OPEN) open.push({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), state, depth: r.depth });
     if (state === 'doing' && (!deepest || r.depth > deepest.depth)) deepest = r;
-    if (!first[state]) first[state] = r;
   }
   const total = COUNTED.reduce((sum, k) => sum + counts[k], 0);
   const allDone = total === counts.done && !unknown;
   if (!total && !allDone) return null;
-  const pick = deepest || first.waiting || first.discussing || first.todo;
-  const current = pick ? row(pick, false) : first.parked ? row(first.parked, true) : null;
+  const current = deepest ? row(deepest, false) : null;
   return {
     total, done: counts.done, counts, current, allDone,
     questions: planQuestions(plan.nodes).length, open,

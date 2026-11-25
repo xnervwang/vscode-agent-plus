@@ -909,8 +909,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const told = await until(() => call('return globalThis.__planTold.length ? globalThis.__planTold : null;'), 15000, 300);
     check(!!told && sameList(told[0], ['codex', 'asks-new']), 'a change to the plan file fires onDidChangePlanSummary with the agent and the conversation', told);
     const after = await call(`${API} return api.planSummary({ sourceId: "codex", sessionId: "asks-new" });`);
-    check(!!after && after.done === 1 && !!after.current && after.current.number === '1' && after.current.state === 'waiting',
-      'and the summary asked for then has row 2 done and the waiting row 1 as the current one', after);
+    check(!!after && after.done === 1 && after.current === null,
+      'and the summary asked for then has row 2 done and, with no row doing any more, no current row', after);
     await call('globalThis.__planSub.dispose(); return true;');
     QPLANS();
     await openConv('briefed');
@@ -1020,7 +1020,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const counted = await until(async () => (await bell()) === before + 1, 10000, 300);
     check(!!counted, 'a conversation that starts to wait adds one to the count in the status bar', { before, now: await bell() });
     const tip = await entry('conversations');
-    check(!!tip && tip.label.includes(`Waiting: ${NWAIT}`) && tip.warning, 'whose hover lists it as waiting, on a yellow background', tip);
+    check(!!tip && tip.label.includes('Waiting for you to approve something or answer') && tip.label.includes(NWAIT) && tip.warning,
+      'whose hover lists it among those waiting for you to approve something or answer, on a yellow background', tip);
     if (!canFocus) {
       check(await noToast(NWAIT, 6000), `with no window focused (this ${process.platform} runner gave the window none), no notification is shown`);
       return;
@@ -1043,9 +1044,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       check(await noToast(NFIN, 3500), 'a conversation that stops with a reply not read is not announced at once');
       const t = await toastWith(`"${NFIN}" finished.`, 12000);
       check(!!t && sameList(t.buttons, ['Open', 'Dismiss']), `but once it has stayed stopped for five seconds, the notification says it finished (after ${Math.round((Date.now() - at) / 1000)} s), with Open and Dismiss`, t || await toasts());
-      await look('notify-finished', { toasts: true, expect: 'A notification: "Finished a turn" finished., with Open and Dismiss. The status bar entry N conversations need you counts one more than before.' }, toastLoc(`"${NFIN}" finished.`));
+      await look('notify-finished', { toasts: true, expect: 'A notification: "Finished a turn" finished., with Open and Dismiss. The status bar entry counts no more than before.' }, toastLoc(`"${NFIN}" finished.`));
     } else check(await noToast(NFIN, 9000), 'with no window focused, a conversation that stops is not announced');
-    check(!!await until(async () => (await bell()) === before + 1, 10000, 300), 'and the status bar counts it', { before, now: await bell() });
+    await settle();
+    check((await bell()) === before, 'and the status bar does not count it: a reply not read is left to its notification', { before, now: await bell() });
   });
 
   await step('notify-open', async () => {
@@ -1058,7 +1060,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       await exec('agentPlus.openAttention', 'codex', 'n-fin');
     }
     check(!!await frontIs(NFIN), 'Open brings the conversation\'s tab to the front', await frontTab());
-    check(!!await until(async () => (await bell()) === before - 1, 10000, 300), 'and once it is read, the status bar counts one fewer', { before, now: await bell() });
+    await settle();
+    check((await bell()) === before, 'and the status bar count, which never had it, stays as it was', { before, now: await bell() });
     await openNotes();
   });
 
@@ -1067,7 +1070,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const before = await bell();
     await patch('n-env', { unseen: true });
     check(await noToast(NENV, 9000), 'a conversation that had already stopped and only gains an envelope is not announced');
-    check((await bell()) === before + 1, 'but the status bar counts it, as it stopped with a reply not read', { before, now: await bell() });
+    check((await bell()) === before, 'nor counted in the status bar', { before, now: await bell() });
   });
 
   await step('notify-queued', async () => {
@@ -1095,9 +1098,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(await noToast(NFRONT, 9000), 'nor is it announced when it then stops with a reply');
     check((await bell()) === before, 'which is not counted either while it is in front', { before, now: await bell() });
     await openNotes();
-    check(!!await until(async () => (await bell()) === before + 1, 10000, 300), 'once another tab is in front, it is counted', { before, now: await bell() });
+    await settle();
+    check((await bell()) === before, 'and once another tab is in front it is still not counted, as a reply not read is left to its notification', { before, now: await bell() });
     check(await noToast(NFRONT, 4000), 'but not announced after the fact');
-    await look('attention-count', { expect: 'The status bar at the bottom right has N conversations need you on a yellow background, counting the conversations that wait for you or stopped with a reply not read; there is no separate bell entry of Agent Plus, and no notification is on screen.' },
+    await look('attention-count', { expect: 'The status bar at the bottom right has N conversations need you on a yellow background, counting the conversations that wait for you; there is no separate bell entry of Agent Plus, and no notification is on screen.' },
       page.locator('#workbench\\.parts\\.statusbar'));
   });
 
@@ -1148,7 +1152,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await start('agentPlus.showAttention');
     const rows = await pickRows();
     check(!!rows && rows.some((r) => /First of two.*waiting for you/.test(r.text)) && rows.some((r) => /Stopped while you were away.*finished/.test(r.text)),
-      'Show the Conversations That Need You lists every conversation counted as waiting or finished', rows);
+      'Show the Conversations That Need You lists the conversations waiting for you and those that finished with a reply not read', rows);
     await look('attention-list', { toasts: true, expect: 'A list at the top of the window headed Conversations that need you, with First of two (waiting for you) and Stopped while you were away (finished), each with the folder under it.' },
       page.locator('.quick-input-widget'));
     await pick('Stopped while you were away');
@@ -1175,7 +1179,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await setting('agentPlus.notifications.finished', false);
     await patch('s-fin', { state: 'unread', activity: 'stopped', unseen: true });
     check(await noToast('Finishes with finished off', 10000), 'with agentPlus.notifications.finished off, a conversation stopping with a reply is not announced');
-    check((await bell()) === 2, 'but the status bar still counts it', await bell());
+    check((await bell()) === 1, 'and, a reply not read being left to its notification, the status bar does not count it', await bell());
     await setting('agentPlus.notifications.finished', true);
     if (canFocus) {
       await patch('s-wait', { state: 'working', activity: 'working' });
@@ -1188,10 +1192,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!await until(async () => (await bell()) === 0, 10000, 300), 'with agentPlus.notifications.enabled off, the status bar stops counting them', await entry('conversations'));
     await patch('s-all', { state: 'prompt', activity: 'waiting' });
     check(await noToast('Waits with notifications off', 6000) && (await bell()) === 0, 'and a conversation starting to wait is neither announced nor counted');
-    await look('notify-settings', { expect: 'The Conversations entry of Agent Plus in the status bar reads Conversations and a number, not N conversations need you, and no notification is on screen, although three conversations wait or stopped with a reply.' },
+    await look('notify-settings', { expect: 'The Conversations entry of Agent Plus in the status bar reads Conversations and a number, not N conversations need you, and no notification is on screen, although two conversations wait.' },
       page.locator('#workbench\\.parts\\.statusbar'));
     await setting('agentPlus.notifications.enabled', true);
-    check(!!await until(async () => (await bell()) === 3, 10000, 300), 'turned back on, the status bar counts all three again', await bell());
+    check(!!await until(async () => (await bell()) === 2, 10000, 300), 'turned back on, the status bar counts the two waiting again', await bell());
     await startWorking([conv('quiet', 'Nothing to see', 'idle', 'stopped')]);
     await clearToasts();
   });
