@@ -164,9 +164,14 @@ function create(host, opts = {}) {
     conversationsView.title = t.view;
     conversationsView.badge = asks ? { value: asks, tooltip: t.badge(asks) } : undefined;
     if (!active || !conversationsOn()) { statusEntry.hide(); return; }
-    statusEntry.text = '$(comment-discussion) ' + (asks ? t.status(asks) : t.statusIdle(conversationsTree.data.running.length));
-    statusEntry.tooltip = t.statusTip;
-    statusEntry.backgroundColor = asks ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
+    /* It counts conversations, not questions: the plan bar a feature extension draws counts the questions of one. */
+    const running = conversationsTree.data.running, asking = running.filter((c) => c.questions.length);
+    statusEntry.text = '$(comment-discussion) ' + (asking.length ? t.status(asking.length) : t.statusIdle(running.length));
+    statusEntry.tooltip = asking.length
+      ? [t.statusWho(asking.length), ...asking.slice(0, 10).map((c) => `${c.title} · ${t.questions(c.questions.length)}`)]
+        .concat(asking.length > 10 ? [t.statusMore(asking.length - 10)] : []).join('\n')
+      : t.statusTip;
+    statusEntry.backgroundColor = asking.length ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
     statusEntry.show();
   };
 

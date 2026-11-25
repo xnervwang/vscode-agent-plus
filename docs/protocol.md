@@ -241,7 +241,7 @@ The core provides the plan summary, a page fragment that draws the plan bar, and
 | `counts` | `{ discussing, todo, doing, waiting, parked, done }`: number of counted rows in each state. |
 | `current` | `{ number, title, state, dim }` or `null`. The deepest `doing` row wins; plan order breaks ties. With no `doing` row, the core checks `waiting`, `discussing` and `todo` in that order and takes the first row in plan order from the first state that has one. If only `parked` rows remain besides `done` rows, it takes the first `parked` row with `dim: true`; otherwise `dim` is `false`. `current` is `null` when no row is open. |
 | `allDone` | `true` when no row is open and no row outside an archived subtree is in a state this version of the core does not know. This includes `total` of `0` when every row is archived or `dropped`. |
-| `questions` | Number of rows waiting for the user's answer. The Conversations entry in the status bar counts the same rows, across the conversations the Conversations view lists, for its `N to decide`: rows in `waiting` or `discussing` with `waitingOn: user`. |
+| `questions` | Number of rows waiting for the user's answer: rows in `waiting` or `discussing` with `waitingOn: user`. The Conversations entry in the status bar counts the running conversations in the Conversations view that have at least one such row, for its `N conversations need you`. |
 | `open` | Up to 30 counted rows that are not `done`, in plan order. Each is `{ number, title, state, depth }`, with `depth` of `1` for a top-level row, `2` for its children, and so on. |
 
 - The core leaves archived subtrees (see Plan files) out of every figure, but each `"archived": true` placeholder keeps its place in the numbering of later rows.

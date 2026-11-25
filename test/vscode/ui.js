@@ -194,7 +194,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
 
   const entry = (name) => page.evaluate((id) => {
     const e = document.getElementById(`xnervwang.agent-plus.agentPlus.${id}`);
-    return e && e.offsetParent ? { text: e.innerText.trim(), label: e.getAttribute('aria-label') || '', warning: e.classList.contains('warning-kind') } : null;
+    return e && e.offsetParent ? { text: e.innerText.trim(), label: e.getAttribute('aria-label') || '', warning: e.classList.contains('warning-kind'),
+      error: e.classList.contains('error-kind') } : null;
   }, name);
   const entryLoc = (name) => page.locator(`[id="xnervwang.agent-plus.agentPlus.${name}"]`);
   const bell = async () => { const e = await entry('attention'); return e ? Number(e.text) || 0 : 0; };
@@ -563,8 +564,9 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     });
     check(tab === '2', 'the Conversations tab\'s badge counts the two questions', tab);
     const st = await entry('conversations');
-    check(!!st && /2 to decide/.test(st.text) && st.warning, 'and the status bar entry says 2 to decide, on a warning background', st);
-    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 to decide on a warning background.' },
+    check(!!st && /2 conversations need you/.test(st.text) && st.error && !st.warning,
+      'and the status bar entry says 2 conversations need you, on a red background', st);
+    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you on a red background.' },
       pane('agentPlus.conversations'));
   });
 
@@ -723,7 +725,13 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   await step('status-entry', async () => {
     needs('question-rows');
     const st = await entry('conversations');
-    check(!!st && /2 to decide/.test(st.text), 'the status bar entry says how many questions wait', st);
+    check(!!st && /2 conversations need you/.test(st.text), 'the status bar entry says how many conversations wait for you', st);
+    const tip = await hoverText(entryLoc('conversations'));
+    check(tip.startsWith('2 conversations need you:') && tip.includes('Asked about the release branch · 1 question') && tip.includes('Asked days ago · 1 question'),
+      'hovering it lists those conversations, each with how many questions it has', tip);
+    await look('status-hover', { pointer: true, toasts: true, expect: 'A hover box above the status bar entry 2 conversations need you, reading 2 conversations need you:, then Asked about the release branch · 1 question and Asked days ago · 1 question on lines of their own.' },
+      page.locator('.monaco-hover, .workbench-hover').first());
+    await unhover();
     await exec('workbench.action.closePanel');
     await clearToasts();
     await viaUi('agentPlus.showConversations', () => entryLoc('conversations').click());
@@ -733,7 +741,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await viaUi('agentPlus.showConversations', () => page.locator('#workbench\\.parts\\.sidebar .title-actions .action-label[aria-label="Agent Plus: Show Conversations"]').click({ timeout: 10000 }));
     check(!!await until(async () => !!await convRows(), 10000, 300), 'and so does the Conversations button in the Work plan view\'s title bar');
     await conversations([conv('run', 'Running a turn', 'working', 'working'), conv('bg', 'Only background work left', 'working', 'background')]);
-    const idle = await until(async () => { const e = await entry('conversations'); return e && /Conversations 2/.test(e.text) && !e.warning && e; }, 15000, 300);
+    const idle = await until(async () => { const e = await entry('conversations'); return e && /Conversations 2/.test(e.text) && !e.error && !e.warning && e; }, 15000, 300);
     check(!!idle, 'with no question waiting it counts the running conversations instead, on no background', idle || await entry('conversations'));
     await look('status-entry', { expect: 'The status bar at the bottom right has a speech-bubble entry Conversations 2 on the plain status bar colour, beside the token mode entry All; the Conversations view is open in the panel.' },
       page.locator('#workbench\\.parts\\.statusbar'));
