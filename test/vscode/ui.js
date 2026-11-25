@@ -163,17 +163,22 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const maximized = await page.evaluate(() => { const e = document.getElementById('workbench.parts.editor'); return !e || e.offsetHeight < 40; });
     if (small && !maximized) { await exec('workbench.action.toggleMaximizedPanel'); await sleep(500); }
   };
-  /* The tree draws only the rows in view, so a row below the fold is scrolled to before it is clicked: from the top,
-     a step at a time. */
+  /* A row the tree has not drawn, or has drawn outside the list's visible box, is scrolled to before it is clicked: from
+     the top, a step at a time. The tree scrolls itself, so Playwright cannot bring such a row into view on its own. */
   const clickRow = async (view, title, opts) => {
     if (view === 'agentPlus.conversations') await showConversations();
     await clearToasts();
-    const row = rowLoc(view, title);
-    if (!await row.count()) {
-      const list = pane(view).locator('.monaco-list').first();
+    const row = rowLoc(view, title), list = pane(view).locator('.monaco-list').first();
+    const shown = async () => {
+      if (!await row.count()) return false;
+      const [r, l] = await Promise.all([row.boundingBox().catch(() => null), list.boundingBox().catch(() => null)]);
+      return !!r && !!l && r.y >= l.y - 1 && r.y + r.height <= l.y + l.height + 1;
+    };
+    if (!await shown()) {
       await list.hover().catch(() => {});
       await page.mouse.wheel(0, -5000);
-      for (let i = 0; i < 20 && !await row.count(); i++) { await page.mouse.wheel(0, 120); await sleep(150); }
+      await sleep(150);
+      for (let i = 0; i < 20 && !await shown(); i++) { await page.mouse.wheel(0, 60); await sleep(150); }
     }
     return row.click(opts);
   };
