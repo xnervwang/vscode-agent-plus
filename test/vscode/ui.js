@@ -163,10 +163,19 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const maximized = await page.evaluate(() => { const e = document.getElementById('workbench.parts.editor'); return !e || e.offsetHeight < 40; });
     if (small && !maximized) { await exec('workbench.action.toggleMaximizedPanel'); await sleep(500); }
   };
+  /* The tree draws only the rows in view, so a row below the fold is scrolled to before it is clicked: from the top,
+     a step at a time. */
   const clickRow = async (view, title, opts) => {
     if (view === 'agentPlus.conversations') await showConversations();
     await clearToasts();
-    return rowLoc(view, title).click(opts);
+    const row = rowLoc(view, title);
+    if (!await row.count()) {
+      const list = pane(view).locator('.monaco-list').first();
+      await list.hover().catch(() => {});
+      await page.mouse.wheel(0, -5000);
+      for (let i = 0; i < 20 && !await row.count(); i++) { await page.mouse.wheel(0, 120); await sleep(150); }
+    }
+    return row.click(opts);
   };
   const showPlanView = async () => { await exec('workbench.view.extension.agentPlus'); await sleep(500); };
   /* Drags the edge of the side bar until it is about `want` CSS pixels wide, or as close to that as the window allows. */
