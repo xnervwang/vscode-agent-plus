@@ -1456,7 +1456,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       'a sub-agent is hidden, and only the unread conversation has the envelope', rows.map((r) => [r.title, r.marks]));
     const weeks = slFind(rows, SLT.weeks) || {};
     check(/feature-x/.test(weeks.marks || '') && /· 2 processes/.test(weeks.marks || '') && !/processes/.test((slFind(rows, SLT.quiet) || {}).marks || ''),
-      'a conversation in a git worktree has the worktree\'s name on its row, and one open in two processes at once says so there', weeks);
+      'a conversation in a git worktree has the worktree\'s name on its row, and one open in two processes at once shows the count on its row', weeks);
     const archived = slFind(rows, SLT.ocOld, 'archived');
     check(!!archived, 'what the agent had archived is imported as archived, the first time the list sees that agent', rows.filter((r) => r.section === 'archived'));
     const ungrouped = rows.filter((r) => r.section === 'ungrouped').map((r) => r.title);
