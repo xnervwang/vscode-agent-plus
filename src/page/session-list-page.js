@@ -345,11 +345,6 @@
       }
       block.append(head);
       const info = a.info;
-      if (info.conversation) {
-        block.append(el('div', 'sl-acct-sub', 'This conversation'));
-        if (info.conversation.title) { const t = el('div', 'sl-acct-conv', info.conversation.title); t.title = info.conversation.title; block.append(t); }
-        for (const r of info.conversation.rows) block.append(kv(r));
-      }
       for (const r of info.rows) block.append(kv(r));
       for (const b of info.bars) {
         const u = el('div', 'sl-bar');
@@ -362,6 +357,13 @@
         if (b.resetsAt) u.append(el('div', 'sl-reset', resetText(b.resetsAt)));
         if (b.tooltip) u.title = b.tooltip;
         block.append(u);
+      }
+      /* The conversation's own figures come last, under a heading of their own, so that the account's lines above are not
+         read as the conversation's. */
+      if (info.conversation) {
+        block.append(el('div', 'sl-acct-sub', 'This conversation'));
+        if (info.conversation.title) { const t = el('div', 'sl-acct-conv', info.conversation.title); t.title = info.conversation.title; block.append(t); }
+        for (const r of info.conversation.rows) block.append(kv(r));
       }
       parts.push(block);
     }

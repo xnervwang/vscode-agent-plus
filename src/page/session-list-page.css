@@ -110,7 +110,7 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-acct-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-link { border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); text-decoration: underline; }
 .sl-link:hover { color: var(--vscode-textLink-activeForeground); }
-.sl-acct-sub { margin-left: 22px; font-size: .8em; opacity: .7; text-transform: uppercase; letter-spacing: .4px; }
+.sl-acct-sub { margin: 6px 0 0 22px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 14%, transparent); font-size: .8em; opacity: .7; text-transform: uppercase; letter-spacing: .4px; }
 .sl-acct-conv { margin-left: 22px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A row of a name and a value: the value goes under the name, at the right, when the two do not fit on one line. */
 .sl-kv { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; margin-left: 22px; }

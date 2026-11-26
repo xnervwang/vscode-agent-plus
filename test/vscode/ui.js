@@ -1584,6 +1584,9 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     }
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
+    /* Out by way of the list's top, which is no row: a pointer that jumps straight out of the webview leaves it holding
+       the last place it saw, and the row that comes under that place once the menu goes takes the hover. */
+    await sl.locator('.sl-chips').hover({ position: { x: 1, y: 1 } });
     await page.mouse.move(5, 5);
     await sl.evaluate(() => { const g = document.querySelector('.sl-section[data-key^="group:"]'); if (g) g.scrollIntoView({ block: 'start' }); });
     await sleep(300);
@@ -1688,7 +1691,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
     check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32%\s+resets 2h 1\dm/.test(shown) && /This conversation\s+Fix the sessions page filter/i.test(shown),
       'Account & usage shows the agent\'s rows, its limits with when they reset, and the conversation in front', shown);
-    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. Under Codex, a small line THIS CONVERSATION in capitals and under it Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k.' }, sidebarBox());
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, below a thin line, a small heading THIS CONVERSATION in capitals, under it Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k, so that the account\'s lines above it are not read as the conversation\'s.' }, sidebarBox());
     await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
     check(!!await until(async () => (await src('return src.state.ran;')).includes('installPlugin'), 5000, 200), 'a link runs the command the agent gave');
     await slHead('Account & usage').click();
