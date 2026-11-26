@@ -203,6 +203,8 @@
     r._p.archive.classList.toggle('sl-hidden', ro || !!row.archived);
     r._p.restore.classList.toggle('sl-hidden', ro || !row.archived);
     if (!r._editing) r.draggable = !row.archived && !ro;
+    /* A hover box already up for this row follows what the row now says. */
+    if (r === hoverRow && !hoverBox.classList.contains('sl-hidden')) hoverBox.textContent = row.hover || row.title;
   }
   /* The title, with the part the search matched marked. */
   function markTitle(r) {
