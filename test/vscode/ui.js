@@ -1729,7 +1729,15 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slHead('Account & usage').click();
     await look('sessions-account-closed', { expect: 'The ACCOUNT & USAGE header collapsed to one band with its chevron pointing right, and the sections below it moved up.' }, sidebarBox());
     await slHead('Account & usage').click();
+    /* An agent that is not signed in gives a part of one line and no bars; it is drawn as any other part. */
+    await src('return src.configure(arg);', { account: { rows: [{ label: 'Account', value: 'Not signed in' }] } });
+    const plain = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]');
+      return !!a && !a.classList.contains('sl-hidden') && /Account\s+Not signed in/.test(a.innerText) && !a.querySelector('.sl-bar') && a.innerText; }), 10000, 300);
+    check(!!plain, 'a part of one line and no bars, as an agent not signed in gives, is drawn under the agent\'s name with nothing else', plain);
+    await look('sessions-account-not-signed-in', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded, with one Codex block: its logo and the name Codex, and under it a single line, Account at the left and Not signed in at the right. No bars, no links and no conversation lines.' }, sidebarBox());
     await src('return src.configure(arg);', { account: null });
+    const left = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return !!a && a.classList.contains('sl-hidden'); }), 10000, 300);
+    check(!!left, 'with no agent giving a part, the section is left out');
   });
 
   await step('sessions-new', async () => {
