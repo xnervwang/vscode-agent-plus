@@ -317,21 +317,24 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   /* The conversation in front has been seen. */
   /*
    * The conversation in front is seen once it has stayed in front SEEN_AFTER_MS: a tab brought forward for a moment, as
-   * a loader does to every restored tab, or passed over on the way to another, is not read.
+   * a loader does to every restored tab, or passed over on the way to another, is not read. One the user marked unread
+   * while it was in front stays unread until another comes to the front. A source's own `unseen` is the source's to
+   * clear, as it does when the user looks at the conversation in its agent.
    */
   let frontKey = '', frontSince = 0, seenTimer = 0;
+  const heldUnread = new Set();
   function markSeen() {
     const k = look.front || '';
-    if (k !== frontKey) { frontKey = k; frontSince = now(); }
+    if (k !== frontKey) { frontKey = k; frontSince = now(); heldUnread.clear(); }
     const r = k && rows.get(k);
-    if (!r || !r.detail || !(r.lastReplyAt > r.seenAt || r.unreadMark || r.agentUnseen)) return;
+    if (!r || !r.detail || heldUnread.has(k) || !(r.lastReplyAt > r.seenAt || r.unreadMark)) return;
     const wait = SEEN_AFTER_MS - (now() - frontSince);
     if (wait > 0) {
       if (!seenTimer) seenTimer = setTimeout(() => { seenTimer = 0; schedule(0); }, wait + 20);
       return;
     }
     store.seen(r.sourceId, r.sessionId, r.lastReplyAt || 0);
-    Object.assign(r, { seenAt: Math.max(+r.seenAt || 0, +r.lastReplyAt || 0), unreadMark: false, agentUnseen: false });
+    Object.assign(r, { seenAt: Math.max(+r.seenAt || 0, +r.lastReplyAt || 0), unreadMark: false });
     tellSeen([r], true);
   }
 
@@ -517,7 +520,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       case 'pin': if (!ro) store.pin(pairs, true); break;
       case 'unpin': if (!ro) store.pin(pairs, false); break;
       case 'color': if (!ro) store.color(pairs, COLORS.includes(pick) ? pick : null); break;
-      case 'markUnread': store.markUnread(pairs, true); tellSeen(list.map((k) => rows.get(k)), false); break;
+      case 'markUnread': store.markUnread(pairs, true); for (const k of list) if (k === look.front) heldUnread.add(k); tellSeen(list.map((k) => rows.get(k)), false); break;
       case 'markRead': for (const k of list) { const r = rows.get(k); store.seen(r.sourceId, r.sessionId, r.lastReplyAt || 0); } tellSeen(list.map((k) => rows.get(k)), true); break;
       case 'archive': if (!ro) store.archive(pairs, true); break;
       case 'unarchive': if (!ro) store.archive(pairs, false); break;
