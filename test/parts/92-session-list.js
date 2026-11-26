@@ -75,7 +75,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const t = setup();
     const many = Array.from({ length: 1200 }, (_, i) => conv(`c-${String(i).padStart(4, '0')}`));
     const claude = source('claude-code', many.slice(0, 3), { imported: () => null });
-    const codex = source('codex', many, { imported: { archived: [{ sessionId: 'c-0001', at: now0 - 50 * DAY }], groups: [{ name: 'Plugins', sessionIds: ['c-0002', 'c-0003', 'c-0001'] }],
+    const codex = source('codex', many, { imported: { archived: [{ sessionId: 'c-0001', at: now0 - 50 * DAY }, { sessionId: 'c-late', at: now0 - 40 * DAY }], groups: [{ name: 'Plugins', sessionIds: ['c-0002', 'c-0003', 'c-0001'] }],
       pinned: ['c-0003'], colors: { 'c-0004': 'green', 'c-9999': 'red' } } });
     t.entries.push({ id: 'claude-code', source: claude }, { id: 'codex', source: codex });
     const list = L.createSessionList(t.host, { now });
@@ -92,6 +92,10 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh({ relist: true });
     st.flush();
     eq([st.imported('claude-code'), st.groups().length], [0, 1], 'a source that still cannot read its list\'s state is not counted imported');
+    codex.sessions.push(conv('c-late', { title: 'Read late' }));
+    await list.refresh({ relist: true });
+    eq([rec('codex', 'c-late').archived, list.model().sections.find((x) => x.key === 'archived').rows.some((r) => r.title === 'Read late')], [true, true],
+      'one the import named before the source listed it is archived once it is listed');
     list.dispose();
   }
 

@@ -239,8 +239,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       let got = null;
       try { got = await settle(fn({ folders: folders() }), pageMs, null); } catch (_) { got = null; }
       if (!got) return;
-      const ids = new Set(((lists.get(e.id) || {}).sessions || []).map((s) => s.sessionId));
-      const mine = (id) => typeof id === 'string' && ids.has(id);
+      /* Any id the source names, listed yet or not: one the source has not read yet when the list first sees it, as an
+         archived conversation in a folder read later, would otherwise miss the one import it has. */
+      const mine = (id) => sources.usableId(id);
       for (const a of Array.isArray(sources.get(got, 'archived')) ? sources.get(got, 'archived') : []) {
         const id = sources.get(a, 'sessionId');
         if (mine(id)) store.archive([[e.id, id]], true, { since: moment(sources.get(a, 'at')), keepPin: true });
