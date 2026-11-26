@@ -29,6 +29,7 @@ const attention = require('./attention');
 const waitReason = require('./wait-reason');
 const windowOpen = require('./window-open');
 const planSummary = require('./plan-summary');
+const { startSessionList } = require('./session-list-host');
 
 const CONFIG = 'agentPlus';
 const REFRESH_MS = 30000;
@@ -267,6 +268,20 @@ function create(host, opts = {}) {
       .catch((e) => say('open: ' + ((e && e.message) || e)));
     return r;
   };
+  /* ── The session list ── */
+  /* Brings forward the window that shows a conversation, without opening it here when none does. */
+  const openElsewhere = async (target) => {
+    const source = registry.get(target.sourceId);
+    if (!source) return 'nowhere';
+    const row = { title: String(target.title || ''), cwd: String(target.cwd || '') };
+    try {
+      if (typeof sources.get(source, 'open') === 'function') return await sources.call(source, 'open', [target.sessionId, row], 'nowhere');
+      return await opener.open(Object.assign({}, target, row));
+    } catch (e) { say('open: ' + ((e && e.message) || e)); return 'nowhere'; }
+  };
+  const sessionList = startSessionList({ vscode, context, registry, say, trusted, shared, planOf, openElsewhere }, opts.sessionList || {});
+  keep(sessionList);
+
   let attentionLists = [];
   const listAll = async (entry, fallback) => {
     if (typeof sources.get(entry.source, 'listAllConversations') !== 'function') return fallback;
@@ -834,8 +849,9 @@ function create(host, opts = {}) {
       } catch (e) { say('work plan watcher not available: ' + ((e && e.message) || e)); }
     }
     changed({ added: id, entry });
+    sessionList.attach(entry);
   };
-  const detach = (entry) => changed({ removed: entry.id, entry });
+  const detach = (entry) => { changed({ removed: entry.id, entry }); sessionList.detach(entry); };
 
   /* ── Commands, called through src/host.js ── */
   /* The two ids of a plan bar command's argument, or null when either is unusable. */
@@ -953,8 +969,10 @@ function create(host, opts = {}) {
       `In front: ${focus.sourceId ? `${focus.sourceId} ${focus.sessionId || '(no session yet)'}` : 'nothing'}`,
       ...registry.list().map((e) => `Source ${e.id}: ${sources.labelOf(e.source)}, from ${sources.extensionOf(e.source) || 'an unnamed extension'}, `
         + `plans in ${sources.planDirOf(e.source) || '(none given)'}`),
+      ...sessionList.statusLines(),
     ],
   };
+  Object.assign(commands, sessionList.commands);
 
   /* ── Trust, settings, folders, the tick ── */
   if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
@@ -994,6 +1012,8 @@ function create(host, opts = {}) {
     /* Whether this window tells the user when a conversation starts to wait. While it does, a source can leave out its
        agent's own notice of the wait. */
     announcesWaits() { const s = notifySettings(); return !closing && !!active && trusted() && s.enabled && s.waiting; },
+    /* The session list, for the interface sources are given (src/host.js). */
+    sessionList: sessionList.list,
     /* For tests. */
     _parts: { workplan, view, conversationsTree, conversationsView, statusEntry, needs, opener, answerView, focus, courier: () => courier,
       deliveries: () => deliveries.size,

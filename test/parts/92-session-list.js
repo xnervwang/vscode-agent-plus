@@ -14,7 +14,7 @@ const path = require('path');
 
 const DAY = 24 * 3600e3;
 
-module.exports = async ({ eq, tmp, root }) => {
+module.exports = async ({ eq, tmp, root, wait }) => {
   const fake = require(path.join(root, 'test', 'fake-vscode.js'));
   const L = require(path.join(root, 'src', 'session-list.js'));
   const now0 = 400 * DAY;
@@ -26,7 +26,8 @@ module.exports = async ({ eq, tmp, root }) => {
     const { vscode, control } = fake.create({ trusted });
     vscode.workspace.workspaceFolders = [{ uri: vscode.Uri.file(folder) }];
     const entries = [];
-    const registry = { entries, get: (id) => entries.find((e) => e.id === id) };
+    /* As src/sources.js's Registry: get() gives the source, entry() the entry. */
+    const registry = { entries, get: (id) => (entries.find((e) => e.id === id) || {}).source || null, entry: (id) => entries.find((e) => e.id === id) || null };
     const opened = [], asks = new Set();
     const host = { vscode, registry, trusted: () => control.state.trusted, memento: fake.memento(), globalMemento: fake.memento(),
       shared: (name) => path.join(shared, name), asksOf: (sourceId, s) => asks.has(s.sessionId), open: async (t) => { opened.push(t); return 'sent'; },
@@ -270,6 +271,41 @@ module.exports = async ({ eq, tmp, root }) => {
     list.dispose(); list2.dispose();
   }
 
+  /* ── A source's note above the list, and a pass asked for at once ── */
+  {
+    const t = setup();
+    const ran = [];
+    t.vscode.commands.executeCommand = async (c, ...a) => { ran.push([c, ...a]); };
+    const ev = new fake.EventEmitter();
+    const oc = source('opencode', [], { features: ['sessions', 'sessionsNotice'] });
+    let notice = { text: 'OpenCode was not found on this machine.', actions: [{ label: 'Download OpenCode', command: 'vscode.open', arguments: ['https://example.invalid/'] }, { label: '' }] };
+    oc.sessionsNotice = () => notice;
+    oc.onDidChangeSessionsNotice = ev.event;
+    t.entries.push({ id: 'opencode', source: oc });
+    const list = L.createSessionList(t.host, { now });
+    await list.refresh();
+    eq(list.model().notices, [{ id: 'opencode', label: 'opencode', text: 'OpenCode was not found on this machine.', actions: [{ i: 0, label: 'Download OpenCode' }] }],
+      'a source with sessionsNotice has its note drawn above the list, with its buttons');
+    list.noticeAction('opencode', 0);
+    await wait(0);
+    eq(ran, [['vscode.open', 'https://example.invalid/']], 'and a button runs the command the source gave');
+    notice = null;
+    await list.refresh();
+    eq(list.model().notices, [], 'a source that has nothing to say has no note');
+    list.dispose();
+
+    const t2 = setup();
+    const codex = source('codex', [conv('old', { title: 'Old', lastActiveAt: now0 - 30 * DAY, lastReplyAt: now0 - 30 * DAY, viewedAt: now0 - 30 * DAY })]);
+    t2.entries.push({ id: 'codex', source: codex });
+    const l2 = L.createSessionList(t2.host, { now });
+    l2.store().swept(); l2.store().flush();
+    await l2.refresh();
+    t2.host.settings = () => ({ archiveAfterDays: 20 });
+    eq([(await l2.sweep()).why, (await l2.sweep({ now: true })).ran, l2.store().record('codex', 'old').archived], ['done lately', true, true],
+      'a pass asked for at once runs within the hour of the last one, as after the user changes when to archive');
+    l2.dispose();
+  }
+
   /* ── Restricted Mode ── */
   {
     const t = setup({ trusted: false });
@@ -279,9 +315,13 @@ module.exports = async ({ eq, tmp, root }) => {
     await list.refresh();
     await list.act('pin', ['["codex","a"]']);
     await list.rename('["codex","a"]', 'B');
+    list.store().archive([['codex', 'a']], true);
+    await list.act('delete', ['["codex","a"]']);
     list.store().flush();
     eq([list.model().restricted, list.store().record('codex', 'a').pinned, codex.calls.length, list.manages()], [true, false, 0, false],
       'in Restricted Mode the list is read only, sends no action, and does not archive or delete on its own');
+    await list.open('["codex","a"]');
+    eq(codex.calls, [['open', ['a'], { where: 'tab' }]], 'though it still opens a conversation, which only reads it');
     list.dispose();
   }
 

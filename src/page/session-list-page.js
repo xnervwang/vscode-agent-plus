@@ -1,0 +1,964 @@
+// BSD 3-Clause License
+// Copyright (c) 2026, Xnerv Wang
+// All rights reserved.
+
+/*
+ * Page script for the session list (src/session-list-view.js). The host posts { type: 'model' } whenever the list
+ * changes, with the model src/session-list.js builds and each agent's logo as data URIs. From the page script of Codex
+ * Plus's session list (its src/page/sessions-page.js): rows and sections are kept per key and reused, and a field is
+ * written only when its value differs, so a one-row change rewrites one row.
+ *
+ * The page lays out, from the top: the New bar (the agent to start with, then New in tab and New in sidebar), the
+ * filter chips, the search box when open, ACCOUNT & USAGE, and the model's sections. A row has the stripe at its start
+ * (open here, open somewhere else, closed here lately), the agent's logo with the status dot at its top right, the
+ * title, its marks, and the time, which the row's buttons take the place of while it is hovered.
+ *
+ * Collapsed sections, the filter, the agents hidden and the search are saved with setState, so they survive VS Code
+ * dropping the page while the view is hidden.
+ */
+(function () {
+  'use strict';
+  const host = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : { postMessage() {}, getState() { return null; }, setState() {} };
+  const root = document.getElementById('root');
+  if (!root) return;
+  const send = (msg) => { try { host.postMessage(msg); } catch (_) { /* the host is gone */ } };
+
+  const saved = host.getState() || {};
+  const ui = {
+    collapsed: Object.assign({ closed: true, archived: true }, saved.collapsed || {}),
+    filter: ['all', 'open', 'running', 'needs'].includes(saved.filter) ? saved.filter : 'all',
+    hidden: Object.assign({}, saved.hidden || {}),
+    search: typeof saved.search === 'string' ? saved.search : '',
+    searchOpen: typeof saved.search === 'string' && saved.search !== '',
+  };
+  const keep = () => { try { host.setState({ collapsed: ui.collapsed, filter: ui.filter, hidden: ui.hidden, search: ui.search }); } catch (_) { /* not kept */ } };
+
+  /* ── building blocks ── */
+  const SVG = 'http://www.w3.org/2000/svg';
+  /* Line drawings on a 16 px grid, in the manner of VS Code's own icons. */
+  const ICONS = {
+    chevron: ['M6 4l4 4-4 4'],
+    plus: ['M8 3v10', 'M3 8h10'],
+    caret: ['M5 6.5l3 3 3-3'],
+    search: ['M7 3a4 4 0 1 1 0 8a4 4 0 0 1 0-8z', 'M10 10l3.5 3.5'],
+    close: ['M4.5 4.5l7 7', 'M11.5 4.5l-7 7'],
+    check: ['M3.5 8.5l3 3 6-7'],
+    pin: ['M9.5 2.5l4 4', 'M10.5 3.5L7 7H4.5L9 11.5V9l3.5-3.5', 'M6.5 9.5L3 13'],
+    unpin: ['M9.5 2.5l4 4', 'M10.5 3.5L7 7H4.5L9 11.5V9l3.5-3.5', 'M6.5 9.5L3 13', 'M2.5 2.5l11 11'],
+    pencil: ['M10.5 2.5l3 3-7.5 7.5H3v-3z'],
+    archive: ['M2.5 3.5h11v3h-11z', 'M3.5 6.5v6h9v-6', 'M6.5 9h3'],
+    restore: ['M2.5 3.5h11v3h-11z', 'M3.5 6.5v6h9v-6', 'M8 12V8.5', 'M6.5 10l1.5-1.5 1.5 1.5'],
+    history: ['M3 8a5 5 0 1 0 1.5-3.5', 'M3 2.5V5h2.5', 'M8 5.5V8l2 1.5'],
+    folder: ['M2 4.5A1 1 0 0 1 3 3.5h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'],
+    account: ['M8 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5z', 'M3 13.5c.5-2.5 2.5-4 5-4s4.5 1.5 5 4'],
+    filter: ['M2.5 3h11L9.5 8v4.5l-3 1V8z'],
+  };
+  const icon = (name, cls = 'sl-icon') => {
+    const s = document.createElementNS(SVG, 'svg');
+    s.setAttribute('viewBox', '0 0 16 16');
+    s.setAttribute('class', cls);
+    s.setAttribute('aria-hidden', 'true');
+    for (const d of ICONS[name]) { const p = document.createElementNS(SVG, 'path'); p.setAttribute('d', d); s.appendChild(p); }
+    return s;
+  };
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const button = (cls, title, ...kids) => { const b = el('button', cls); b.type = 'button'; if (title) { b.title = title; b.setAttribute('aria-label', title); } b.append(...kids); return b; };
+  const setText = (e, text) => { if (e.textContent !== text) e.textContent = text; };
+  const themeColor = (id) => (id ? `var(--vscode-${String(id).replace(/\./g, '-')})` : '');
+  const light = () => /\bvscode-(light|high-contrast-light)\b/.test(document.body.className);
+  const logoOf = (sourceId) => { const l = model && model.logos && model.logos[sourceId]; return l ? (light() ? l.light : l.dark) || '' : ''; };
+  const labelOf = (sourceId) => { const s = model && (model.sources || []).find((x) => x.id === sourceId); return s ? s.label : sourceId; };
+  const setLogo = (img, sourceId) => { const src = logoOf(sourceId); if (img.getAttribute('src') !== src) { if (src) img.setAttribute('src', src); else img.removeAttribute('src'); } img.alt = labelOf(sourceId); };
+
+  /* ── the page's fixed parts ── */
+  const top = el('div', 'sl-top');
+  const newBar = el('div', 'sl-new');
+  const newAgent = button('sl-new-agent', 'Choose the agent of a new conversation');
+  const newLogo = el('img', 'sl-logo-img');
+  newAgent.append(newLogo, icon('caret'));
+  newAgent.dataset.tool = 'agent';
+  const newTab = button('sl-new-half', 'Start a conversation in a new editor tab', icon('plus'), el('span', '', 'New in tab'));
+  newTab.dataset.where = 'tab';
+  const newSide = button('sl-new-half', 'Start a conversation in the sidebar', icon('plus'), el('span', '', 'New in sidebar'));
+  newSide.dataset.where = 'sidebar';
+  newBar.append(newAgent, newTab, newSide);
+  const chips = el('div', 'sl-chips');
+  const CHIPS = [['all', 'All'], ['open', 'Open'], ['running', 'Running'], ['needs', 'Needs you']];
+  const chipEls = new Map(CHIPS.map(([k, label]) => {
+    const b = button('sl-chip', '', el('span', '', label), el('span', 'sl-chip-n', '0'));
+    b.dataset.chip = k;
+    chips.appendChild(b);
+    return [k, b];
+  }));
+  const searchBox = el('div', 'sl-search sl-hidden');
+  const searchInput = el('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search conversations…';
+  searchInput.setAttribute('aria-label', 'Search conversations');
+  searchInput.spellcheck = false;
+  const clearBtn = button('sl-clear', 'Clear search', icon('close'));
+  clearBtn.dataset.tool = 'clear';
+  searchBox.append(icon('search'), searchInput, clearBtn);
+  const notes = el('div', 'sl-notes');
+  top.append(newBar, chips, searchBox, notes);
+  const body = el('div', 'sl-body');
+  const nullText = el('div', 'sl-empty sl-hidden', 'No conversations yet');
+  const noneText = el('div', 'sl-empty sl-hidden', 'No conversations match');
+  const hoverBox = el('div', 'sl-hover sl-hidden');
+  root.append(top, body, nullText, noneText, hoverBox);
+
+  /* ── sections ── */
+  const SECTION_ICON = { account: 'account', closed: 'history', group: 'folder' };
+  function makeSection(key, kind) {
+    const s = el('div', 'sl-section');
+    s.dataset.key = key;
+    const head = el('div', 'sl-head');
+    head.dataset.toggle = key;
+    head.tabIndex = -1;
+    const name = el('span', 'sl-head-label');
+    const count = el('span', 'sl-head-count');
+    head.append(icon('chevron', 'sl-icon sl-chevron'));
+    if (SECTION_ICON[kind]) head.append(icon(SECTION_ICON[kind]));
+    head.append(name, count);
+    const list = el('div', 'sl-list');
+    s.append(head, list);
+    s._p = { head, name, count, list, rows: new Map() };
+    return s;
+  }
+  const account = makeSection('account', 'account');
+  account._p.name.textContent = 'Account & usage';
+  account._p.count.remove();
+  account._p.list.className = 'sl-accounts';
+  body.appendChild(account);
+  const sectionEls = new Map();
+
+  /* ── rows ── */
+  function makeRow() {
+    const r = el('div', 'sl-row');
+    r.tabIndex = -1;
+    r.draggable = true;
+    const stripe = el('span', 'sl-stripe');
+    const logo = el('span', 'sl-logo');
+    const img = el('img', 'sl-logo-img');
+    const dot = el('span', 'sl-dot');
+    logo.append(img, dot);
+    const title = el('span', 'sl-title');
+    const marks = el('span', 'sl-marks');
+    const pinned = el('span', 'sl-pinned');
+    pinned.appendChild(icon('pin'));
+    pinned.title = 'Pinned: kept from being archived or deleted on its own';
+    const meta = el('span', 'sl-meta');
+    const time = el('span', 'sl-time');
+    const acts = el('span', 'sl-actions');
+    const pin = button('sl-act', 'Pin', icon('pin'));
+    pin.dataset.act = 'pin';
+    const unpin = button('sl-act', 'Unpin', icon('unpin'));
+    unpin.dataset.act = 'unpin';
+    const rename = button('sl-act', 'Rename', icon('pencil'));
+    rename.dataset.act = 'rename';
+    const archive = button('sl-act', 'Archive', icon('archive'));
+    archive.dataset.act = 'archive';
+    const restore = button('sl-act', 'Unarchive', icon('restore'));
+    restore.dataset.act = 'unarchive';
+    acts.append(pin, unpin, rename, archive, restore);
+    meta.append(time, acts);
+    r.append(stripe, logo, title, marks, pinned, meta);
+    r._p = { stripe, img, dot, title, marks, pinned, time, pin, unpin, rename, archive, restore };
+    r._sig = '';
+    return r;
+  }
+  const STRIPE_WORDS = { here: 'Open in this window', elsewhere: 'Open somewhere else', closed: 'Closed here lately' };
+  function fillRow(r, row, place) {
+    r._row = row;
+    r._place = place;
+    const sig = JSON.stringify([row, ui.searchOpen && ui.search, logoOf(row.s), model.restricted, model.envelope]);
+    if (sig === r._sig) return;
+    r._sig = sig;
+    r.dataset.key = row.key;
+    r.dataset.dot = row.dot || 'none';
+    r.dataset.stripe = row.stripe || 'none';
+    r._p.stripe.className = `sl-stripe s-${row.stripe || 'none'}`;
+    r._p.stripe.title = STRIPE_WORDS[row.stripe] || '';
+    setLogo(r._p.img, row.s);
+    r._p.dot.className = `sl-dot d-${row.dot || 'none'}`;
+    r.classList.toggle('sl-elsewhere', !!row.elsewhere);
+    r.style.paddingLeft = row.depth ? `${8 + Math.min(row.depth, 3) * 16}px` : '';
+    if (!r._editing) markTitle(r);
+    r._p.title.style.color = themeColor(row.color);
+    const marks = [];
+    if (row.steward) marks.push(el('span', 'sl-crown', '👑'));
+    if (row.unread) { const u = el('span', 'sl-unread', model.envelope || '✉'); u.title = 'Has a reply you have not read'; marks.push(u); }
+    for (const b of row.badges || []) { const x = el('span', b.dim ? 'sl-badge sl-dim' : 'sl-badge', b.text); if (b.tooltip) x.title = b.tooltip; marks.push(x); }
+    if (row.worktree) marks.push(el('span', 'sl-badge', row.worktree));
+    if (row.processes) marks.push(el('span', 'sl-procs', `· ${row.processes} processes`));
+    r._p.marks.replaceChildren(...marks);
+    r._p.pinned.classList.toggle('sl-hidden', !row.pinned);
+    setText(r._p.time, row.time || '');
+    const ro = !!model.restricted;
+    r._p.pin.classList.toggle('sl-hidden', ro || !row.pinnable);
+    r._p.unpin.classList.toggle('sl-hidden', ro || !row.pinned);
+    r._p.rename.classList.toggle('sl-hidden', ro || !!row.archived || !row.ctx.renamable);
+    r._p.archive.classList.toggle('sl-hidden', ro || !!row.archived);
+    r._p.restore.classList.toggle('sl-hidden', ro || !row.archived);
+    if (!r._editing) r.draggable = !row.archived && !ro;
+  }
+  /* The title, with the part the search matched marked. */
+  function markTitle(r) {
+    const title = r._row.title;
+    const q = term();
+    const at = q ? title.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    const t = r._p.title;
+    if (at < 0) { if (t.childElementCount || t.textContent !== title) t.textContent = title; return; }
+    t.textContent = '';
+    t.append(title.slice(0, at), el('mark', 'sl-mark', title.slice(at, at + q.length)), title.slice(at + q.length));
+  }
+  function reconcile(list, cache, rows, place) {
+    const seen = new Set();
+    let i = 0;
+    for (const row of rows) {
+      seen.add(row.key);
+      let r = cache.get(row.key);
+      if (!r) { r = makeRow(); cache.set(row.key, r); }
+      fillRow(r, row, place);
+      const at = list.children[i];
+      if (at !== r) list.insertBefore(r, at || null);
+      i++;
+    }
+    for (const [k, r] of cache) if (!seen.has(k)) { if (r === hl) hl = null; if (r === ctxRow) ctxRow = null; r.remove(); cache.delete(k); }
+  }
+
+  /* ── the model ── */
+  let model = null;
+  let hl = null;
+  let ctxRow = null;
+  let selection = new Set();
+  let anchor = '';
+  let aimed = null;
+  let shownFront = '';
+  let pendingGroupRename = '';
+  let lastDetail = '';
+
+  function apply(next) {
+    model = next || { sections: [], counts: {}, sources: [], accounts: [], menu: [], colors: [], logos: {}, empty: true };
+    drawTop();
+    drawAccounts(model.accounts || []);
+    const keys = new Set();
+    let i = 1;
+    for (const sec of model.sections || []) {
+      keys.add(sec.key);
+      let se = sectionEls.get(sec.key);
+      if (!se) { se = makeSection(sec.key, sec.kind); sectionEls.set(sec.key, se); }
+      se._s = sec;
+      se.dataset.kind = sec.kind;
+      if (!se._p.name.isContentEditable) setText(se._p.name, sec.label);
+      se._p.head._ctx = sec.kind === 'group' ? { group: true, made: !!sec.made, first: !!sec.first, last: !!sec.last } : null;
+      se._p.head._groupId = sec.groupId || '';
+      reconcile(se._p.list, se._p.rows, sec.rows || [], sec.key);
+      const at = body.children[i];
+      if (at !== se) body.insertBefore(se, at || null);
+      i++;
+    }
+    for (const [k, se] of sectionEls) if (!keys.has(k)) { se.remove(); sectionEls.delete(k); }
+    for (const se of [account, ...sectionEls.values()]) se.classList.toggle('sl-open', !ui.collapsed[se.dataset.key]);
+    filter();
+    front();
+    selection = new Set([...selection].filter((k) => rowsOf(k).length));
+    paintSelection();
+    if (pendingGroupRename) startRenameGroup(pendingGroupRename);
+  }
+
+  function drawTop() {
+    const srcs = (model.sources || []).filter((s) => (s.create || []).length);
+    const cur = srcs.find((s) => s.id === model.newSource) || srcs[0];
+    newBar.classList.toggle('sl-hidden', !cur || !!model.restricted);
+    if (cur) {
+      setLogo(newLogo, cur.id);
+      newAgent.title = `New conversations start in ${cur.label}. Click to choose another agent`;
+      newTab.disabled = !cur.create.includes('tab');
+      newSide.disabled = !cur.create.includes('sidebar');
+      newTab.classList.toggle('sl-primary', model.newWhere !== 'sidebar' && !newTab.disabled);
+      newSide.classList.toggle('sl-primary', model.newWhere === 'sidebar' && !newSide.disabled);
+    }
+    const lines = (model.problems || []).map((p) => el('div', 'sl-note sl-warn', p.text));
+    for (const n of model.notices || []) {
+      const line = el('div', 'sl-note sl-notice');
+      const img = el('img', 'sl-logo-img');
+      setLogo(img, n.id);
+      line.append(img, el('span', 'sl-note-text', n.text));
+      for (const a of n.actions) { const b = button('sl-note-btn', '', a.label); b.dataset.notice = n.id; b.dataset.i = String(a.i); line.append(b); }
+      lines.push(line);
+    }
+    if (model.restricted) {
+      const line = el('div', 'sl-note sl-notice');
+      const b = button('sl-note-btn', '', 'Manage Workspace Trust');
+      b.dataset.tool = 'trust';
+      line.append(el('span', 'sl-note-text', 'Restricted Mode: the list shows conversations and changes nothing. Some agents start only in a trusted workspace.'), b);
+      lines.unshift(line);
+    }
+    notes.replaceChildren(...lines);
+  }
+
+  function drawAccounts(list) {
+    account.classList.toggle('sl-hidden', !list.length);
+    const sig = JSON.stringify([list, light(), Object.keys(model.logos || {}).length]);
+    if (account._sig === sig) return;
+    account._sig = sig;
+    const kv = (r) => { const d = el('div', 'sl-kv'); d.append(el('span', 'sl-kv-k', r.label), el('span', 'sl-kv-v', r.value)); if (r.tooltip) d.title = r.tooltip; return d; };
+    const parts = [];
+    for (const a of list) {
+      const block = el('div', 'sl-acct');
+      const head = el('div', 'sl-acct-head');
+      const img = el('img', 'sl-logo-img');
+      setLogo(img, a.id);
+      head.append(img, el('span', 'sl-acct-name', a.label));
+      for (const l of a.info.links || []) {
+        const b = button('sl-link', '', l.label);
+        b.dataset.link = String(l.i);
+        b.dataset.source = a.id;
+        head.append(b);
+      }
+      block.append(head);
+      const info = a.info;
+      if (info.conversation) {
+        block.append(el('div', 'sl-acct-sub', info.conversation.title ? `This conversation · ${info.conversation.title}` : 'This conversation'));
+        for (const r of info.conversation.rows) block.append(kv(r));
+      }
+      for (const r of info.rows) block.append(kv(r));
+      for (const b of info.bars) {
+        const u = el('div', 'sl-bar');
+        const h = el('div', 'sl-kv');
+        h.append(el('span', 'sl-kv-k', b.label), el('span', 'sl-kv-v', `${Math.round(b.percent)}%${b.resetsAt ? ` · ${resetText(b.resetsAt)}` : ''}`));
+        const track = el('div', 'sl-track'), fill = el('div', b.percent >= 80 ? 'sl-fill sl-high' : 'sl-fill');
+        fill.style.width = `${b.percent}%`;
+        track.appendChild(fill);
+        u.append(h, track);
+        if (b.tooltip) u.title = b.tooltip;
+        block.append(u);
+      }
+      parts.push(block);
+    }
+    account._p.list.replaceChildren(...parts);
+  }
+  const pad = (n) => String(n).padStart(2, '0');
+  function resetText(ms) {
+    const d = new Date(ms);
+    const left = ms - Date.now();
+    if (left <= 0) return 'resets now';
+    if (left < 24 * 3600e3) { const m = Math.round(left / 60e3); return `resets ${m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`}`; }
+    return `resets ${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  /* The conversation in front is drawn as the current one, and scrolled to once. */
+  function front() {
+    const k = (model && model.front) || '';
+    for (const r of root.querySelectorAll('.sl-row.sl-current')) if (r.dataset.key !== k) r.classList.remove('sl-current');
+    if (!k) { shownFront = ''; return; }
+    const rs = rowsOf(k).filter((r) => r._place !== 'closed');
+    for (const r of rs) r.classList.add('sl-current');
+    if (k === shownFront) return;
+    shownFront = k;
+    const r = rs.find(onScreen);
+    if (r) r.scrollIntoView({ block: 'nearest' });
+  }
+
+  function rowsOf(k) {
+    const out = [];
+    for (const se of sectionEls.values()) if (se._p.rows.has(k)) out.push(se._p.rows.get(k));
+    return out;
+  }
+
+  /* ── filtering and searching ── */
+  const term = () => (ui.searchOpen ? ui.search.trim() : '');
+  function matches(row, q) {
+    const s = q.toLowerCase();
+    if (row.title.toLowerCase().includes(s) || (row.branch && row.branch.toLowerCase().includes(s))) return true;
+    return s.length >= 4 && !/\s/.test(s) && row.id.toLowerCase().includes(s);
+  }
+  function passes(row) {
+    if (ui.hidden[row.s]) return false;
+    if (ui.filter === 'open' && !row.here) return false;
+    if (ui.filter === 'running' && !row.runs) return false;
+    if (ui.filter === 'needs' && !row.needs) return false;
+    const q = term();
+    return !q || matches(row, q);
+  }
+  const filtering = () => !!(term() || ui.filter !== 'all' || Object.keys(ui.hidden).some((k) => ui.hidden[k]));
+  function filter() {
+    if (!model) return;
+    const on = filtering();
+    let shown = 0;
+    for (const se of sectionEls.values()) {
+      let n = 0;
+      for (const r of se._p.rows.values()) {
+        const ok = passes(r._row);
+        if (r._shown !== ok) { r._shown = ok; r.classList.toggle('sl-hidden', !ok); }
+        if (!r._editing) markTitle(r);
+        if (ok) n++;
+      }
+      if (se.dataset.key !== 'closed') shown += n;
+      setText(se._p.count, String(n));
+      const kind = se._s.kind;
+      const empty = n === 0 && (on || kind === 'closed' || kind === 'archived' || (kind === 'group' && !se._s.made) || (kind === 'ungrouped' && (model.sections || []).length > 3));
+      se.classList.toggle('sl-hidden', empty);
+      se.classList.toggle('sl-empty-group', kind === 'group' && n === 0);
+    }
+    for (const [k, b] of chipEls) {
+      b.classList.toggle('sl-on', ui.filter === k);
+      b.setAttribute('aria-pressed', ui.filter === k ? 'true' : 'false');
+      setText(b.lastChild, String((model.counts || {})[k] || 0));
+    }
+    searchBox.classList.toggle('sl-hidden', !ui.searchOpen);
+    clearBtn.classList.toggle('sl-hidden', !ui.search);
+    if (searchInput.value !== ui.search) searchInput.value = ui.search;
+    nullText.classList.toggle('sl-hidden', !model.empty || on);
+    noneText.classList.toggle('sl-hidden', !(on && shown === 0 && !model.empty));
+    wantDetail();
+  }
+
+  /* Rows on screen whose dot and unread mark the source has not read yet: the host asks it to. */
+  function wantDetail() {
+    const keys = visibleRows().filter((r) => r._row.detail === false).map((r) => r._row.key).slice(0, 200);
+    const sig = keys.join('\n');
+    if (sig === lastDetail) return;
+    lastDetail = sig;
+    if (keys.length) send({ kind: 'wantDetail', keys });
+  }
+
+  /* ── menus ── */
+  /*
+   * The page draws its menus itself, as Codex Plus's list does: VS Code's native menu can list only the commands in
+   * package.json, so it cannot offer the user's groups, the agents or a colour swatch. The model carries the items and
+   * when each is offered (menuItems in src/session-list.js).
+   */
+  const EDGE = 8;
+  const SUB_CLOSE_MS = 150;
+  let cm = null;
+  let swallowClick = false;
+  const inCtx = (t) => !!(cm && t && t.closest && t.closest('.sl-ctx'));
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  /* A when clause: `key` and `!key`, joined by &&. */
+  function holds(when, ctx) {
+    return String(when || '').split('&&').map((p) => p.trim()).filter(Boolean).every((p) => (p.charAt(0) === '!' ? !ctx[p.slice(1)] : !!ctx[p]));
+  }
+  function colorItems(keys) {
+    const of = (k) => { const r = rowsOf(k)[0]; return r ? String(r._row.color || '').replace(/^charts\./, '') : ''; };
+    const first = keys.length ? of(keys[0]) : '';
+    const current = keys.every((k) => of(k) === first) ? first : null;
+    return [{ label: 'Default', pick: '', swatch: '', checked: current === '' },
+      ...(model.colors || []).map((c, i) => ({ label: cap(c.name), pick: c.name, swatch: themeColor(c.color), checked: current === c.name, separatorBefore: i === 0 }))];
+  }
+  /* Add to Group's submenu: the groups, except one that already holds every conversation in `keys`. */
+  function groupItems(keys) {
+    const holdsAll = (g) => keys.every((k) => { const se = sectionEls.get(`group:${g.id}`); return !!se && se._p.rows.has(k); });
+    return (model.groups || []).filter((g) => !holdsAll(g)).map((g) => ({ label: g.name, pick: g.id }));
+  }
+  const agentItems = () => (model.sources || []).filter((s) => (s.create || []).length).map((s) => ({ label: s.label, pick: s.id, logo: s.id }));
+  function itemsFor(ctx, keys) {
+    const out = [];
+    let last = '';
+    for (const m of model.menu || []) {
+      if (!holds(m.when, ctx)) continue;
+      if (model.restricted && !['openTab', 'openSidebar', 'markUnread', 'markRead'].includes(m.name)) continue;
+      const sub = m.submenu === 'color' ? colorItems(keys) : m.submenu === 'group' ? groupItems(keys) : m.submenu === 'agent' ? agentItems() : null;
+      if (sub && !sub.length) continue;
+      let label = m.title;
+      if (m.rows) {
+        const n = keys.filter((k) => { const rs = rowsOf(k); return rs.length > 0 && rs.every((r) => r._row && r._row[m.rows]); }).length;
+        if (!n) continue;
+        if (n > 1) label = String(m.plural || m.title).replace('{n}', String(n));
+      }
+      out.push({ label, name: m.name, submenu: sub, separatorBefore: out.length > 0 && m.group !== last });
+      last = m.group;
+    }
+    return out;
+  }
+  function mainLeft(x, w, hasSub) {
+    const left = Math.max(EDGE, Math.min(x, window.innerWidth - w - EDGE));
+    if (!hasSub || left + w - 2 + w <= window.innerWidth - EDGE || left - w + 2 >= EDGE) return left;
+    return Math.max(EDGE, window.innerWidth - EDGE - w + 2 - w);
+  }
+  function subLeft(at, w) {
+    if (at.right - 2 + w <= window.innerWidth - EDGE) return at.right - 2;
+    if (at.left - w + 2 >= EDGE) return at.left - w + 2;
+    const right = Math.max(EDGE, window.innerWidth - w - EDGE);
+    return EDGE + w - at.left < at.right - right ? EDGE : right;
+  }
+  const fitTop = (y, h) => Math.max(EDGE, Math.min(y, window.innerHeight - h - EDGE));
+  function itemButton(it) {
+    const b = el('button', 'sl-ctx-item');
+    b.type = 'button';
+    b.setAttribute('role', it.checkbox ? 'menuitemcheckbox' : 'menuitem');
+    const label = el('span', 'sl-ctx-label');
+    if (it.checkbox) { const c = el('span', it.checked ? 'sl-check sl-checked' : 'sl-check'); c.appendChild(icon('check')); label.append(c); }
+    if (typeof it.swatch === 'string') { const s = el('span', it.swatch ? 'sl-swatch' : 'sl-swatch sl-swatch-none'); if (it.swatch) s.style.background = it.swatch; label.append(s); }
+    if (it.logo) { const img = el('img', 'sl-logo-img'); setLogo(img, it.logo); label.append(img); }
+    label.append(`${it.label}${it.checked && !it.checkbox ? ' ✓' : ''}`);
+    b.append(label);
+    if (it.submenu) { b.setAttribute('aria-haspopup', 'menu'); b.setAttribute('aria-expanded', 'false'); b.append(el('span', 'sl-ctx-chevron', '›')); }
+    return b;
+  }
+  function menuBox(items, sub) {
+    const box = el('div', sub ? 'sl-ctx sl-ctx-sub' : 'sl-ctx');
+    box.setAttribute('role', 'menu');
+    const buttons = items.map((it) => { if (it.separatorBefore) box.append(el('div', 'sl-ctx-sep')); const b = itemButton(it); box.append(b); return b; });
+    return { box, buttons };
+  }
+  const rectOf = (e) => { const b = e.getBoundingClientRect(); return { left: b.left, right: b.left + b.width, top: b.top, bottom: b.top + b.height }; };
+  /* `run(item, pick)` is what an item does. A menu given `rebuild` stays open after a pick and is drawn again from it,
+     as the agents' checkboxes are. */
+  function openCtx(x, y, items, run, { rebuild = null } = {}) {
+    closeCtx();
+    hideHover();
+    const { box, buttons } = menuBox(items, false);
+    buttons.forEach((b, i) => b.addEventListener('mouseenter', () => hoverItem(i)));
+    box.addEventListener('scroll', () => closeSub(false));
+    root.appendChild(box);
+    cm = { box, buttons, items, run, rebuild, back: document.activeElement || null, sub: null, subButtons: [], subAt: -1, timer: 0, x, y };
+    box.style.left = `${mainLeft(x, box.offsetWidth, items.some((it) => it.submenu))}px`;
+    box.style.top = `${fitTop(y, box.offsetHeight)}px`;
+    if (buttons[0]) buttons[0].focus();
+  }
+  const stopTimer = () => { if (cm && cm.timer) { clearTimeout(cm.timer); cm.timer = 0; } };
+  function hoverItem(i) {
+    if (!cm) return;
+    if (cm.items[i].submenu) { openSub(i, false); return; }
+    if (!cm.sub) return;
+    stopTimer();
+    cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
+  }
+  function openSub(i, focus) {
+    stopTimer();
+    if (cm.subAt !== i) {
+      closeSub(false);
+      const parent = cm.buttons[i];
+      const { box, buttons } = menuBox(cm.items[i].submenu, true);
+      box.addEventListener('mouseenter', stopTimer);
+      root.appendChild(box);
+      parent.classList.add('sl-ctx-open');
+      parent.setAttribute('aria-expanded', 'true');
+      Object.assign(cm, { sub: box, subButtons: buttons, subAt: i });
+      const at = rectOf(parent);
+      box.style.left = `${subLeft(at, box.offsetWidth)}px`;
+      box.style.top = `${fitTop(at.top - 3, box.offsetHeight)}px`;
+    }
+    if (focus && cm.subButtons[0]) cm.subButtons[0].focus();
+  }
+  function closeSub(focusParent) {
+    stopTimer();
+    if (!cm || !cm.sub) return;
+    const parent = cm.buttons[cm.subAt];
+    cm.sub.remove();
+    Object.assign(cm, { sub: null, subButtons: [], subAt: -1 });
+    parent.classList.remove('sl-ctx-open');
+    parent.setAttribute('aria-expanded', 'false');
+    if (focusParent) parent.focus();
+  }
+  function closeCtx() {
+    if (!cm) return;
+    const was = cm;
+    stopTimer();
+    const a = document.activeElement;
+    const had = !a || a === document.body || was.box.contains(a) || (!!was.sub && was.sub.contains(a));
+    if (was.sub) was.sub.remove();
+    was.box.remove();
+    cm = null;
+    if (had && was.back && was.back.isConnected) was.back.focus({ preventScroll: true });
+    letGoAim();
+  }
+  function pressItem(b) {
+    if (!cm) return;
+    const j = cm.subButtons.indexOf(b);
+    const i = j >= 0 ? cm.subAt : cm.buttons.indexOf(b);
+    const it = cm.items[i];
+    if (!it) return;
+    if (j < 0 && it.submenu) { openSub(i, true); return; }
+    const run = cm.run, pick = j >= 0 ? it.submenu[j].pick : undefined;
+    if (cm.rebuild) {
+      run(it, pick);
+      const { x, y, rebuild, back } = cm;
+      openCtx(x, y, rebuild(), run, { rebuild });
+      cm.back = back;
+      if (cm.buttons[i]) cm.buttons[i].focus();
+      return;
+    }
+    closeCtx();
+    run(it, pick);
+  }
+  function ctxKey(e) {
+    const inSub = !!cm.sub && cm.sub.contains(e.target);
+    const list = inSub ? cm.subButtons : cm.buttons;
+    const b = e.target.closest('.sl-ctx-item');
+    const at = b ? list.indexOf(b) : -1;
+    const k = e.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') {
+      if (!inSub) closeSub(false);
+      const n = list.length, down = k === 'ArrowDown';
+      const next = list[at < 0 ? (down ? 0 : n - 1) : (at + (down ? 1 : n - 1)) % n];
+      if (next) next.focus();
+    } else if (k === 'ArrowRight') {
+      if (!inSub && at >= 0 && cm.items[at].submenu) openSub(at, true);
+    } else if (k === 'ArrowLeft') {
+      if (inSub) closeSub(true);
+    } else if (k === 'Enter' || k === ' ') {
+      if (b) pressItem(b);
+    } else if (k === 'Escape') {
+      if (cm.sub) closeSub(inSub); else closeCtx();
+    } else if (k !== 'Tab') return;
+    e.preventDefault();
+  }
+  /* The rows a row's menu acts on: the selection when the row is in it, else the row alone. */
+  const keysFor = (r) => (selection.has(r._row.key) ? [...selection] : [r._row.key]);
+  function openRowMenu(r, e) {
+    if (!model || !r._row || r._editing) return false;
+    const keys = keysFor(r);
+    const items = itemsFor(r._row.ctx || {}, keys);
+    if (!items.length) return false;
+    const at = rectOf(r);
+    const pointer = !!e && typeof e.clientX === 'number' && !!(e.clientX || e.clientY);
+    openCtx(pointer ? e.clientX : at.left + 8, pointer ? e.clientY : at.bottom, items, (it, pick) => {
+      if (it.name === 'rename') startRename(r);
+      else send({ kind: 'act', name: it.name, keys, pick });
+    });
+    return true;
+  }
+  function openGroupMenu(head, e) {
+    if (!model || !head._ctx || head.querySelector('.sl-editing')) return false;
+    const items = itemsFor(head._ctx, []);
+    if (!items.length) return false;
+    const at = rectOf(head);
+    const pointer = !!e && typeof e.clientX === 'number' && !!(e.clientX || e.clientY);
+    const groupId = head._groupId;
+    openCtx(pointer ? e.clientX : at.left + 8, pointer ? e.clientY : at.bottom, items, (it, pick) => {
+      if (it.name === 'renameGroup') startRenameGroup(groupId);
+      else send({ kind: 'groupAct', name: it.name, groupId, pick });
+    });
+    return true;
+  }
+  /* The New bar's agent menu. */
+  function openAgentMenu() {
+    const srcs = (model.sources || []).filter((s) => (s.create || []).length);
+    const items = srcs.map((s) => ({ label: s.label, pick: s.id, logo: s.id, checked: s.id === model.newSource || (!model.newSource && s === srcs[0]) }));
+    const at = rectOf(newAgent);
+    openCtx(at.left, at.bottom + 2, items, (it) => send({ kind: 'newSource', sourceId: it.pick, where: model.newWhere }));
+  }
+  /* Which agents' conversations the list shows: the filter tool in the view's title bar. */
+  function openSourceMenu() {
+    const items = () => (model.sources || []).map((s) => ({ label: s.label, pick: s.id, logo: s.id, checkbox: true, checked: !ui.hidden[s.id] }));
+    const list = items();
+    if (!list.length) return;
+    openCtx(root.clientWidth - 8, 4, list, (it) => { if (ui.hidden[it.pick]) delete ui.hidden[it.pick]; else ui.hidden[it.pick] = true; keep(); filter(); }, { rebuild: items });
+  }
+  function aimAt(r, pointer) {
+    ctxRow = r;
+    aimed = { row: r, alone: !selection.has(r._row.key), pointer: !!pointer };
+    if (aimed.alone) { anchor = r._row.key; select([r._row.key]); }
+    highlight(r, false);
+  }
+  function letGoAim() {
+    const a = aimed;
+    aimed = null;
+    if (!a) return;
+    if (a.alone && selection.size === 1 && selection.has(a.row._row.key)) select([]);
+    if (a.pointer && hl === a.row) highlight(null);
+  }
+
+  /* ── selection ── */
+  const onScreen = (r) => !r.closest('.sl-hidden, .sl-section:not(.sl-open)');
+  const visibleRows = () => [...root.querySelectorAll('.sl-row')].filter(onScreen);
+  function paintSelection() {
+    for (const r of root.querySelectorAll('.sl-row.sl-selected')) if (!selection.has(r.dataset.key)) r.classList.remove('sl-selected');
+    for (const k of selection) for (const r of rowsOf(k)) r.classList.add('sl-selected');
+  }
+  function select(keys) {
+    selection = new Set(keys);
+    paintSelection();
+    send({ kind: 'select', keys: [...selection] });
+  }
+  function highlight(r, scroll = true) {
+    if (hl && hl !== r) hl.classList.remove('sl-hl');
+    hl = r || null;
+    if (hl) { hl.classList.add('sl-hl'); if (scroll) hl.scrollIntoView({ block: 'nearest' }); }
+  }
+  const openRow = (r) => { if (r && r._row) send({ kind: 'open', key: r._row.key }); };
+
+  /* ── editing a title or a group's name where it is drawn ── */
+  function editText(span, was, done) {
+    span.textContent = was;
+    span.contentEditable = 'true';
+    span.classList.add('sl-editing');
+    span.focus();
+    const range = document.createRange();
+    range.selectNodeContents(span);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    let over = false;
+    const finish = (commit) => {
+      if (over) return;
+      over = true;
+      span.removeEventListener('keydown', onKey);
+      span.removeEventListener('blur', onBlur);
+      const text = span.textContent.replace(/\s+/g, ' ').trim();
+      span.contentEditable = 'false';
+      span.classList.remove('sl-editing');
+      span.scrollLeft = 0;
+      done(commit && text && text !== was ? text : '');
+    };
+    const onKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); root.focus(); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); root.focus(); }
+      e.stopPropagation();
+    };
+    const onBlur = () => finish(true);
+    span.addEventListener('keydown', onKey);
+    span.addEventListener('blur', onBlur);
+  }
+  function rowFor(k) {
+    if (ctxRow && ctxRow.isConnected && ctxRow._row.key === k) return ctxRow;
+    const all = rowsOf(k).filter((r) => r._place !== 'closed');
+    return all.find(onScreen) || all[0] || null;
+  }
+  function startRename(r) {
+    if (!r || r._editing || r._row.archived || model.restricted) return;
+    const k = r._row.key;
+    expand(r);
+    r._editing = true;
+    r.draggable = false;
+    hideHover();
+    editText(r._p.title, r._row.title, (title) => {
+      r._editing = false;
+      r.draggable = !r._row.archived;
+      if (title) { r._row = Object.assign({}, r._row, { title }); send({ kind: 'rename', key: k, title }); }
+      markTitle(r);
+    });
+  }
+  function startRenameGroup(groupId) {
+    const se = sectionEls.get(`group:${groupId}`);
+    if (!se) { pendingGroupRename = groupId; return; }
+    pendingGroupRename = '';
+    if (se._p.name.isContentEditable) return;
+    se.classList.remove('sl-hidden');
+    se._p.head.scrollIntoView({ block: 'nearest' });
+    editText(se._p.name, se._s.label, (name) => {
+      se._p.name.textContent = name || se._s.label;
+      if (name) send({ kind: 'renameGroup', groupId, name });
+    });
+  }
+  function expand(r) {
+    const s = r.closest('.sl-section');
+    if (s && !s.classList.contains('sl-open')) toggle(s.dataset.key);
+  }
+  function toggle(key) {
+    ui.collapsed[key] = !ui.collapsed[key];
+    keep();
+    const s = key === 'account' ? account : sectionEls.get(key);
+    if (s) s.classList.toggle('sl-open', !ui.collapsed[key]);
+    wantDetail();
+  }
+  function openSearch() {
+    ui.searchOpen = !ui.searchOpen;
+    if (!ui.searchOpen) ui.search = '';
+    keep();
+    filter();
+    if (ui.searchOpen) searchInput.focus();
+  }
+
+  /* ── the hover box: where the conversation is, what it is doing, its dates and id ── */
+  const HOVER_MS = 600;
+  let hoverTimer = 0, hoverRow = null;
+  function hideHover() {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = 0; }
+    hoverRow = null;
+    hoverBox.classList.add('sl-hidden');
+  }
+  function showHover(r) {
+    hideHover();
+    hoverRow = r;
+    hoverTimer = setTimeout(() => {
+      hoverTimer = 0;
+      if (!r.isConnected || hoverRow !== r || !r._row || cm) return;
+      hoverBox.textContent = r._row.hover || r._row.title;
+      hoverBox.classList.remove('sl-hidden');
+      const b = r.getBoundingClientRect();
+      const w = hoverBox.offsetWidth, h = hoverBox.offsetHeight;
+      hoverBox.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, b.left + 24)))}px`;
+      hoverBox.style.top = `${Math.round(b.bottom + 4 + h <= window.innerHeight - 8 ? b.bottom + 4 : Math.max(8, b.top - h - 4))}px`;
+    }, HOVER_MS);
+  }
+
+  /* ── events ── */
+  root.addEventListener('click', (e) => {
+    const t = e.target;
+    if (swallowClick) { swallowClick = false; e.preventDefault(); return; }
+    const ctxItem = t.closest('.sl-ctx-item');
+    if (ctxItem) { pressItem(ctxItem); return; }
+    if (t.closest('.sl-ctx')) return;
+    const act = t.closest('.sl-act');
+    if (act) {
+      e.stopPropagation();
+      const r = act.closest('.sl-row');
+      if (!r || !r._row) return;
+      if (act.dataset.act === 'rename') startRename(r);
+      else send({ kind: 'act', name: act.dataset.act, keys: [r._row.key] });
+      return;
+    }
+    const nb = t.closest('[data-notice]');
+    if (nb) { send({ kind: 'noticeAction', sourceId: nb.dataset.notice, i: Number(nb.dataset.i) }); return; }
+    if (t.closest('[data-tool="trust"]')) { send({ kind: 'trust' }); return; }
+    const link = t.closest('[data-link]');
+    if (link) { send({ kind: 'accountLink', sourceId: link.dataset.source, i: Number(link.dataset.link) }); return; }
+    if (t.closest('[data-tool="agent"]')) { openAgentMenu(); return; }
+    const half = t.closest('[data-where]');
+    if (half && !half.disabled) { send({ kind: 'create', sourceId: model.newSource, where: half.dataset.where }); return; }
+    const chip = t.closest('[data-chip]');
+    if (chip) { const k = chip.dataset.chip; ui.filter = ui.filter === k && k !== 'all' ? 'all' : k; keep(); filter(); return; }
+    if (t.closest('[data-tool="clear"]')) { ui.search = ''; keep(); filter(); searchInput.focus(); return; }
+    const head = t.closest('[data-toggle]');
+    if (head && !t.closest('.sl-editing')) { toggle(head.dataset.toggle); return; }
+    const r = t.closest('.sl-row');
+    if (!r || r._editing) return;
+    const k = r._row.key;
+    if (e.ctrlKey || e.metaKey) {
+      const next = new Set(selection);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      anchor = k;
+      select([...next]);
+      highlight(r);
+      return;
+    }
+    if (e.shiftKey && anchor) {
+      const list = visibleRows();
+      const a = list.findIndex((x) => x._row.key === anchor), b = list.indexOf(r);
+      if (a >= 0 && b >= 0) { select([...new Set(list.slice(Math.min(a, b), Math.max(a, b) + 1).map((x) => x._row.key))]); highlight(r); return; }
+    }
+    anchor = k;
+    select([]);
+    highlight(null);
+    openRow(r);
+  });
+  /* A right-click on a row or a group header opens the page's menu and cancels the event, which VS Code would otherwise
+     answer with its own menu. */
+  root.addEventListener('contextmenu', (e) => {
+    hideHover();
+    if (inCtx(e.target)) { e.preventDefault(); return; }
+    closeCtx();
+    const r = e.target.closest('.sl-row');
+    ctxRow = r || null;
+    if (r) { aimAt(r, true); if (openRowMenu(r, e)) e.preventDefault(); else letGoAim(); return; }
+    const head = e.target.closest('.sl-head');
+    if (head && openGroupMenu(head, e)) e.preventDefault();
+  });
+  root.addEventListener('mousedown', (e) => {
+    swallowClick = false;
+    if (cm && !inCtx(e.target)) { swallowClick = e.button === 0; closeCtx(); }
+    hideHover();
+  });
+  root.addEventListener('wheel', (e) => { if (cm && (e.deltaX || e.deltaY) && !inCtx(e.target)) closeCtx(); }, { passive: true });
+  root.addEventListener('mouseover', (e) => {
+    const r = e.target.closest('.sl-row');
+    if (r && r !== hoverRow && !r._editing) showHover(r);
+    else if (!r && hoverRow) hideHover();
+  });
+  root.addEventListener('mouseleave', hideHover);
+  root.addEventListener('scroll', () => { hideHover(); closeCtx(); }, { passive: true });
+
+  searchInput.addEventListener('input', () => { ui.search = searchInput.value; keep(); filter(); });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (ui.search) ui.search = ''; else ui.searchOpen = false; keep(); filter(); root.focus(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); root.focus(); highlight(visibleRows()[0]); }
+    else if (e.key === 'Enter') { e.preventDefault(); const first = hl || visibleRows().find((r) => r._place !== 'closed'); if (first) openRow(first); }
+  });
+
+  root.addEventListener('keydown', (e) => {
+    if (e.target === searchInput || e.target.isContentEditable) return;
+    if (inCtx(e.target)) { ctxKey(e); return; }
+    if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      const r = (e.target.closest && e.target.closest('.sl-row')) || hl;
+      if (r && r._row && onScreen(r)) { e.preventDefault(); closeCtx(); aimAt(r); if (!openRowMenu(r, null)) letGoAim(); }
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const list = visibleRows();
+      if (!list.length) return;
+      const at = hl ? list.indexOf(hl) : -1;
+      highlight(list[e.key === 'ArrowDown' ? Math.min(list.length - 1, at + 1) : Math.max(0, at < 0 ? 0 : at - 1)]);
+      return;
+    }
+    if (e.key === 'Enter' && hl) { e.preventDefault(); openRow(hl); return; }
+    if (e.key === 'F2' && hl) { e.preventDefault(); startRename(hl); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCtx();
+      if (ui.search) { ui.search = ''; keep(); filter(); } else if (selection.size) select([]); else highlight(null);
+      return;
+    }
+    /* Typing in the list starts a search, as in Claude Code's list. */
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && e.key !== ' ') {
+      ui.searchOpen = true;
+      ui.search += e.key;
+      keep();
+      filter();
+      searchInput.focus();
+      e.preventDefault();
+    }
+  });
+
+  /* ── dragging rows onto a group, or onto Ungrouped ── */
+  const DRAG = 'application/x-agent-plus-sessions';
+  let dragging = null, dragImage = null;
+  const dropImage = () => { if (dragImage) { dragImage.remove(); dragImage = null; } };
+  root.addEventListener('dragstart', (e) => {
+    const r = e.target.closest && e.target.closest('.sl-row');
+    if (!r || r._editing || r._row.archived || model.restricted) return;
+    hideHover();
+    const keys = (selection.has(r._row.key) ? [...selection] : [r._row.key]).filter((k) => !rowsOf(k).some((x) => x._row && x._row.archived));
+    dragging = keys;
+    e.dataTransfer.setData(DRAG, JSON.stringify(keys));
+    e.dataTransfer.effectAllowed = 'move';
+    dropImage();
+    dragImage = el('div', 'sl-drag', keys.length === 1 ? r._row.title : `${keys.length} conversations`);
+    root.appendChild(dragImage);
+    if (typeof e.dataTransfer.setDragImage === 'function') e.dataTransfer.setDragImage(dragImage, -12, -12);
+  });
+  root.addEventListener('dragend', () => { dragging = null; dropImage(); for (const h of root.querySelectorAll('.sl-drop')) h.classList.remove('sl-drop'); });
+  const target = (e) => {
+    const h = e.target.closest && e.target.closest('.sl-head');
+    const se = h && sectionEls.get(h.dataset.toggle);
+    return se && (se._s.kind === 'group' || se._s.kind === 'ungrouped') ? h : null;
+  };
+  root.addEventListener('dragover', (e) => {
+    const h = target(e);
+    if (!h || !dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    h.classList.add('sl-drop');
+  });
+  root.addEventListener('dragleave', (e) => { const h = target(e); if (h && !h.contains(e.relatedTarget)) h.classList.remove('sl-drop'); });
+  root.addEventListener('drop', (e) => {
+    const h = target(e);
+    if (!h) return;
+    e.preventDefault();
+    h.classList.remove('sl-drop');
+    let keys = dragging;
+    try { keys = JSON.parse(e.dataTransfer.getData(DRAG) || 'null') || keys; } catch (_) { /* the drag's own list */ }
+    dragging = null;
+    if (Array.isArray(keys) && keys.length) send({ kind: 'move', keys, section: h.dataset.toggle });
+  });
+
+  window.addEventListener('message', (e) => {
+    const msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'model') apply(msg.model);
+    else if (msg.type === 'search') openSearch();
+    else if (msg.type === 'filter') { if (cm) closeCtx(); else openSourceMenu(); }
+    else if (msg.type === 'startRename' && typeof msg.key === 'string') startRename(rowFor(msg.key));
+    else if (msg.type === 'startRenameGroup' && typeof msg.groupId === 'string') startRenameGroup(msg.groupId);
+  });
+  /* VS Code changes the body's theme class when the theme changes; the logos have a light and a dark form. */
+  new MutationObserver(() => { if (model) { account._sig = ''; apply(model); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('blur', () => { hideHover(); closeCtx(); highlight(null); });
+  window.addEventListener('resize', closeCtx);
+  send({ kind: 'ready' });
+}());

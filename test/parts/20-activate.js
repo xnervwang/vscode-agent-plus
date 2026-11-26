@@ -45,7 +45,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const b = boot(root, tmp, { views: false });
     const api = b.api;
     eq([api.family, api.protocol, api.accepts, api.features, api.version, Object.isFrozen(api)],
-      ['agent-plus', 1, [1], ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList', 'prefill'], require(path.join(root, 'package.json')).version, true], 'the interface: family, protocol 1, accepted majors, features, version');
+      ['agent-plus', 1, [1], ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList', 'prefill', 'sessionList'], require(path.join(root, 'package.json')).version, true], 'the interface: family, protocol 1, accepted majors, features, version');
     const noViews = await api.deliver({ sourceId: 'codex', sessionId: 'S', text: 'hi' });
     eq([typeof api.deliver, typeof api.planPathOf, noViews.outcome, Object.isFrozen(noViews)], ['function', 'function', 'notReceived', true],
       'deliver() and planPathOf() are on it; with no views built, deliver() resolves to a frozen notReceived');

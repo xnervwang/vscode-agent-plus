@@ -44,7 +44,8 @@ const NOTICE_DELAY_MS = 4000;
    once those exist. */
 const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
   'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit', 'chooseTokenMode', 'openAttention',
-  'showAttention', 'showWorkPlanOf', 'answerQuestionOf', 'writeAboutRow'];
+  'showAttention', 'showWorkPlanOf', 'answerQuestionOf', 'writeAboutRow', 'searchSessions', 'filterSessions', 'newSessionGroup',
+  'reopenClosedConversation'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {
@@ -166,6 +167,15 @@ function start(context, log, opts = {}) {
     if (Array.isArray(disposables)) disposables.push(sub);
     return sub;
   };
+  /* onDidChangeSessionDeletionDue: the session list's, once the views are built (src/session-list.js). */
+  const dueChanges = sources.emitter();
+  const listenDeletionDue = (listener, thisArgs, disposables) => {
+    if (typeof listener !== 'function') throw new TypeError('a listener is a function');
+    const d = dueChanges.event(listener, thisArgs);
+    const sub = disposable(() => d.dispose());
+    if (Array.isArray(disposables)) disposables.push(sub);
+    return sub;
+  };
   /* Null in Restricted Mode, where deliver() could not hand anything to a steward either. */
   const stewardQuery = (a, b) => {
     const one = a && typeof a === 'object';
@@ -216,6 +226,9 @@ function start(context, log, opts = {}) {
     if (on && !views && typeof opts.views === 'function' && !closing) {
       try { views = opts.views(host, Object.assign({ home: opts.home, limit }, opts.viewOptions)); } catch (e) { say(`the views could not be built: ${(e && e.stack) || e}`); views = null; }
       if (views) for (const entry of registry.list()) attachSafely(entry);
+      if (views && views.sessionList) {
+        try { views.sessionList.onDidChangeDeletionDue((e) => { if (!closing) dueChanges.fire(e); }); } catch (_) { /* none told */ }
+      }
     }
     if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
     if (choice) { try { choice.setActive(on); } catch (e) { say(`token mode entry: ${(e && e.message) || e}`); } }
@@ -365,7 +378,7 @@ function start(context, log, opts = {}) {
     version: core.version,
     protocol: core.protocol,
     accepts: core.accepts.slice(),
-    features: sources.FEATURES.slice(),
+    features: sources.FEATURES.concat('sessionList'),
     registerSource(source) {
       let r;
       try { r = register(source); } catch (e) { r = { accepted: false, code: sources.REFUSED.failed, reason: String((e && e.message) || e), registration: null }; }
@@ -395,6 +408,16 @@ function start(context, log, opts = {}) {
     announcesWaits() {
       try { return !closing && !!views && typeof views.announcesWaits === 'function' && views.announcesWaits() === true; } catch (_) { return false; }
     },
+    /* With 'sessionList': whether the session list archives and deletes conversations on its own in this window now. */
+    sessionListManages() {
+      try { return !closing && !!views && !!views.sessionList && views.sessionList.manages() === true; } catch (_) { return false; }
+    },
+    /* With 'sessionList': session id -> when the list deletes that conversation of `sourceId`, or null. */
+    sessionDeletionDue(sourceId) {
+      try { return views && views.sessionList ? views.sessionList.deletionDue(String(sourceId)) : Object.freeze({}); } catch (_) { return Object.freeze({}); }
+    },
+    /* With 'sessionList': vscode.Event<{ sourceId }>. */
+    onDidChangeSessionDeletionDue: listenDeletionDue,
   });
 
   /* ── Commands ── */
@@ -437,6 +460,7 @@ function start(context, log, opts = {}) {
     everyone.changes.dispose();
     summaryChanges.dispose();
     stewardChanges.dispose();
+    dueChanges.dispose();
   } });
   host.api = agentPlus;
   host.views = () => views;

@@ -1,0 +1,197 @@
+/* BSD 3-Clause License
+   Copyright (c) 2026, Xnerv Wang
+   All rights reserved. */
+
+/* Styles for the session list (src/page/session-list-page.js). Sizes follow Codex Plus's list, which follows Claude
+   Code's: 28 px rows with 6 px corners, 26 px section headers, capitals for section labels. Each section header has a
+   band of the theme's section header colour with a line above and below, so that the sections can be told apart at a
+   glance. Colours come from VS Code theme variables, except the status dots and the stripes, which keep fixed colours
+   so that the five dots look the same in every theme. */
+html, body { margin: 0; padding: 0; height: 100%; }
+body { background: var(--vscode-sideBar-background); color: var(--vscode-foreground); overflow: hidden; }
+.sl-root {
+  display: flex; flex-direction: column; height: 100%; overflow-x: hidden; overflow-y: auto; box-sizing: border-box;
+  font-family: var(--vscode-font-family); font-size: var(--vscode-font-size, 13px); outline: none; user-select: none;
+}
+.sl-hidden { display: none !important; }
+svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.sl-logo-img { width: 16px; height: 16px; flex-shrink: 0; object-fit: contain; }
+
+/* The New bar: the agent, then the two halves. */
+.sl-top { padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px; }
+.sl-new { display: flex; height: 26px; border: 1px solid var(--vscode-button-border, var(--vscode-widget-border, transparent)); border-radius: 4px; overflow: hidden; }
+.sl-new-agent, .sl-new-half {
+  display: flex; align-items: center; justify-content: center; gap: 4px; border: none; cursor: pointer; font-family: inherit; font-size: inherit;
+  background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); white-space: nowrap; min-width: 0;
+}
+.sl-new-agent { flex: none; padding: 0 4px 0 8px; border-right: 1px solid var(--vscode-sideBar-background); }
+.sl-new-agent svg.sl-icon { width: 12px; height: 12px; }
+.sl-new-half { flex: 1; padding: 0 8px; }
+.sl-new-half + .sl-new-half { border-left: 1px solid var(--vscode-sideBar-background); }
+.sl-new-half > span { overflow: hidden; text-overflow: ellipsis; }
+.sl-new-half.sl-primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.sl-new-agent:hover, .sl-new-half:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
+.sl-new-half.sl-primary:hover { background: var(--vscode-button-hoverBackground); }
+.sl-new-half:disabled { opacity: .45; cursor: default; }
+.sl-new-agent:focus-visible, .sl-new-half:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+
+/* The filter chips, with their counts. */
+.sl-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.sl-chip {
+  display: flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: .9em;
+  border: 1px solid transparent; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); opacity: .85;
+}
+.sl-chip-n { opacity: .7; font-variant-numeric: tabular-nums; }
+.sl-chip:hover { opacity: 1; }
+.sl-chip.sl-on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
+.sl-chip:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+
+.sl-search { position: relative; display: flex; }
+.sl-search svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: .6; pointer-events: none; }
+.sl-search input {
+  flex: 1; min-width: 0; box-sizing: border-box; padding: 5px 26px 5px 28px; border: 1px solid var(--vscode-input-border, transparent); border-radius: 4px;
+  font-family: inherit; font-size: inherit; background: var(--vscode-input-background); color: var(--vscode-input-foreground); outline: none;
+}
+.sl-search input:focus { border-color: var(--vscode-focusBorder); }
+.sl-search .sl-clear {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; padding: 0; display: flex; align-items: center;
+  justify-content: center; border: none; border-radius: 4px; background: none; cursor: pointer; color: var(--vscode-input-foreground);
+}
+.sl-search .sl-clear svg { position: static; transform: none; }
+.sl-notes:empty { display: none; }
+.sl-note { font-size: .9em; color: var(--vscode-descriptionForeground); padding: 2px 2px; }
+.sl-note.sl-warn { color: var(--vscode-editorWarning-foreground, var(--vscode-descriptionForeground)); }
+.sl-note.sl-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--vscode-foreground); }
+.sl-note-text { flex: 1 1 160px; min-width: 0; }
+.sl-note-btn {
+  border: none; border-radius: 3px; padding: 2px 8px; cursor: pointer; font-family: inherit; font-size: inherit;
+  background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
+}
+.sl-note-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+/* Sections. */
+.sl-section { flex: none; }
+.sl-head {
+  display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; box-sizing: border-box; cursor: pointer; outline: none;
+  background: var(--vscode-sideBarSectionHeader-background, color-mix(in srgb, var(--vscode-foreground) 6%, transparent));
+  border-top: 1px solid var(--vscode-sideBarSectionHeader-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+  color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
+}
+.sl-head:hover { background: var(--vscode-list-hoverBackground); }
+.sl-head:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.sl-head.sl-drop { background: var(--vscode-list-dropBackground); outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.sl-chevron { width: 12px; height: 12px; transition: transform .1s; }
+.sl-open > .sl-head .sl-chevron { transform: rotate(90deg); }
+.sl-head-label {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; letter-spacing: .4px;
+  font-size: .85em; font-weight: 600;
+}
+.sl-head-count { flex: none; font-size: .85em; opacity: .7; font-variant-numeric: tabular-nums; }
+.sl-list, .sl-accounts { display: none; }
+.sl-open > .sl-list { display: flex; flex-direction: column; gap: 1px; padding: 3px 4px 6px; }
+.sl-open > .sl-accounts { display: flex; flex-direction: column; gap: 10px; padding: 8px 12px 10px; }
+.sl-empty-group.sl-open > .sl-list::after { content: 'Drag conversations here'; padding: 4px 12px; opacity: .55; font-size: .9em; }
+
+/* ACCOUNT & USAGE: one block per agent. */
+.sl-acct { display: flex; flex-direction: column; gap: 3px; }
+.sl-acct-head { display: flex; align-items: center; gap: 6px; }
+.sl-acct-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-link { border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); text-decoration: underline; }
+.sl-link:hover { color: var(--vscode-textLink-activeForeground); }
+.sl-acct-sub { margin-left: 22px; font-size: .8em; text-transform: uppercase; letter-spacing: .4px; opacity: .7; }
+.sl-kv { display: flex; justify-content: space-between; gap: 12px; margin-left: 22px; }
+.sl-kv-k { opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-kv-v { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.sl-bar { display: flex; flex-direction: column; gap: 3px; }
+.sl-track { margin-left: 22px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--vscode-input-border, color-mix(in srgb, var(--vscode-foreground) 20%, transparent)); }
+.sl-fill { height: 100%; background: var(--vscode-progressBar-background); }
+.sl-fill.sl-high { background: #d97757; }
+
+/* Rows. */
+.sl-row {
+  position: relative; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 8px; box-sizing: border-box; border-radius: 6px;
+  cursor: pointer; min-width: 0; outline: none;
+}
+.sl-row:hover, .sl-row.sl-hl { background: var(--vscode-list-hoverBackground); }
+.sl-row.sl-current { background: var(--vscode-list-inactiveSelectionBackground); }
+.sl-row.sl-current .sl-title { font-weight: 600; }
+.sl-row.sl-selected {
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 55%, transparent);
+  outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder)); outline-offset: -1px;
+}
+/* The stripe at the start of a row: a solid bar for open here, an outlined one for open somewhere else, a light blue
+   one for closed here lately. */
+.sl-stripe { flex: none; width: 4px; height: 16px; border-radius: 2px; box-sizing: border-box; margin-right: 2px; }
+.sl-stripe.s-here { background: color-mix(in srgb, var(--vscode-foreground) 75%, transparent); }
+.sl-stripe.s-elsewhere { border: 1.5px solid color-mix(in srgb, var(--vscode-foreground) 75%, transparent); }
+.sl-stripe.s-closed { background: #7aa7e0; }
+.vscode-light .sl-stripe.s-closed, .vscode-high-contrast-light .sl-stripe.s-closed { background: #4f86cf; }
+.sl-logo { position: relative; flex: none; width: 16px; height: 16px; }
+.sl-dot { position: absolute; top: -3px; right: -4px; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; }
+.sl-dot.d-none { display: none; }
+.sl-dot.d-blue { background: #3b82f6; box-shadow: 0 0 0 1.5px var(--vscode-sideBar-background); }
+.sl-dot.d-red { background: #ef4444; box-shadow: 0 0 0 1.5px var(--vscode-sideBar-background); }
+.sl-dot.d-green { background: #22c55e; box-shadow: 0 0 0 1.5px var(--vscode-sideBar-background); }
+.sl-dot.d-redRing { border: 2px solid #ef4444; background: var(--vscode-sideBar-background); }
+.sl-dot.d-greenRing { border: 2px solid #22c55e; background: var(--vscode-sideBar-background); }
+.sl-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Open somewhere else: the title and logo are dimmed as if disabled; the dot is not. */
+.sl-row.sl-elsewhere .sl-title, .sl-row.sl-elsewhere .sl-logo-img, .sl-row.sl-elsewhere .sl-time { opacity: .45; }
+.sl-marks { flex: none; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sl-marks:empty { display: none; }
+.sl-crown, .sl-unread { line-height: 1; }
+.sl-badge { font-size: .8em; padding: 0 5px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+.sl-badge.sl-dim { opacity: .6; }
+.sl-procs { font-size: .85em; color: var(--vscode-errorForeground, #f14c4c); }
+.sl-pinned { flex: none; display: flex; margin-left: auto; opacity: .7; }
+.sl-pinned svg.sl-icon { width: 14px; height: 14px; }
+.sl-meta { display: grid; flex: none; place-items: center end; margin-left: auto; }
+.sl-pinned:not(.sl-hidden) + .sl-meta { margin-left: 4px; }
+.sl-time, .sl-actions { grid-area: 1 / 1; }
+.sl-time { opacity: .7; font-size: .9em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sl-actions { display: flex; gap: 1px; visibility: hidden; }
+.sl-row:hover .sl-time, .sl-row.sl-hl .sl-time { visibility: hidden; }
+.sl-row:hover .sl-actions, .sl-row.sl-hl .sl-actions { visibility: visible; }
+.sl-row:hover .sl-pinned, .sl-row.sl-hl .sl-pinned { visibility: hidden; }
+.sl-act {
+  display: flex; align-items: center; justify-content: center; padding: 2px; border: none; border-radius: 4px; background: none; cursor: pointer;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+}
+.sl-act:hover { background: var(--vscode-toolbar-hoverBackground); }
+.sl-mark { background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, .33)); color: inherit; border-radius: 2px; }
+.sl-editing { outline: 1px solid var(--vscode-focusBorder); border-radius: 3px; padding: 0 2px; min-width: 20px; cursor: text; user-select: text; text-overflow: clip; }
+.sl-drag {
+  position: fixed; top: -1000px; left: 0; max-width: 240px; padding: 2px 8px; border-radius: 6px; pointer-events: none; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground);
+}
+.sl-empty { padding: 16px; text-align: center; opacity: .65; }
+
+/* The hover box. */
+.sl-hover {
+  position: fixed; z-index: 20; max-width: min(320px, calc(100vw - 24px)); padding: 6px 8px; pointer-events: none; white-space: pre-line;
+  overflow-wrap: anywhere; line-height: 1.4; border-radius: 6px; font-size: .9em;
+  background: var(--vscode-editorHoverWidget-background, var(--vscode-menu-background)); color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, #7f7f7f66)); box-shadow: 0 2px 8px #0000003d;
+}
+
+/* The page's menus: rows, group headers, the New bar's agent, and the agents shown. */
+.sl-ctx {
+  position: fixed; z-index: 1000; min-width: 140px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 3px 0; overflow-x: hidden;
+  overflow-y: auto; background: var(--vscode-menu-background); border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, transparent));
+  border-radius: 6px; box-shadow: 0 2px 8px #00000040;
+}
+.sl-ctx-item {
+  display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; width: 100%; max-width: 360px; padding: 5px 12px;
+  overflow: hidden; white-space: nowrap; text-align: left; cursor: pointer; background: none; border: none; color: var(--vscode-menu-foreground);
+  font-family: inherit; font-size: inherit;
+}
+.sl-ctx-item:hover, .sl-ctx-item:focus, .sl-ctx-item.sl-ctx-open { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); outline: none; }
+.sl-ctx-label { display: inline-flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; }
+.sl-ctx-sep { height: 1px; margin: 3px 0; background: var(--vscode-menu-separatorBackground, var(--vscode-menu-border, #7f7f7f40)); }
+.sl-ctx-chevron { margin-left: 12px; opacity: .7; }
+.sl-check { display: inline-flex; width: 16px; height: 16px; }
+.sl-check svg { visibility: hidden; }
+.sl-check.sl-checked svg { visibility: visible; }
+.sl-swatch { flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+.sl-swatch-none { border: 1px solid currentColor; }

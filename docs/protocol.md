@@ -300,7 +300,7 @@ The session list is a webview view in an activity bar container of Agent Plus's 
 
 | Member | Meaning |
 | --- | --- |
-| `features` | `'sessions'`: the source has `listSessions`, `onDidChangeSessions`, `sessionActions` and `runSessionAction`. `'sessionImport'`: it has `importSessions`. `'sessionSeen'`: it has `noteSeen`. `'sessionClose'`: it has `onDidCloseSession`. `'accountInfo'`: it has `accountInfo` and `onDidChangeAccountInfo` |
+| `features` | `'sessions'`: the source has `listSessions`, `onDidChangeSessions`, `sessionActions` and `runSessionAction`. `'sessionImport'`: it has `importSessions`. `'sessionSeen'`: it has `noteSeen`. `'sessionClose'`: it has `onDidCloseSession`. `'accountInfo'`: it has `accountInfo` and `onDidChangeAccountInfo`. `'sessionsNotice'`: it has `sessionsNotice` and `onDidChangeSessionsNotice` |
 | `listSessions({ folders, cursor, limit })` | `Promise<{ sessions, cursor }>`: one page of this project's conversations, archived ones included, in any order. `folders` is the window's workspace folders as real paths, the first one first; the source lists the conversations it can open in this window from one of them or a folder below one (Claude Code only the first folder's, as it can open no other). `cursor` is `null` on the first call and the previous answer's `cursor` after it; an answer whose `cursor` is `null` or `''` is the last page. `limit` is the most the core wants in one answer. `sessions` is an array of Session (below) |
 | `onDidChangeSessions` | `vscode.Event<void>`: a conversation came or went, or any field of one changed. The core reads the list again within a second of the last event; firing more often than needed is harmless |
 | `sessionActions` | Frozen object, or a function returning one: what `runSessionAction` can do (Actions below). `{ open, create, rename, delete, own }`: `open` and `create` are arrays of the places it can open into, `'tab'` and `'sidebar'`; `rename` and `delete` are booleans; `own` is the source's own row actions, `[{ id, title }]`, drawn at the end of the row's menu |
@@ -312,6 +312,8 @@ The session list is a webview view in an activity bar container of Agent Plus's 
 | `onDidCloseSession` | With `'sessionClose'`. `vscode.Event<{ sessionId, where }>`, `where` being `'tab'` or `'sidebar'`: this window closed the conversation. Without it the core finds closed conversations itself, from `sessionForTab` and `shows`, and may not know where one was shown |
 | `accountInfo({ sessionId })` | With `'accountInfo'`. `null`, or the source's part of the Account & usage section (below). `sessionId` is this source's conversation in front in this window, or `''` |
 | `onDidChangeAccountInfo` | With `'accountInfo'`. `vscode.Event<void>` |
+| `sessionsNotice()` | With `'sessionsNotice'`. `null`, or `{ text, actions }`: a note the core draws above the list with the source's logo, such as why it lists nothing (its agent is not installed). `text` is at most 300 characters; `actions` is at most 3 buttons, `[{ label, command, arguments }]`, each running `command` with `arguments` |
+| `onDidChangeSessionsNotice` | With `'sessionsNotice'`. `vscode.Event<void>` |
 
 ### Session
 
@@ -389,6 +391,8 @@ The list and the core's other views draw one of five dots, or none, worked out f
 - **Deleting**: only an archived conversation that is not pinned, that no window and no other process has open, and in which nothing runs. With `agentPlus.sessions.deleteArchived` on (the default), one archived for `agentPlus.sessions.deleteAfterDays` days (90 by default) is deleted, counting from the later of when the list first saw it archived and its `lastActiveAt`. Only one window on the machine archives and deletes on its own at a time.
 - **Pinned**: kept in its section, first; never archived on its own; not deleted. Archiving a pinned conversation unpins it. One pinned and then archived by the agent's own interface stays pinned.
 - **Unread**: the core records the newest `lastReplyAt` the user has seen of each conversation; `viewedAt` counts too. It tells a source with `'sessionSeen'` (`noteSeen`).
+- **Restricted Mode**: the list still shows what the sources list, and changes nothing: no action goes to a source, nothing is archived or deleted on its own, the menus offer only opening and the read marks. A note above the list says so, with a Manage Workspace Trust button; it also says some agents start only in a trusted workspace, since an extension that does not start registers no source to explain itself.
+- **A changed rule**: changing `agentPlus.sessions.archiveAfterDays`, `deleteArchived` or `deleteAfterDays` applies it at once, rather than at the next hourly pass.
 - **Reopening**: Ctrl+Shift+T (Cmd+Shift+T) runs `agentPlus.reopenClosedConversation` while `agentPlus.lastClosedWasConversation` is set: the conversation of any source closed last in this window, at the place it was shown. A source whose agent binds the same key for its own conversations keeps that binding's condition off while `sessionListManages()` is `true`.
 
 ### What the core tells sources

@@ -24,6 +24,7 @@ const rules = require('./session-rules');
 const { createStore, projectOf, keyOf, COLORS } = require('./session-store');
 const { elsewhere: otherWindows, windowLabel } = require('./session-windows');
 const { sharedHome } = require('./files');
+const { withoutMarks } = require('./title-marks');
 /* The page code's own way of writing how long ago, so that the list writes it as the conversations' pages do. */
 const { age } = require('../shared/page/kit.js');
 
@@ -122,6 +123,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   let store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say });
   const lists = new Map();
   const listeners = new Set();
+  const dueListeners = new Set();
+  const dueSig = new Map();
   let look = { here: new Set(), front: '', where: new Map() };
   let rows = new Map();
   let modelValue = null;
@@ -169,6 +172,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const add = gone.map((k) => { const r = rows.get(k); const [s, id] = JSON.parse(k); return { k, s, id, title: r ? r.title : '', where: whereOf(k) || 'tab', at }; });
     const keep = add.concat(list.filter((c) => !gone.includes(c.k))).slice(0, CLOSED_KEEP);
     if (host.memento) Promise.resolve(host.memento.update(CLOSED_KEY, keep)).catch(() => {});
+    if (host.closed) { try { host.closed(gone); } catch (_) { /* the host's own trouble */ } }
   }
   const tellsClosings = (sourceId) => { const e = entryOf(sourceId); return !!e && sources.supports(e.source, 'sessionClose'); };
   function noteClosed(was, next) {
@@ -261,6 +265,23 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     rows = next;
   }
 
+  /* When the list will delete each conversation, by source; a change is told (onDidChangeSessionDeletionDue). */
+  function dueOf(sourceId) {
+    const s = settings();
+    const out = {};
+    for (const r of rows.values()) if (r.sourceId === sourceId) out[r.sessionId] = rules.deleteDueAt(r, { days: +s.deleteAfterDays, on: s.deleteArchived !== false });
+    return Object.freeze(out);
+  }
+  function tellDue() {
+    for (const e of entries()) {
+      const sig = JSON.stringify(dueOf(e.id));
+      if (dueSig.get(e.id) === sig) continue;
+      const had = dueSig.has(e.id);
+      dueSig.set(e.id, sig);
+      if (had) for (const fn of dueListeners) { try { fn({ sourceId: e.id }); } catch (_) { /* the listener's own trouble */ } }
+    }
+  }
+
   /* A source that keeps its own record of what was read hears what the list records (noteSeen). */
   function tellSeen(list, seen) {
     for (const e of entries()) {
@@ -298,9 +319,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     try { if (now() - fs.statSync(p).mtimeMs > SWEEP_LOCK_STALE_MS) { fs.rmdirSync(p); fs.mkdirSync(p); return () => { try { fs.rmdirSync(p); } catch (_) { /* gone */ } }; } } catch (_) { /* another took it */ }
     return null;
   }
-  async function sweep() {
+  /* `now` skips the hour since the last pass, as when the user has just changed when to archive or delete. */
+  async function sweep({ now: soon = false } = {}) {
     if (sweeping || closed || !(host.trusted ? host.trusted() : true)) return { ran: false, why: 'busy or not trusted' };
-    if (now() - store.sweepAt() < SWEEP_EVERY_MS) return { ran: false, why: 'done lately' };
+    if (!soon && now() - store.sweepAt() < SWEEP_EVERY_MS) return { ran: false, why: 'done lately' };
     const release = sweepLock();
     if (!release) return { ran: false, why: 'another window is on it' };
     sweeping = (async () => {
@@ -334,7 +356,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   /* ── actions ── */
   function runAction(e, action, ids, args) {
     const fn = sources.get(e.source, 'runSessionAction');
-    if (typeof fn !== 'function' || (host.trusted && !host.trusted())) return Promise.resolve(resultsOf(null, ids, 'Agent Plus does nothing in Restricted Mode'));
+    /* Opening only reads; every other action waits for the workspace to be trusted. */
+    if (typeof fn !== 'function' || (action !== 'open' && host.trusted && !host.trusted())) return Promise.resolve(resultsOf(null, ids, 'Agent Plus does nothing in Restricted Mode'));
     const prev = queues.get(e.id) || Promise.resolve();
     const go = prev.then(() => settle(Promise.resolve().then(() => fn.call(e.source, action, ids, args || {})), actionMs, null))
       .then((answer) => resultsOf(answer, ids, answer ? '' : 'the agent did not answer in time'));
@@ -342,7 +365,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return go;
   }
 
-  const entryOf = (sourceId) => registry.get ? registry.get(sourceId) : entries().find((e) => e.id === sourceId);
+  const entryOf = (sourceId) => entries().find((e) => e.id === sourceId) || null;
   const tell = (text) => { try { vscode.window.showInformationMessage(text); } catch (_) { /* nothing to show it in */ } };
   const warn = (text) => { try { vscode.window.showWarningMessage(text); } catch (_) { /* nothing to show it in */ } };
 
@@ -387,6 +410,12 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     }
     schedule();
     return 'done';
+  }
+
+  /* The agent and the half of the New bar picked last, without starting a conversation. */
+  function chooseNew(sourceId, where) {
+    if (!entryOf(sourceId) || !host.globalMemento) return;
+    Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { sourceId, where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => {});
   }
 
   async function rename(key, title) {
@@ -537,7 +566,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       DOT_WORDS[dot], ...where, r.processes ? `Open in ${r.processes} processes at once` : '', ...r.badges.map((b) => b.tooltip).filter(Boolean),
       ...r.hover].filter(Boolean);
     return {
-      key: r.key, s: r.sourceId, id: r.sessionId, title: r.title || '(untitled)', time: span, dot, stripe: rules.stripeOf(r),
+      key: r.key, s: r.sourceId, id: r.sessionId, title: withoutMarks(r.title) || '(untitled)', time: span, detail: r.detail, dot, stripe: rules.stripeOf(r),
       color: r.color ? `charts.${r.color === 'pink' ? 'pink' : r.color}` : '', pinned: r.pinned, unread, steward: r.steward,
       badges: r.badges, branch: r.branch, worktree: r.worktree, processes: r.processes, depth: depth || 0, hover: hover.join('\n'),
       archived: r.archived, grouped: !!(r.group && store.groupKnown(r.group) && store.groups().some((g) => g.id === r.group)),
@@ -600,6 +629,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       sections, counts: rules.counts(visible), groups: groups.map((g) => ({ id: g.id, name: g.name })), sources: srcs, accounts,
       newSource: srcs.some((x) => x.id === last.sourceId) ? last.sourceId : (srcs[0] || {}).id || '', newWhere: last.where === 'sidebar' ? 'sidebar' : 'tab',
       problems: entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), text: (lists.get(e.id) || {}).problem || '' })).filter((p) => p.text),
+      notices: entries().map((e) => { const n = noticeOf(e); return n ? Object.assign({ id: e.id, label: sources.labelOf(e.source) }, n) : null; }).filter(Boolean),
       front: look.front, restricted: !!(host.trusted && !host.trusted()), menu: menuItems(),
       colors: COLORS.map((name) => ({ name, color: `charts.${name}` })), empty: visible.length === 0,
     };
@@ -614,6 +644,31 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       links: (Array.isArray(sources.get(info, 'links')) ? sources.get(info, 'links') : []).slice(0, 3).map((l, i) => ({ i, label: str(sources.get(l, 'label'), 60) })).filter((l) => l.label),
       conversation: sources.get(info, 'conversation') ? { title: str(sources.get(sources.get(info, 'conversation'), 'title'), 120), rows: rowsOf(sources.get(sources.get(info, 'conversation'), 'rows')) } : null,
     };
+  }
+
+  /* A source's note above the list (feature 'sessionsNotice'), as { text, actions: [{ i, label }] }, or null. */
+  function rawNotice(e) {
+    const fn = sources.optional(e.source, 'sessionsNotice');
+    if (!fn) return null;
+    try { return fn(); } catch (_) { return null; }
+  }
+  function noticeOf(e) {
+    const n = rawNotice(e);
+    const text = str(sources.get(n, 'text'), 300).trim();
+    if (!text) return null;
+    const acts = sources.get(n, 'actions');
+    return { text, actions: (Array.isArray(acts) ? acts : []).slice(0, 3).map((a, i) => ({ i, label: str(sources.get(a, 'label'), 40) }))
+      .filter((a) => a.label) };
+  }
+  /* Runs one of the buttons of a source's note. */
+  function noticeAction(sourceId, i) {
+    const e = entryOf(sourceId);
+    const acts = e ? sources.get(rawNotice(e), 'actions') : null;
+    const a = Array.isArray(acts) ? acts[i] : null;
+    const command = str(sources.get(a, 'command'), 200);
+    if (!command) return;
+    const args = sources.get(a, 'arguments');
+    Promise.resolve(vscode.commands.executeCommand(command, ...(Array.isArray(args) ? args : []))).catch((err) => say(`session list: ${command}: ${(err && err.message) || err}`));
   }
 
   /* Runs one of the links of a source's Account & usage part. */
@@ -648,6 +703,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       noteClosed(was, look);
       elsewhereByKey = otherWindows(entries().map((e) => ({ sourceId: e.id, planDir: sources.planDirOf(e.source) })), { now: now() });
       build();
+      tellDue();
       markSeen();
       placeNew();
       modelValue = buildModel();
@@ -670,6 +726,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (d) subs.push(d);
     const a = sources.listen(e.source, 'onDidChangeAccountInfo', () => schedule());
     if (a) subs.push(a);
+    if (sources.supports(e.source, 'sessionsNotice')) { const n = sources.listen(e.source, 'onDidChangeSessionsNotice', () => schedule()); if (n) subs.push(n); }
     if (sources.supports(e.source, 'sessionClose')) {
       const c = sources.listen(e.source, 'onDidCloseSession', (ev) => {
         const id = sources.get(ev, 'sessionId'), where = sources.get(ev, 'where');
@@ -688,7 +745,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     schedule: () => { attach(); schedule(); },
     model: () => modelValue || buildModel(),
     onDidChange(fn) { listeners.add(fn); return { dispose: () => listeners.delete(fn) }; },
-    act, groupAct, create, rename, open: openRow, accountLink, sweep,
+    act, groupAct, create, chooseNew, rename, open: openRow, accountLink, noticeAction, sweep,
     renameGroup: (id, name) => { if (store.renameGroup(id, name)) schedule(0); },
     moveTo: (keys, groupKey) => {
       if (host.trusted && !host.trusted()) return;
@@ -708,12 +765,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     /* Rows and their keys, for the find command and the tests. */
     rows: () => [...rows.values()],
     manages: () => !closed && (host.trusted ? host.trusted() : true),
-    deletionDue(sourceId) {
-      const s = settings();
-      const out = {};
-      for (const r of rows.values()) if (r.sourceId === sourceId) out[r.sessionId] = rules.deleteDueAt(r, { days: +s.deleteAfterDays, on: s.deleteArchived !== false });
-      return Object.freeze(out);
-    },
+    deletionDue: dueOf,
+    onDidChangeDeletionDue(fn) { dueListeners.add(fn); return { dispose: () => dueListeners.delete(fn) }; },
     folderChanged() {
       const next = projectOf(folders(), workspaceFile());
       if (next.key === project.key) return;

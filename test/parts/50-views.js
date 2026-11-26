@@ -57,7 +57,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     eq(pkg.contributes.commands.map((c) => c.command).filter((c) => !control.state.handlers[c]), [], 'every command in the manifest is registered');
     eq(Object.keys(control.state.views).sort(), ['agentPlus.conversations', 'agentPlus.workPlan'], 'the two trees are created');
-    eq(Object.keys(control.state.webviews), ['agentPlus.answer'], 'and the Answer view');
+    eq(Object.keys(control.state.webviews).sort(), ['agentPlus.answer', 'agentPlus.sessions'], 'and the Answer view and the session list');
     const rc = b.api.registerSource(s.codex), rl = b.api.registerSource(s.claude);
     await wait(120);
     const conv = control.state.views['agentPlus.conversations'].provider, plan = control.state.views['agentPlus.workPlan'];
