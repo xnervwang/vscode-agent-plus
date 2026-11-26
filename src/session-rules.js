@@ -49,7 +49,7 @@ function stripeOf(row) {
    showing it. Seeing a conversation, or marking it read, clears the mark. */
 function unread(row) {
   if (!row) return false;
-  if (row.unreadMark) return true;
+  if (row.unreadMark || row.agentUnseen) return true;
   const seen = Math.max(+row.seenAt || 0, +row.viewedAt || 0);
   return +row.lastReplyAt > 0 && +row.lastReplyAt > seen;
 }

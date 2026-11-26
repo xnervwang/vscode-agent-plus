@@ -54,6 +54,10 @@
     filter: ['M2.5 3h11L9.5 8v4.5l-3 1V8z'],
     mail: ['M2.5 4h11v8h-11z', 'M2.5 4.5L8 9l5.5-4.5'],
     crown: ['M3 12.5h10', 'M3.2 11L2.5 5l3.2 2.6L8 3.5l2.3 4.1L13.5 5l-.7 6z'],
+    window: ['M5.5 2.5h8v6h-8z', 'M2.5 6.5h8v7h-8z', 'M2.5 9h8'],
+    terminal: ['M2.5 3.5h11v9h-11z', 'M5 6.5l2 1.5-2 1.5', 'M8.5 10h3'],
+    tab: ['M2.5 12.5v-8h4l1 1.5h6v6.5z'],
+    side: ['M2.5 3.5h11v9h-11z', 'M6.5 3.5v9'],
   };
   const icon = (name, cls = 'sl-icon') => {
     const s = document.createElementNS(SVG, 'svg');
@@ -79,11 +83,20 @@
   const newLogo = el('img', 'sl-logo-img');
   newAgent.append(newLogo, icon('caret'));
   newAgent.dataset.tool = 'agent';
-  const newTab = button('sl-new-half', 'Start a conversation in a new editor tab', icon('plus'), el('span', '', 'New in tab'));
+  const newTab = button('sl-new-half', 'Start a conversation in a new editor tab', icon('plus'), el('span', '', 'New in tab'), icon('tab', 'sl-icon sl-place'));
   newTab.dataset.where = 'tab';
-  const newSide = button('sl-new-half', 'Start a conversation in the sidebar', icon('plus'), el('span', '', 'New in sidebar'));
+  const newSide = button('sl-new-half', 'Start a conversation in the sidebar', icon('plus'), el('span', '', 'New in sidebar'), icon('side', 'sl-icon sl-place'));
   newSide.dataset.where = 'sidebar';
   newBar.append(newAgent, newTab, newSide);
+  /* A bar too narrow for both labels keeps the default half's and shows only where the other opens, as an icon,
+     rather than a label cut down to a letter or two. */
+  function fitNew() {
+    newBar.classList.remove('sl-tight');
+    const other = [newTab, newSide].find((b) => !b.classList.contains('sl-primary'));
+    const label = other && other.querySelector('span');
+    if (label && label.scrollWidth > label.clientWidth + 1) newBar.classList.add('sl-tight');
+  }
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => fitNew()).observe(newBar);
   const chips = el('div', 'sl-chips');
   const CHIPS = [['all', 'All'], ['open', 'Open'], ['running', 'Running'], ['needs', 'Needs you']];
   const chipEls = new Map(CHIPS.map(([k, label]) => {
@@ -150,6 +163,7 @@
     pinned.appendChild(icon('pin'));
     pinned.title = 'Pinned: kept from being archived or deleted on its own';
     const meta = el('span', 'sl-meta');
+    const away = el('span', 'sl-away sl-hidden');
     const time = el('span', 'sl-time');
     const acts = el('span', 'sl-actions');
     const pin = button('sl-act', 'Pin', icon('pin'));
@@ -163,13 +177,14 @@
     const restore = button('sl-act', 'Unarchive', icon('restore'));
     restore.dataset.act = 'unarchive';
     acts.append(pin, unpin, rename, archive, restore);
-    meta.append(time, acts);
+    meta.append(away, time, acts);
     r.append(stripe, logo, title, marks, pinned, meta);
-    r._p = { stripe, img, dot, title, marks, pinned, time, pin, unpin, rename, archive, restore };
+    r._p = { stripe, img, dot, title, marks, pinned, away, time, pin, unpin, rename, archive, restore };
     r._sig = '';
     return r;
   }
   const STRIPE_WORDS = { here: 'Open in this window', elsewhere: 'Open somewhere else', closed: 'Closed here lately' };
+  const AWAY_WORDS = { window: 'Open in another VS Code window', terminal: 'Open in a terminal or another program' };
   function fillRow(r, row, place) {
     r._row = row;
     r._place = place;
@@ -195,6 +210,12 @@
     if (row.processes) marks.push(el('span', 'sl-procs', `· ${row.processes} processes`));
     r._p.marks.replaceChildren(...marks);
     r._p.pinned.classList.toggle('sl-hidden', !row.pinned);
+    r._p.away.classList.toggle('sl-hidden', !row.away);
+    if (row.away && r._p.away.dataset.away !== row.away) {
+      r._p.away.dataset.away = row.away;
+      r._p.away.replaceChildren(icon(row.away === 'window' ? 'window' : 'terminal'));
+      r._p.away.title = AWAY_WORDS[row.away] || '';
+    }
     setText(r._p.time, row.time || '');
     const ro = !!model.restricted;
     r._p.pin.classList.toggle('sl-hidden', ro || !row.pinnable);
@@ -282,6 +303,7 @@
       newSide.disabled = !cur.create.includes('sidebar');
       newTab.classList.toggle('sl-primary', model.newWhere !== 'sidebar' && !newTab.disabled);
       newSide.classList.toggle('sl-primary', model.newWhere === 'sidebar' && !newSide.disabled);
+      fitNew();
     }
     const lines = (model.problems || []).map((p) => el('div', 'sl-note sl-warn', p.text));
     for (const n of model.notices || []) {
@@ -324,18 +346,20 @@
       block.append(head);
       const info = a.info;
       if (info.conversation) {
-        block.append(el('div', 'sl-acct-sub', info.conversation.title ? `This conversation · ${info.conversation.title}` : 'This conversation'));
+        block.append(el('div', 'sl-acct-sub', 'This conversation'));
+        if (info.conversation.title) { const t = el('div', 'sl-acct-conv', info.conversation.title); t.title = info.conversation.title; block.append(t); }
         for (const r of info.conversation.rows) block.append(kv(r));
       }
       for (const r of info.rows) block.append(kv(r));
       for (const b of info.bars) {
         const u = el('div', 'sl-bar');
         const h = el('div', 'sl-kv');
-        h.append(el('span', 'sl-kv-k', b.label), el('span', 'sl-kv-v', `${Math.round(b.percent)}%${b.resetsAt ? ` · ${resetText(b.resetsAt)}` : ''}`));
+        h.append(el('span', 'sl-kv-k', b.label), el('span', 'sl-kv-v', `${Math.round(b.percent)}%`));
         const track = el('div', 'sl-track'), fill = el('div', b.percent >= 80 ? 'sl-fill sl-high' : 'sl-fill');
         fill.style.width = `${b.percent}%`;
         track.appendChild(fill);
         u.append(h, track);
+        if (b.resetsAt) u.append(el('div', 'sl-reset', resetText(b.resetsAt)));
         if (b.tooltip) u.title = b.tooltip;
         block.append(u);
       }
@@ -483,22 +507,23 @@
     if (!hasSub || left + w - 2 + w <= window.innerWidth - EDGE || left - w + 2 >= EDGE) return left;
     return Math.max(EDGE, window.innerWidth - EDGE - w + 2 - w);
   }
-  function subLeft(at, w) {
+  /* Where a submenu goes beside its item, right or left, or null when the list is too narrow for either. */
+  function subBeside(at, w) {
     if (at.right - 2 + w <= window.innerWidth - EDGE) return at.right - 2;
     if (at.left - w + 2 >= EDGE) return at.left - w + 2;
-    const right = Math.max(EDGE, window.innerWidth - w - EDGE);
-    return EDGE + w - at.left < at.right - right ? EDGE : right;
+    return null;
   }
   const fitTop = (y, h) => Math.max(EDGE, Math.min(y, window.innerHeight - h - EDGE));
-  function itemButton(it) {
+  /* `ticks`: the menu marks a choice, so each item has a column for its tick. */
+  function itemButton(it, ticks) {
     const b = el('button', 'sl-ctx-item');
     b.type = 'button';
     b.setAttribute('role', it.checkbox ? 'menuitemcheckbox' : 'menuitem');
     const label = el('span', 'sl-ctx-label');
-    if (it.checkbox) { const c = el('span', it.checked ? 'sl-check sl-checked' : 'sl-check'); c.appendChild(icon('check')); label.append(c); }
+    if (ticks) { const c = el('span', it.checked ? 'sl-check sl-checked' : 'sl-check'); c.appendChild(icon('check')); label.append(c); }
     if (typeof it.swatch === 'string') { const s = el('span', it.swatch ? 'sl-swatch' : 'sl-swatch sl-swatch-none'); if (it.swatch) s.style.background = it.swatch; label.append(s); }
     if (it.logo) { const img = el('img', 'sl-logo-img'); setLogo(img, it.logo); label.append(img); }
-    label.append(`${it.label}${it.checked && !it.checkbox ? ' ✓' : ''}`);
+    label.append(it.label);
     b.append(label);
     if (it.submenu) { b.setAttribute('aria-haspopup', 'menu'); b.setAttribute('aria-expanded', 'false'); b.append(el('span', 'sl-ctx-chevron', '›')); }
     return b;
@@ -506,7 +531,10 @@
   function menuBox(items, sub) {
     const box = el('div', sub ? 'sl-ctx sl-ctx-sub' : 'sl-ctx');
     box.setAttribute('role', 'menu');
-    const buttons = items.map((it) => { if (it.separatorBefore) box.append(el('div', 'sl-ctx-sep')); const b = itemButton(it); box.append(b); return b; });
+    const ticks = items.some((it) => it.checkbox || it.checked);
+    const buttons = items.map((it) => { if (it.separatorBefore) box.append(el('div', 'sl-ctx-sep')); const b = itemButton(it, ticks); box.append(b); return b; });
+    /* The item under the pointer takes the focus, so that one item at a time is drawn as chosen. */
+    box.addEventListener('mouseover', (e) => { const b = e.target.closest('.sl-ctx-item'); if (b && document.activeElement !== b) b.focus({ preventScroll: true }); });
     return { box, buttons };
   }
   const rectOf = (e) => { const b = e.getBoundingClientRect(); return { left: b.left, right: b.left + b.width, top: b.top, bottom: b.top + b.height }; };
@@ -527,25 +555,46 @@
   const stopTimer = () => { if (cm && cm.timer) { clearTimeout(cm.timer); cm.timer = 0; } };
   function hoverItem(i) {
     if (!cm) return;
-    if (cm.items[i].submenu) { openSub(i, false); return; }
+    if (cm.items[i].submenu) { openSub(i, false, true); return; }
     if (!cm.sub) return;
     stopTimer();
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
-  function openSub(i, focus) {
+  /*
+   * Opens item i's submenu beside it. In a list too narrow for that, the submenu takes the menu's place instead, under a
+   * first line naming the item that goes back to the menu; it then opens only on a click or a key, since one opened by
+   * the pointer passing over the item would cover the rest of the menu.
+   */
+  function openSub(i, focus, byPointer = false) {
     stopTimer();
     if (cm.subAt !== i) {
+      if (byPointer && cm.inPlace && cm.inPlace.has(i)) { closeSub(false); return; }
       closeSub(false);
       const parent = cm.buttons[i];
       const { box, buttons } = menuBox(cm.items[i].submenu, true);
       box.addEventListener('mouseenter', stopTimer);
       root.appendChild(box);
+      const at = rectOf(parent);
+      const left = subBeside(at, box.offsetWidth);
+      if (left === null) {
+        (cm.inPlace || (cm.inPlace = new Set())).add(i);
+        if (byPointer) { box.remove(); return; }
+        const back = el('button', 'sl-ctx-item sl-ctx-back');
+        back.type = 'button';
+        back.setAttribute('role', 'menuitem');
+        back.append(el('span', 'sl-ctx-label', `‹ ${cm.items[i].label}`));
+        box.prepend(back, el('div', 'sl-ctx-sep'));
+        box.style.minWidth = `${cm.box.offsetWidth}px`;
+        box.style.left = cm.box.style.left;
+        box.style.top = `${fitTop(parseFloat(cm.box.style.top) || EDGE, box.offsetHeight)}px`;
+        cm.box.style.visibility = 'hidden';
+      } else {
+        box.style.left = `${left}px`;
+        box.style.top = `${fitTop(at.top - 3, box.offsetHeight)}px`;
+      }
       parent.classList.add('sl-ctx-open');
       parent.setAttribute('aria-expanded', 'true');
       Object.assign(cm, { sub: box, subButtons: buttons, subAt: i });
-      const at = rectOf(parent);
-      box.style.left = `${subLeft(at, box.offsetWidth)}px`;
-      box.style.top = `${fitTop(at.top - 3, box.offsetHeight)}px`;
     }
     if (focus && cm.subButtons[0]) cm.subButtons[0].focus();
   }
@@ -554,6 +603,7 @@
     if (!cm || !cm.sub) return;
     const parent = cm.buttons[cm.subAt];
     cm.sub.remove();
+    cm.box.style.visibility = '';
     Object.assign(cm, { sub: null, subButtons: [], subAt: -1 });
     parent.classList.remove('sl-ctx-open');
     parent.setAttribute('aria-expanded', 'false');
@@ -573,6 +623,7 @@
   }
   function pressItem(b) {
     if (!cm) return;
+    if (b.classList.contains('sl-ctx-back')) { closeSub(true); return; }
     const j = cm.subButtons.indexOf(b);
     const i = j >= 0 ? cm.subAt : cm.buttons.indexOf(b);
     const it = cm.items[i];
@@ -588,6 +639,7 @@
       return;
     }
     closeCtx();
+    hoverQuiet = true;
     run(it, pick);
   }
   function ctxKey(e) {
@@ -644,7 +696,7 @@
   function openAgentMenu() {
     const srcs = (model.sources || []).filter((s) => (s.create || []).length);
     const items = srcs.map((s) => ({ label: s.label, pick: s.id, logo: s.id, checked: s.id === model.newSource || (!model.newSource && s === srcs[0]) }));
-    const at = rectOf(newAgent);
+    const at = rectOf(newBar);
     openCtx(at.left, at.bottom + 2, items, (it) => send({ kind: 'newSource', sourceId: it.pick, where: model.newWhere }));
   }
   /* Which agents' conversations the list shows: the filter tool in the view's title bar. */
@@ -777,12 +829,22 @@
     hoverRow = null;
     hoverBox.classList.add('sl-hidden');
   }
+  /* After a menu's item is picked, no hover box opens until the pointer moves: the row the pointer is left on would
+     otherwise put one up, behind whatever the pick opens (a confirmation dialog). */
+  let hoverQuiet = false;
+  document.addEventListener('mousemove', (e) => {
+    if (!hoverQuiet || !(e.movementX || e.movementY)) return;
+    hoverQuiet = false;
+    const r = e.target && e.target.closest ? e.target.closest('.sl-row') : null;
+    if (r && !r._editing && !cm) showHover(r);
+  });
   function showHover(r) {
     hideHover();
+    if (hoverQuiet) return;
     hoverRow = r;
     hoverTimer = setTimeout(() => {
       hoverTimer = 0;
-      if (!r.isConnected || hoverRow !== r || !r._row || cm) return;
+      if (!r.isConnected || hoverRow !== r || !r._row || cm || !r.matches(':hover')) return;
       hoverBox.textContent = r._row.hover || r._row.title;
       hoverBox.classList.remove('sl-hidden');
       const b = r.getBoundingClientRect();

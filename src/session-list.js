@@ -38,6 +38,8 @@ const MAX_SESSIONS = 20000;
 const PAGE_MS = 10000;
 const ACTION_MS = 60000;
 const RELIST_MS = 60000;
+/* How long the conversation in front stays there before it counts as seen. */
+const SEEN_AFTER_MS = 1500;
 const SWEEP_EVERY_MS = 3600e3;
 const SWEEP_LOCK_STALE_MS = 15 * 60e3;
 const CLOSED_KEY = 'agentPlus.sessions.closed';
@@ -82,7 +84,7 @@ function sessionOf(raw) {
     createdAt: moment(g('createdAt')), viewedAt: moment(g('viewedAt')), kind,
     parentId: sources.usableId(parent) && parent !== c.sessionId ? parent : '',
     branch: str(g('branch'), 200), worktree: str(g('worktree'), 100), detail: g('detail') !== false,
-    elsewhere, processes: Number.isInteger(processes) && processes > 1 ? Math.min(processes, 99) : 0, badges,
+    elsewhere, processes: Number.isInteger(processes) && processes > 1 ? Math.min(processes, 99) : 0, badges, agentUnseen: g('unseen') === true,
     actions: (Array.isArray(g('actions')) ? g('actions') : []).filter((a) => typeof a === 'string').slice(0, 20),
     hover: lines(g('hover'), 6, 200),
   });
@@ -302,10 +304,23 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     }
   }
   /* The conversation in front has been seen. */
+  /*
+   * The conversation in front is seen once it has stayed in front SEEN_AFTER_MS: a tab brought forward for a moment, as
+   * a loader does to every restored tab, or passed over on the way to another, is not read.
+   */
+  let frontKey = '', frontSince = 0, seenTimer = 0;
   function markSeen() {
-    const r = look.front && rows.get(look.front);
-    if (!r || !r.detail || !(r.lastReplyAt > r.seenAt || r.unreadMark)) return;
+    const k = look.front || '';
+    if (k !== frontKey) { frontKey = k; frontSince = now(); }
+    const r = k && rows.get(k);
+    if (!r || !r.detail || !(r.lastReplyAt > r.seenAt || r.unreadMark || r.agentUnseen)) return;
+    const wait = SEEN_AFTER_MS - (now() - frontSince);
+    if (wait > 0) {
+      if (!seenTimer) seenTimer = setTimeout(() => { seenTimer = 0; schedule(0); }, wait + 20);
+      return;
+    }
     store.seen(r.sourceId, r.sessionId, r.lastReplyAt || 0);
+    Object.assign(r, { seenAt: Math.max(+r.seenAt || 0, +r.lastReplyAt || 0), unreadMark: false, agentUnseen: false });
     tellSeen([r], true);
   }
 
@@ -577,7 +592,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (r.here) where.push(`Open in this window${look.where.get(r.key) === 'sidebar' ? ', in the sidebar' : ''}`);
     for (const x of r.elsewhere) { where.push(`${x.running ? 'Runs' : 'Open'} in ${x.label}`); for (const d of x.detail) where.push(`  ${d}`); }
     const hover = [`${sources.labelOf(e ? e.source : null)} · ${sectionLabel}`, `Session ID: ${r.sessionId}`,
-      r.createdAt || r.lastActiveAt ? `Started ${stampOf(r.createdAt)} · last active ${stampOf(r.lastActiveAt)}` : '',
+      r.createdAt ? `Started ${stampOf(r.createdAt)}` : '', r.lastActiveAt ? `Last active ${stampOf(r.lastActiveAt)}` : '',
       DOT_WORDS[dot], ...where, r.processes ? `Open in ${r.processes} processes at once` : '', ...r.badges.map((b) => b.tooltip).filter(Boolean),
       ...r.hover].filter(Boolean);
     return {
@@ -585,7 +600,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       color: THEME_COLOR[r.color] || '', pinned: r.pinned, unread, steward: r.steward,
       badges: r.badges, branch: r.branch, worktree: r.worktree, processes: r.processes, depth: depth || 0, hover: hover.join('\n'),
       archived: r.archived, grouped: !!(r.group && store.groupKnown(r.group) && store.groups().some((g) => g.id === r.group)),
-      here: r.here, elsewhere: r.elsewhere.length > 0, runs: rules.runs(r), needs: !!r.detail && rules.needsYou(r),
+      here: r.here, elsewhere: r.elsewhere.length > 0, away: awayOf(r.elsewhere), runs: rules.runs(r), needs: !!r.detail && rules.needsYou(r),
       ctx: { row: true, here: r.here, archived: r.archived, pinned: r.pinned, unread, renamable: caps.rename,
         grouped: !!r.group, canTab: caps.open.includes('tab'), canSidebar: caps.open.includes('sidebar'),
         ...Object.fromEntries(r.actions.map((a) => [`own_${a}`, true])) },
@@ -594,6 +609,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     };
   }
 
+  /* What the row's end shows for where else it is open: 'window' for another VS Code window, 'terminal' for anything
+     else (a terminal, a command-line run, a desktop app), '' for nowhere. */
+  const awayOf = (places) => (!places.length ? '' : places.some((x) => x.kind === 'vscode') ? 'window' : 'terminal');
   function stampOf(ms) {
     if (!ms) return '?';
     const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
@@ -799,7 +817,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     },
     store: () => store,
     project: () => project,
-    dispose() { closed = true; if (timer) clearTimeout(timer); for (const d of subs) { try { d.dispose(); } catch (_) { /* gone */ } } store.dispose(); },
+    dispose() { closed = true; if (timer) clearTimeout(timer); if (seenTimer) clearTimeout(seenTimer); for (const d of subs) { try { d.dispose(); } catch (_) { /* gone */ } } store.dispose(); },
   };
 }
 

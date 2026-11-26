@@ -1428,9 +1428,21 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       'Ungrouped is in order of the last message, newest first, across the agents', ungrouped);
     const chips = await sl.evaluate(() => Object.fromEntries([...document.querySelectorAll('.sl-chip')].map((c) => [c.dataset.chip, Number(c.lastChild.textContent)])));
     check(chips.needs === 3 && chips.running === 5 && chips.open === 1, 'the chips count: Needs you the blue and both red dots, Running the five running, Open the one open here', chips);
-    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted, New in sidebar), chips All, Open 1, Running 5, Needs you 3, then section bands RECENTLY CLOSED is absent, UNGROUPED and ARCHIVED (collapsed) each with a count. Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title.' },
+    const whole = await sl.evaluate(() => { const s = document.querySelector('.sl-new-half.sl-primary span'); return !!s && s.scrollWidth <= s.clientWidth + 1 && s.textContent; });
+    check(whole === 'New in tab', 'the New bar\'s default half shows its whole label', whole);
+    const heads = await sl.evaluate(() => [...document.querySelectorAll('.sl-section')].filter((x) => !x.classList.contains('sl-hidden') && x.dataset.key !== 'account')
+      .map((x) => [x.dataset.key, Number((x.querySelector('.sl-head-count') || {}).textContent), x.querySelectorAll('.sl-row').length]));
+    check(heads.length > 0 && heads.every(([, n, m]) => n === m), 'each section\'s count is the number of rows in it', heads);
+    const away = await sl.evaluate(() => [...document.querySelectorAll('.sl-row')].filter((r) => r.querySelector('.sl-away:not(.sl-hidden) svg'))
+      .map((r) => [r.querySelector('.sl-title').textContent, r.querySelector('.sl-away').dataset.away]).sort());
+    check(sameList(away.map((x) => x.join(':')), [`${SLT.other}:window`, `${SLT.ocTerm}:terminal`].sort()),
+      'a row open in another VS Code window ends in a windows icon, and one open in a terminal in a terminal icon; no other row has one', away);
+    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then section bands RECENTLY CLOSED is absent, UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title.' },
       sidebarBox());
-    await look('sessions-elsewhere', { expect: 'A close view of the list. The rows Open in another window and OpenCode in a terminal stand out as open somewhere else at a glance: an outlined stripe at the start of the row and greyed title and logo, while the other rows are not greyed. Judge whether that mark is noticeable without being told to look for it.' },
+    await exec('notifications.clearAll');
+    await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-row[data-stripe="elsewhere"]')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
+    await sleep(300);
+    await look('sessions-elsewhere', { expect: 'A close view of the list. The rows Open in another window and OpenCode in a terminal stand out as open somewhere else at a glance: an outlined stripe at the start of the row, greyed title and logo, and an icon just before the time at the right (two windows for the one in another window, a terminal for the one in a terminal), while the other rows are not greyed and have no such icon. Judge whether that mark is noticeable without being told to look for it.' },
       sidebarBox());
   });
 
@@ -1446,7 +1458,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await sleep(800);
     const fits = await sl.evaluate(() => [...document.querySelectorAll('.sl-row')].filter((r) => r.offsetParent).every((r) => r.scrollWidth <= r.clientWidth + 1));
     check(fits, 'in a narrow side bar every row still fits, its title cut short');
-    await look('sessions-narrow', { expect: 'The list in a narrow side bar, about 230 pixels: long titles end in an ellipsis, the time stays at the right, nothing overlaps, and the New bar\'s two halves stay on one line, their labels cut short if need be.' }, sidebarBox());
+    const tight = await sl.evaluate(() => { const b = document.querySelector('.sl-new'), p = b.querySelector('.sl-new-half.sl-primary span'), o = b.querySelector('.sl-new-half:not(.sl-primary) .sl-place');
+      return { tight: b.classList.contains('sl-tight'), whole: !!p && p.scrollWidth <= p.clientWidth + 1, icon: !!o && getComputedStyle(o).display !== 'none' }; });
+    check(tight.tight && tight.whole && tight.icon, 'and the New bar keeps New in tab whole, showing the other half as a side bar icon', tight);
+    await look('sessions-narrow', { expect: 'The list in a narrow side bar, about 230 pixels: long titles end in an ellipsis, the time stays at the right, nothing overlaps, and the New bar stays on one line: New in tab with its whole label, and beside it a small side bar icon in place of New in sidebar.' }, sidebarBox());
     await sideBarWidth(420);
   });
 
@@ -1457,7 +1472,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await slRowLoc(SLT.other).hover();
     const said = await until(async () => { const t = await slHover(); return /Open in the VS Code window "proj-b \[SSH: host-b\]"/.test(t) && t; }, 5000, 200);
     check(!!said && /Session ID: sl-other/.test(said) && /Ungrouped/.test(said), 'the hover box of a conversation open in another window names that window, the section and the session id', said || await slHover());
-    await look('sessions-hover', { pointer: true, expect: 'A hover box under the row Open in another window, saying Codex · Ungrouped, the session ID sl-other, when it started and was last active, and Open in the VS Code window "proj-b [SSH: host-b]".' }, sidebarBox());
+    await look('sessions-hover', { pointer: true, expect: 'A hover box next to the row Open in another window (under it, or above it when there is no room below), saying Codex · Ungrouped, the session ID sl-other, when it started and when it was last active on two lines, and Open in the VS Code window "proj-b [SSH: host-b]".' }, sidebarBox());
     await page.mouse.move(5, 5);
     await sleep(300);
     await slRowLoc(SLT.ocTerm).hover();
@@ -1484,7 +1499,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!menu && ['Open in Tab', 'Rename', 'Text Color', 'Unpin', 'New Group from Conversation', 'Mark as Unread', 'Archive'].every((x) => menu.includes(x))
       && !menu.includes('Add to Group') && !menu.includes('Delete...'),
     'a row\'s menu offers opening, renaming, a text colour, unpinning, a new group, unread and archiving; no Add to Group while there is no group, and no deleting outside Archived', menu);
-    await slItem('Text Color').hover();
+    await slItem('Text Color').click();
     await slItem('Green', true).click();
     check(!!await slWait((r) => /charts-green/.test((slFind(r, SLT.quiet) || {}).color || '')), 'Text Color colours the title');
     await slRowLoc(SLT.run).click({ button: 'right' });
@@ -1520,6 +1535,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const arch = await slWait((r) => slFind(r, SLT.quiet, 'archived') && !slFind(r, SLT.quiet, 'ungrouped'));
     check(!!arch && !slFind(arch, SLT.quiet, 'archived').pinned, 'Archive moves it to Archived and unpins it', arch && slFind(arch, SLT.quiet));
     await slOpen('Archived');
+    await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-section[data-key="archived"] .sl-row')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
+    await sleep(300);
     await look('sessions-archived', { expect: 'The ARCHIVED section expanded under Ungrouped, listing Nothing going on (green title, no pin) and Archived long ago with the dark OpenCode logo; hovering an archived row would show an Unarchive button.' }, sidebarBox());
     await slAct(SLT.quiet, 'unarchive', 'archived');
     check(!!await slWait((r) => slFind(r, SLT.quiet, 'ungrouped')), 'Unarchive puts it back in Ungrouped');
@@ -1539,7 +1556,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!made, 'and the name typed is the group\'s', made);
     slGroup = made || '';
     await slRowLoc(SLT.cc).click({ button: 'right' });
-    await slItem('Add to Group').hover();
+    await slItem('Add to Group').click();
     await slItem('Plugins', true).click();
     check(!!await slWait((r) => slFind(r, SLT.cc, slGroup)), 'Add to Group moves a conversation of any agent into it');
     await slRowLoc(SLT.perm).dragTo(slHead('Plugins'));
@@ -1548,11 +1565,29 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await slHead('Plugins').click({ button: 'right' });
     const gm = await slMenu();
     check(!!gm && ['New Conversation in This Group', 'New Group', 'Rename Group', 'Delete Group'].every((x) => gm.includes(x)), 'a group\'s menu offers a new conversation in it, a new group, renaming and deleting it', gm);
-    await slItem('New Conversation in This Group').hover();
-    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group with a right-click menu open on its header: New Conversation in This Group with a submenu listing Codex, Claude Code and OpenCode, each with its logo, then New Group, Rename Group, Move Down or Move Up where they apply, and Delete Group after a separator.' }, sidebarBox());
+    await slItem('New Conversation in This Group').click();
+    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group\'s right-click menu with its first item, New Conversation in This Group, opened, and a submenu listing Codex, Claude Code and OpenCode, each with its logo. Either the submenu is beside the menu, which shows New Group, Rename Group and Delete Group, without covering the item it belongs to; or, in a side bar too narrow for that, the submenu has taken the menu\'s place under a first line ‹ New Conversation in This Group, with nothing of the menu showing through.' }, sidebarBox());
+    const placed = await sl.evaluate(() => {
+      const sub = document.querySelector('.sl-ctx-sub'), item = document.querySelector('.sl-ctx:not(.sl-ctx-sub) .sl-ctx-open');
+      if (!sub || !item) return null;
+      const a = sub.getBoundingClientRect(), b = item.getBoundingClientRect();
+      return { inPlace: !!sub.querySelector('.sl-ctx-back'), covers: a.left < b.right - 2 && a.right > b.left + 2 && a.top < b.bottom && a.bottom > b.top };
+    });
+    if (placed && placed.inPlace) {
+      await sl.locator('.sl-ctx-back').click();
+      const backTo = await until(() => sl.evaluate(() => { const m = document.querySelector('.sl-ctx:not(.sl-ctx-sub)'); return !document.querySelector('.sl-ctx-sub') && m && m.style.visibility !== 'hidden'
+        && [...m.querySelectorAll('.sl-ctx-item')].map((b) => b.textContent.replace('›', '').trim()); }), 5000, 200);
+      check(!!backTo && ['New Group', 'Rename Group', 'Delete Group'].every((x) => backTo.includes(x)),
+        'in a side bar too narrow for a submenu beside the menu, the submenu takes the menu\'s place, and its first line goes back to the menu', backTo);
+    } else {
+      check(!!placed && !placed.covers, 'a submenu opens beside its menu, clear of the item it belongs to', placed);
+    }
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
-    await look('sessions-groups', { expect: 'Sections in this order: PLUGINS (a folder icon, count 2) holding Waits for a permission and A Claude Code conversation, UNGROUPED, then ARCHIVED; each section header is a band with a line above and below, so the sections can be told apart.' }, sidebarBox());
+    await page.mouse.move(5, 5);
+    await sl.evaluate(() => { const g = document.querySelector('.sl-section[data-key^="group:"]'); if (g) g.scrollIntoView({ block: 'start' }); });
+    await sleep(300);
+    await look('sessions-groups', { expect: 'At the top, a PLUGINS section (a folder icon, count 2) holding Waits for a permission and A Claude Code conversation, then UNGROUPED below it; each section header is a band with a line above and below, so the sections can be told apart.' }, sidebarBox());
     await slHead('Plugins').click({ button: 'right' });
     await slItem('Delete Group').click();
     check(!!await slWait((r) => slFind(r, SLT.cc, 'ungrouped') && slFind(r, SLT.perm, 'ungrouped')), 'Delete Group puts its conversations back in Ungrouped');
@@ -1598,7 +1633,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await slOpen('Recently closed');
     const time = await sl.evaluate(() => { const r = document.querySelector('.sl-section[data-key="closed"] .sl-row .sl-time'); return r && r.textContent; });
     check(/^closed (now|\d+m)$/.test(time || ''), 'and says when it was closed', time);
-    await look('sessions-closed', { expect: 'A RECENTLY CLOSED section with a clock icon at the top of the list, expanded, listing Nothing going on with "closed now" at the right and a light blue stripe at its start; the same conversation also has its row in Ungrouped with the same light blue stripe.' }, sidebarBox());
+    await look('sessions-closed', { expect: 'A RECENTLY CLOSED section with a clock icon at the top of the list, expanded, listing Nothing going on with "closed now" at the right and a light blue stripe at its start.' }, sidebarBox());
     await setting('agentPlus.sessions.recentlyClosed', 0);
     check(!!await until(() => sl.evaluate(() => { const s = document.querySelector('.sl-section[data-key="closed"]'); return !s || s.classList.contains('sl-hidden'); }), 8000, 300),
       'with agentPlus.sessions.recentlyClosed 0 the section goes');
@@ -1615,7 +1650,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await page.keyboard.type('archive');
     const found = await slWait((r) => { const s = r.filter((x) => x.shown && x.section !== 'closed'); return s.length >= 1 && s.every((x) => /archive/i.test(x.title)); });
     check(!!found, 'Search keeps only the conversations whose title matches', found && found.filter((x) => x.shown).map((x) => x.title));
-    await look('sessions-search', { expect: 'A search box under the chips holding "archive", and only Review the archive sweep left in the list with "archive" highlighted in its title.' }, sidebarBox());
+    await look('sessions-search', { expect: 'A search box under the chips holding "archive", and only the two conversations whose title has it left in the list, each with it highlighted: Review the archive sweep in Ungrouped, and Archived long ago in ARCHIVED.' }, sidebarBox());
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await sl.locator('.sl-chip[data-chip="needs"]').click();
@@ -1631,11 +1666,12 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await slItem('OpenCode').click();
     const noOc = await slWait((r) => !r.some((x) => x.shown && (x.title === SLT.oc || x.title === SLT.ocTerm)) && r.some((x) => x.shown && x.title === SLT.cc));
     check(!!noOc, 'and unticking one hides its conversations');
-    await look('sessions-filter', { pointer: true, expect: 'A small menu at the top right of the list with Codex and Claude Code ticked and OpenCode unticked, each with its logo; no OpenCode row is left in the list.' }, sidebarBox());
+    await look('sessions-filter', { pointer: true, expect: 'A small menu at the top right of the list with Codex and Claude Code ticked and OpenCode unticked, each with its logo; no OpenCode row is left among the rows in view.' }, sidebarBox());
     await slItem('OpenCode').click();
     await page.keyboard.press('Escape');
     check(!!await slWait((r) => r.some((x) => x.shown && x.title === SLT.oc)), 'ticking it again shows them again');
     await viaUi('agentPlus.findConversation', () => start('agentPlus.findConversation'));
+    await until(() => page.evaluate(() => !!(document.activeElement && document.activeElement.closest('.quick-input-widget'))), 10000, 100);
     await page.keyboard.type('sl-ask');
     const found2 = await until(async () => { const r = await pickRows(); return r && r.length >= 1 && r.every((x) => /sl-ask/.test(x.text)) && r; }, 10000, 300);
     check(!!found2 && found2.some((x) => x.label === SLT.ask), 'Find Conversation finds conversations by part of the id, with the agent beside each', found2);
@@ -1650,9 +1686,9 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       links: [{ label: 'View details', command: 'agentPlusTest.installPlugin' }], conversation: { title: SLT.run, rows: [{ label: 'Tokens', value: '412k' }] } } });
     await showSessions('agentPlus.sessions');
     const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
-    check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32% · resets 2h 1\dm/.test(shown) && /This conversation · Fix the sessions page filter/i.test(shown),
+    check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32%\s+resets 2h 1\dm/.test(shown) && /This conversation\s+Fix the sessions page filter/i.test(shown),
       'Account & usage shows the agent\'s rows, its limits with when they reset, and the conversation in front', shown);
-    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, "This conversation · Fix the sessions page filter" with Tokens 412k, Signed in with API key, Tokens today 1.9M, and two bars: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each saying when it resets.' }, sidebarBox());
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. Under Codex, a small line THIS CONVERSATION in capitals and under it Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k.' }, sidebarBox());
     await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
     check(!!await until(async () => (await src('return src.state.ran;')).includes('installPlugin'), 5000, 200), 'a link runs the command the agent gave');
     await slHead('Account & usage').click();
@@ -1667,7 +1703,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await sl.locator('.sl-new-agent').click();
     const m = await slMenu();
     check(!!m && sameList(m, ['Codex', 'Claude Code', 'OpenCode']), 'the New bar\'s logo opens a list of the agents', m);
-    await look('sessions-new-menu', { pointer: true, expect: 'Under the New bar\'s logo, a small menu listing Codex (with a check mark), Claude Code and OpenCode, each with its logo.' }, sidebarBox());
+    await look('sessions-new-menu', { pointer: true, expect: 'Under the New bar\'s logo, a small menu listing Codex, Claude Code and OpenCode, each with its logo, with a tick in a column before Codex\'s logo, as the agents filter marks its choices.' }, sidebarBox());
     await slItem('Claude Code').click();
     await until(() => sl.evaluate(() => /Claude Code/.test(document.querySelector('.sl-new-agent').title)), 5000, 200);
     await sl.locator('.sl-new-half[data-where="sidebar"]').click();

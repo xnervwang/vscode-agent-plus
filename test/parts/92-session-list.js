@@ -120,8 +120,34 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const flags = (t) => { const r = byTitle(m, t); return [r.runs, r.needs]; };
     eq([flags('Beta'), flags('Dialog'), flags('Asks'), flags('Alpha')], [[true, false], [false, true], [false, true], [false, false]],
       'each row says whether it runs and whether it needs the user, which the page\'s chips filter by');
-    eq([m.front, codex.seen, list.store().record('codex', 'a').seenAt], ['["codex","a"]', [[['a'], true]], now0 - 60e3],
-      'the conversation in the tab in front is seen, and its source is told');
+    eq([m.front, codex.seen, byTitle(m, 'Alpha').unread], ['["codex","a"]', [], true], 'the conversation just brought to the front is not seen yet');
+    clock = now0 + 2000;
+    await list.refresh();
+    m = list.model();
+    eq([codex.seen, list.store().record('codex', 'a').seenAt, byTitle(m, 'Alpha').unread], [[[['a'], true]], now0 - 60e3, false],
+      'once it has stayed in front a moment it is seen, and its source is told');
+    const tabsNow = [{ label: 'Alpha', input: { source: 'codex', sid: 'a' } }, { label: 'x', input: {} }];
+    t.control.setTabs(tabsNow, 1);
+    codex.sessions.find((x) => x.sessionId === 'a').lastReplyAt = now0 + 1000;
+    await list.refresh({ relist: true });
+    clock = now0 + 3000;
+    t.control.setTabs(tabsNow, 0);
+    await list.refresh();
+    clock = now0 + 3500;
+    t.control.setTabs(tabsNow, 1);
+    await list.refresh();
+    clock = now0 + 8000;
+    await list.refresh();
+    eq([byTitle(list.model(), 'Alpha').unread, codex.seen.length], [true, 1], 'one brought to the front for a moment and left is still unread');
+    t.control.setTabs(tabsNow, 0);
+    await list.refresh();
+    clock = now0 + 10000;
+    await list.refresh();
+    eq([byTitle(list.model(), 'Alpha').unread, codex.seen.length], [false, 2], 'and is seen once it stays');
+    codex.sessions.find((x) => x.sessionId === 'd').unseen = true;
+    await list.refresh({ relist: true });
+    eq(byTitle(list.model(), 'Dialog').unread, true, 'a row its source says is unseen in the agent\'s own interface has the envelope');
+    clock = now0;
     t.host.settings = () => ({ hideBackground: false });
     await list.refresh();
     m = list.model();
