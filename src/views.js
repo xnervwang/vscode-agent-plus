@@ -83,6 +83,16 @@ function create(host, opts = {}) {
 
   /* ── The work plan of the conversation in front ── */
   const focus = new sources.Focus();
+  /* The front as the output channel last said it. Both the deferred draw (drawFocus) and a read of the plans
+     (refreshPlans) can move the work plan view to a new front, so either one says it, and a front already said is not
+     said again. */
+  let saidFront = '(none)';
+  const sayFront = () => {
+    const now = focus.sourceId ? `${focus.sourceId} ${focus.sessionId || '(no session yet)'}` : '(none)';
+    if (now === saidFront) return;
+    saidFront = now;
+    say('active conversation: ' + now);
+  };
   /*
    * Plans are read again for every conversation of this workspace on every pass, and a plan file can be 8 MB. A file
    * whose modification time and size are both what they were last time is the same file, so the parse is kept. The
@@ -542,6 +552,7 @@ function create(host, opts = {}) {
     if (closing) return;
     workplan.setTimeZone(readerZone());
     const moved = workplan.setFocus(focus.sessionId, focus.sourceId);
+    sayFront();
     conversationsTree.setFront(focus.sourceId, focus.sessionId);
     paintPlanView();
     if (workplan.refresh() || moved) paintBadge();
@@ -760,8 +771,9 @@ function create(host, opts = {}) {
     if (closing) return;
     paintPlanView();
     conversationsTree.setFront(focus.sourceId, focus.sessionId);
-    if (!workplan.setFocus(focus.sessionId, focus.sourceId)) return;
-    say('active conversation: ' + (focus.sourceId ? `${focus.sourceId} ${focus.sessionId || '(no session yet)'}` : '(none)'));
+    const moved = workplan.setFocus(focus.sessionId, focus.sourceId);
+    sayFront();
+    if (!moved) return;
     workplan.refresh();
     paintBadge();
   };
