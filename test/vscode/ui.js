@@ -1443,7 +1443,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sideBarWidth(420);
     const rows = await slWait((r) => [SLT.run, SLT.perm, SLT.ask, SLT.other, SLT.cc, SLT.oc, SLT.ocTerm].every((t) => slFind(r, t, 'ungrouped'))
       && (slFind(r, SLT.other) || {}).stripe === 'elsewhere' && (slFind(r, SLT.ask) || {}).dot === 'red', 25000);
-    check(!!rows, 'the session list lists the conversations of all three agents together, in Ungrouped', rows || await slRows().catch(() => null));
+    check(!!rows, 'the session list shows the conversations of all three agents together, in Ungrouped', rows || await slRows().catch(() => null));
     if (!rows) return;
     const dot = (t) => (slFind(rows, t) || {}).dot;
     check(sameList([SLT.run, SLT.bg, SLT.perm, SLT.ask, SLT.askrun, SLT.quiet].map(dot), ['green', 'greenRing', 'blue', 'red', 'redRing', 'none']),
