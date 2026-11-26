@@ -40,6 +40,14 @@ const LAST_NEW_KEY = 'agentPlus.sessions.lastNew';
 const KINDS = ['user', 'background', 'subagent', 'empty'];
 const ELSEWHERE_KINDS = ['vscode', 'terminal', 'desktop', 'exec', 'other'];
 
+/* A member the protocol gates on a feature of another name ('sessionImport' gives importSessions), bound to its source;
+   null when the source does not list the feature or has no such method. */
+function gated(source, feature, name) {
+  if (!sources.supports(source, feature)) return null;
+  const fn = sources.get(source, name);
+  return typeof fn === 'function' ? (...args) => fn.apply(source, args) : null;
+}
+
 const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
 const moment = (v) => { const n = typeof v === 'number' ? v : typeof v === 'string' ? Date.parse(v) : NaN; return Number.isFinite(n) && n > 0 ? n : 0; };
 const lines = (v, max, n) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).slice(0, max).map((x) => x.slice(0, n)) : []);
@@ -56,9 +64,9 @@ function sessionOf(raw) {
     label: str(sources.get(e, 'label'), 80) || 'another program',
     detail: lines(sources.get(e, 'detail'), 6, 200), running: sources.get(e, 'running') === true,
   }));
-  const badges = (Array.isArray(g('badges')) ? g('badges') : []).slice(0, 2)
+  const badges = (Array.isArray(g('badges')) ? g('badges') : []).slice(0, 20)
     .map((b) => ({ text: str(sources.get(b, 'text'), 40), tooltip: str(sources.get(b, 'tooltip'), 300), dim: sources.get(b, 'dim') === true }))
-    .filter((b) => b.text);
+    .filter((b) => b.text).slice(0, 2);
   const processes = Number(g('processes'));
   return Object.assign(c, {
     createdAt: moment(g('createdAt')), viewedAt: moment(g('viewedAt')), kind,
@@ -142,10 +150,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         if (g === active && t.isActive && !front) front = k;
       }
       const list = lists.get(e.id);
-      const shows = sources.optional(e.source, 'shows') || ((id) => sources.call(e.source, 'shows', [id], false));
+      const shows = sources.optional(e.source, 'shows');
       for (const s of (list && list.sessions) || []) {
         const k = keyOf(e.id, s.sessionId);
-        if (!here.has(k)) { try { if (shows(s.sessionId) === true) { here.add(k); where.set(k, 'sidebar'); } } catch (_) { /* not shown */ } }
+        if (shows && !here.has(k)) { try { if (shows(s.sessionId) === true) { here.add(k); where.set(k, 'sidebar'); } } catch (_) { /* not shown */ } }
         if (!front && sources.call(e.source, 'isFocused', [s.sessionId], false) === true) front = k;
       }
     }
@@ -171,7 +179,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
 
   /* ── reading the sources ── */
   async function listOne(e) {
-    const fn = sources.optional(e.source, 'listSessions');
+    const fn = gated(e.source, 'sessions', 'listSessions');
     if (!fn) return;
     const st = lists.get(e.id) || { sessions: [], problem: '', complete: false, at: 0, dirty: true };
     lists.set(e.id, st);
@@ -199,7 +207,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
 
   async function importOnce(e) {
     if (store.imported(e.id)) return;
-    const fn = sources.optional(e.source, 'importSessions');
+    const fn = gated(e.source, 'sessionImport', 'importSessions');
     if (fn) {
       let got = null;
       try { got = await settle(fn({ folders: folders() }), pageMs, null); } catch (_) { got = null; }
@@ -257,7 +265,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   function tellSeen(list, seen) {
     for (const e of entries()) {
       const ids = list.filter((r) => r.sourceId === e.id).map((r) => r.sessionId);
-      const fn = ids.length ? sources.optional(e.source, 'noteSeen') : null;
+      const fn = ids.length ? gated(e.source, 'sessionSeen', 'noteSeen') : null;
       if (fn) { try { Promise.resolve(fn(ids, !!seen)).catch(() => {}); } catch (_) { /* the source keeps its own record as it is */ } }
     }
   }
