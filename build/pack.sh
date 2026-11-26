@@ -6,4 +6,4 @@
 # Build build/<publisher>.<name>-<version>.vsix from the paths below, less what .vscodeignore leaves out.
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-exec node "$root/shared/build/pack-vsix.js" "$root" package.json package.nls.json package.nls.zh-cn.json extension.js src shared/page/kit.js images README.md
+exec node "$root/shared/build/pack-vsix.js" "$root" package.json package.nls.json package.nls.zh-cn.json extension.js src images README.md

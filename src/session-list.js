@@ -25,8 +25,13 @@ const { createStore, projectOf, keyOf, COLORS } = require('./session-store');
 const { elsewhere: otherWindows, windowLabel } = require('./session-windows');
 const { sharedHome } = require('./files');
 const { withoutMarks } = require('./title-marks');
-/* The page code's own way of writing how long ago, so that the list writes it as the conversations' pages do. */
-const { age } = require('../shared/page/kit.js');
+/* How long ago, as Claude Code's own session list writes it: now, then whole minutes, hours, days, months of 30 days
+   and years. The same rule as agentPlusKit.age in shared/page/kit.js, which the package does not carry. */
+function age(ms, now) {
+  const sec = Math.max(0, Math.floor((now - ms) / 1000));
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60), d = Math.floor(h / 24), mo = Math.floor(d / 30), y = Math.floor(d / 365);
+  return y > 0 ? `${y}y` : mo > 0 ? `${mo}mo` : d > 0 ? `${d}d` : h > 0 ? `${h}h` : m > 0 ? `${m}m` : 'now';
+}
 
 const PAGE = 500;
 const MAX_SESSIONS = 20000;
@@ -126,6 +131,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const dueListeners = new Set();
   const dueSig = new Map();
   let look = { here: new Set(), front: '', where: new Map() };
+  /* sourceId -> the session id of that source last in front in this window, for its Account & usage part. */
+  const lastFront = new Map();
   let rows = new Map();
   let modelValue = null;
   let closed = false;
@@ -375,10 +382,14 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const e = entryOf(r.sourceId);
     if (!e) return 'gone';
     if (r.here) { await sources.call(e.source, 'reveal', [r.sessionId, { title: r.title, cwd: r.cwd }], false); return 'here'; }
-    const vs = r.elsewhere.filter((x) => x.kind === 'vscode');
-    if (vs.length && host.open) {
-      const got = await host.open({ sourceId: r.sourceId, sessionId: r.sessionId, title: r.title, cwd: r.cwd });
+    /* One another window shows is brought forward there. When that window does not answer it is not opened here as well,
+       since two windows would then write the same conversation. */
+    const vs = r.elsewhere.find((x) => x.kind === 'vscode');
+    if (vs) {
+      const got = host.open ? await host.open({ sourceId: r.sourceId, sessionId: r.sessionId, title: r.title, cwd: r.cwd }) : 'nowhere';
       if (got && got !== 'nowhere') return 'sent';
+      tell(`"${r.title || r.sessionId}" is open in ${vs.label}, which did not answer. Close it there, or reload that window, to open it here.`);
+      return 'elsewhere';
     }
     const out = r.elsewhere.find((x) => x.kind !== 'vscode');
     if (out) {
@@ -620,8 +631,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       const fn = sources.optional(e.source, 'accountInfo');
       if (!fn) continue;
       let info = null;
-      const front = look.front ? JSON.parse(look.front) : null;
-      try { info = fn({ sessionId: front && front[0] === e.id ? front[1] : '' }); } catch (_) { info = null; }
+      try { info = fn({ sessionId: lastFront.get(e.id) || '' }); } catch (_) { info = null; }
       if (info && typeof info === 'object') accounts.push({ id: e.id, label: sources.labelOf(e.source), info: accountOf(info) });
     }
     const last = (host.globalMemento && host.globalMemento.get(LAST_NEW_KEY)) || {};
@@ -676,8 +686,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const e = entryOf(sourceId);
     const fn = e && sources.optional(e.source, 'accountInfo');
     let info = null;
-    const front = look.front ? JSON.parse(look.front) : null;
-    try { info = fn ? fn({ sessionId: front && front[0] === sourceId ? front[1] : '' }) : null; } catch (_) { info = null; }
+    try { info = fn ? fn({ sessionId: lastFront.get(sourceId) || '' }) : null; } catch (_) { info = null; }
     const links = sources.get(info, 'links');
     const l = Array.isArray(links) ? links[i] : null;
     const command = str(sources.get(l, 'command'), 200);
@@ -700,6 +709,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       for (const id of [...lists.keys()]) if (!entries().some((e) => e.id === id)) lists.delete(id);
       const was = look;
       look = lookNow();
+      if (look.front) { const [fs0, fid] = JSON.parse(look.front); lastFront.set(fs0, fid); }
       noteClosed(was, look);
       elsewhereByKey = otherWindows(entries().map((e) => ({ sourceId: e.id, planDir: sources.planDirOf(e.source) })), { now: now() });
       build();

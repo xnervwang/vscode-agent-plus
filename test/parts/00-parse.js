@@ -45,6 +45,12 @@ module.exports = async ({ ok, bad, eq, root }) => {
   const containers = [].concat(pkg.contributes.viewsContainers.activitybar, pkg.contributes.viewsContainers.panel);
   eq([containers.map((c) => c.icon), fs.existsSync(path.join(root, 'images', 'sidebar.svg'))], [['images/sidebar.svg', 'images/sidebar.svg'], true],
     'both containers use images/sidebar.svg, which is in the repository');
+  /* The package carries extension.js, src/ and images/, and .vscodeignore leaves shared/ out: a module of the extension
+     that required a file elsewhere would load in the tests and fail once installed. */
+  const walkJs = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkJs(path.join(d, e.name)) : /\.js$/.test(e.name) ? [path.join(d, e.name)] : []));
+  const outside = [path.join(root, 'extension.js'), ...walkJs(path.join(root, 'src'))].flatMap((f) => [...fs.readFileSync(f, 'utf8').matchAll(/require\(\s*'(\.{1,2}\/[^']+)'\s*\)/g)]
+    .map((m) => path.resolve(path.dirname(f), m[1])).filter((t) => !/^(src|extension|package)/.test(path.relative(root, t))).map((t) => `${path.relative(root, f)} -> ${path.relative(root, t)}`));
+  eq(outside, [], 'every module of the extension requires only what the package carries');
   const ids = JSON.stringify(pkg.contributes).match(/"(?:command|id|view)":"[^"]+"/g) || [];
   const foreign = ids.filter((s) => !/"(agentPlus[.A-Za-z]*)"/.test(s));
   eq(foreign, [], 'every container, view and command id is in the agentPlus namespace');

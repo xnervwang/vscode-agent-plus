@@ -162,6 +162,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     'another window\'s entry marks a row open elsewhere and names the window; the source\'s own guess at a VS Code window is dropped then; a terminal shows with its details');
     eq([await list.open('["codex","w"]'), t.opened.map((o) => o.sessionId), await list.open('["codex","z"]'), codex.calls.filter((c) => c[0] === 'open').length],
       ['sent', ['w'], 'elsewhere', 0], 'opening one open in another window brings that window forward; one open in a terminal is not opened here');
+    t.host.open = async () => 'nowhere';
+    eq([await list.open('["codex","w"]'), codex.calls.filter((c) => c[0] === 'open').length, t.control.state.said.some((x) => /which did not answer/.test(x.message))],
+      ['elsewhere', 0, true], 'and when that window does not answer, it is not opened here as well, and the user is told');
     list.store().archive([['codex', 'w']], true);
     list.store().flush();
     await list.refresh();
@@ -286,6 +289,16 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     eq(list.model().notices, [{ id: 'opencode', label: 'opencode', text: 'OpenCode was not found on this machine.', actions: [{ i: 0, label: 'Download OpenCode' }] }],
       'a source with sessionsNotice has its note drawn above the list, with its buttons');
+    const acc = [];
+    oc.features.push('accountInfo');
+    oc.accountInfo = ({ sessionId }) => { acc.push(sessionId); return { rows: [{ label: 'Provider', value: 'Bedrock' }] }; };
+    oc.sessions = [conv('ses_aaaaaaaaaaaaaaaaaaaaaaaaaa', { title: 'Mine' })];
+    t.control.setTabs([{ label: 'Mine', input: { source: 'opencode', sid: 'ses_aaaaaaaaaaaaaaaaaaaaaaaaaa' } }], 0);
+    await list.refresh({ relist: true });
+    t.control.setTabs([{ label: 'x', input: {} }], 0);
+    await list.refresh();
+    eq([acc.slice(-1)[0], list.model().accounts.map((a) => a.info.rows[0].value)], ['ses_aaaaaaaaaaaaaaaaaaaaaaaaaa', ['Bedrock']],
+      'an agent\'s Account & usage part is asked about its conversation last in front, after another one comes to the front');
     list.noticeAction('opencode', 0);
     await wait(0);
     eq(ran, [['vscode.open', 'https://example.invalid/']], 'and a button runs the command the source gave');
