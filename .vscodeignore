@@ -1,4 +1,5 @@
 build/**
+.githooks/**
 test/**
 docs/**
 *.vsix
