@@ -1356,6 +1356,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const b = document.querySelector('.sl-ctx:not(.sl-ctx-sub)');
     return b ? [...b.querySelectorAll('.sl-ctx-item')].map((x) => x.textContent.replace('›', '').replace('✓', '').trim()) : null;
   }), 5000, 200);
+  /* Closes the list's menus: Escape closes the innermost one, and a submenu the pointer opened may be up as well. */
+  const slClose = async () => { for (let i = 0; i < 4 && await sl.evaluate(() => !!document.querySelector('.sl-ctx')); i++) await page.keyboard.press('Escape'); };
   const slItem = (label, sub = false) => sl.locator(sub ? '.sl-ctx-sub .sl-ctx-item' : '.sl-ctx:not(.sl-ctx-sub) .sl-ctx-item').filter({ hasText: label }).first();
   const slAct = async (title, act, section) => { const r = slRowLoc(title, section); await r.hover(); await r.locator(`.sl-act[data-act="${act}"]`).click(); await page.mouse.move(5, 5); };
   const slHover = () => sl.evaluate(() => { const h = document.querySelector('.sl-hover'); return h && !h.classList.contains('sl-hidden') ? h.textContent : ''; });
@@ -1520,7 +1522,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const many = await slMenu();
     check(!!many && many.includes('Archive 2 Conversations') && many.includes('New Group from 2 Conversations'),
       'Ctrl or Cmd and a click selects several conversations, of any agents, and the menu acts on them all', many);
-    await page.keyboard.press('Escape');
+    await slClose();
     await page.keyboard.press('Escape');
     check(!!await until(() => sl.evaluate(() => !document.querySelector('.sl-row.sl-selected')), 5000, 200), 'and Esc clears the selection');
     await sl.locator('.sl-root').focus();
@@ -1582,8 +1584,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     } else {
       check(!!placed && !placed.covers, 'a submenu opens beside its menu, clear of the item it belongs to', placed);
     }
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
+    await slClose();
     /* Out by way of the list's top, which is no row: a pointer that jumps straight out of the webview leaves it holding
        the last place it saw, and the row that comes under that place once the menu goes takes the hover. */
     await sl.locator('.sl-chips').hover({ position: { x: 1, y: 1 } });
@@ -1621,7 +1622,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await slRowLoc(SLT.other, 'archived').click({ button: 'right' });
     const m2 = await slMenu();
     check(!!m2 && !m2.includes('Delete...'), 'one open in another window cannot be deleted: its menu has no Delete', m2);
-    await page.keyboard.press('Escape');
+    await slClose();
     await slAct(SLT.other, 'unarchive', 'archived');
   });
 
@@ -1671,7 +1672,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!noOc, 'and unticking one hides its conversations');
     await look('sessions-filter', { pointer: true, expect: 'A small menu at the top right of the list with Codex and Claude Code ticked and OpenCode unticked, each with its logo; no OpenCode row is left among the rows in view.' }, sidebarBox());
     await slItem('OpenCode').click();
-    await page.keyboard.press('Escape');
+    await slClose();
     check(!!await slWait((r) => r.some((x) => x.shown && x.title === SLT.oc)), 'ticking it again shows them again');
     await viaUi('agentPlus.findConversation', () => start('agentPlus.findConversation'));
     await until(() => page.evaluate(() => !!(document.activeElement && document.activeElement.closest('.quick-input-widget'))), 10000, 100);
