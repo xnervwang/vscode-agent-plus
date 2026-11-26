@@ -245,7 +245,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const bell = () => {
       const it = control.state.status.find((s) => s.id === 'agentPlus.conversations');
       const m = it && it.shown && /(\d+) conversations? needs? you/.exec(it.text);
-      return m ? [Number(m[1]), (it.backgroundColor || {}).id] : [0, (it && it.backgroundColor || {}).id];
+      return m ? [Number(m[1]), (it.color || {}).id, it.backgroundColor] : [0, (it && it.color || {}).id, it && it.backgroundColor];
     };
     const turn = async (on) => { control.state.config['agentPlus.notifications.enabled'] = on; control.changeConfig(['agentPlus.notifications.enabled']); await wait(300); };
     const seen = [bell()];
@@ -260,8 +260,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     seen.push(bell());
     await turn(true);
     seen.push(bell());
-    const W = 'statusBarItem.warningBackground';
-    eq(seen, [[1, W], [0, undefined], [1, W], [0, undefined], [2, W]],
+    const W = undefined;
+    eq(seen, [[1, W, undefined], [0, undefined, undefined], [1, W, undefined], [0, undefined, undefined], [2, W, undefined]],
       'turning the notifications off empties the count and turning them back on restores it at once, even for a conversation that changed meanwhile');
     b.close();
   }

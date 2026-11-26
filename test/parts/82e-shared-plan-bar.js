@@ -55,39 +55,58 @@ module.exports = async ({ eq, root, wait }) => {
       'in a page it is one global object, agentPlusPlanBar, with the width below which both extensions draw it compact');
   }
 
-  const doing = { total: 12, done: 4, counts: { done: 4, doing: 2, waiting: 0, discussing: 3, todo: 3, parked: 0 }, questions: 2, allDone: false,
-    current: { number: '3.2', title: 'CLI: budget subcommand', state: 'doing', dim: false },
-    open: [{ number: '3', title: 'CLI', state: 'doing', depth: 1 }, { number: '3.2', title: 'CLI: budget subcommand', state: 'doing', depth: 2 }] };
-  const waiting = { total: 12, done: 7, counts: { done: 7, waiting: 1, todo: 4 }, questions: 0, allDone: false,
-    current: { number: '3.3.1', title: 'Warnings in report', state: 'waiting', dim: false }, open: [] };
-  const parked = { total: 10, done: 9, counts: { done: 9, parked: 1 }, questions: 0, allDone: false,
-    current: { number: '10', title: 'Handle refunds later', state: 'parked', dim: true }, open: [{ number: '10', title: 'Handle refunds later', state: 'parked', depth: 1 }] };
-  const finished = { total: 12, done: 12, counts: { done: 12 }, questions: 0, allDone: true, current: null, open: [] };
+  const rowsOf = (spec) => spec.map(([number, title, state, depth, asks]) => Object.assign({ number, title, state, depth }, asks ? { asks: true } : {}));
+  const busy = { total: 14, done: 4, counts: { done: 4, doing: 2, waiting: 3, discussing: 3, todo: 2, parked: 0 }, asking: { waiting: 1, discussing: 2 },
+    questions: 3, allDone: false, current: { number: '3.2', title: 'CLI: budget subcommand', state: 'doing', dim: false },
+    open: rowsOf([['3', 'CLI', 'doing', 1], ['3.2', 'CLI: budget subcommand', 'doing', 2], ['4', 'Refunds', 'waiting', 1, true], ['5', 'Report', 'waiting', 1],
+      ['6', 'Fonts', 'waiting', 1], ['7', 'Month', 'discussing', 1, true], ['8', 'Names', 'discussing', 1, true], ['9', 'Colours', 'discussing', 1],
+      ['10', 'Docs', 'todo', 1], ['11', 'Tests', 'todo', 1]]),
+    asks: [{ number: '4', title: 'Refunds', question: 'Skip negative amounts?' }, { number: '7', title: 'Month', question: 'This month or last?' },
+      { number: '8', title: 'Names', question: '' }] };
+  const parked = { total: 10, done: 9, counts: { done: 9, parked: 1 }, asking: {}, questions: 0, allDone: false, current: null,
+    open: rowsOf([['10', 'Handle refunds later', 'parked', 1]]), asks: [] };
+  const finished = { total: 12, done: 12, counts: { done: 12 }, asking: {}, questions: 0, allDone: true, current: null, open: [], asks: [] };
+  const older = { total: 6, done: 1, counts: { done: 1, doing: 1, waiting: 2, todo: 2 }, questions: 1, allDone: false, current: null, open: [] };
   const wide = bar.COMPACT_BELOW + 200, narrow = bar.COMPACT_BELOW - 1;
-  const look = (m) => m && [m.compact, m.segments.map((s) => s.state + ':' + s.n).join(' '), m.count, m.current && [m.current.state, m.current.text, m.current.dim], m.questions];
-  eq([look(bar.model(doing, wide)), look(bar.model(waiting, wide)), look(bar.model(parked, wide)), look(bar.model(finished, wide))], [
-    [false, 'doing:2 discussing:3 todo:3', '8 open', ['doing', '3.2 CLI: budget subcommand', false], '2 to decide'],
-    [false, 'waiting:1 todo:4', '5 open', ['waiting', '3.3.1 Warnings in report', false], ''],
-    [false, 'parked:1', '1 open', ['parked', '10 Handle refunds later', true], ''],
-    [false, '', '', ['done', 'All rows done', true], ''],
-  ], 'each state: the track has the open rows only, in the order doing, waiting, discussing, todo, parked; the count says how many are open; the current row with its state; the questions; with none open, a check and All rows done in grey');
-  eq([bar.SEGMENTS, bar.COUNT_ROOM], [['doing', 'waiting', 'discussing', 'todo', 'parked'], '999 open'], 'what the track and the count show is set in one place');
-  eq([look(bar.model(doing, narrow)), look(bar.model(doing, bar.COMPACT_BELOW)), look(bar.model(doing, 0))[0]],
-    [[true, 'doing:2 discussing:3 todo:3', '8 open', ['doing', '3.2 CLI: budget subcommand', false], '2'], look(bar.model(doing, wide)), false],
-    'below the threshold the bar is compact and the red part has only the number; at the threshold, or before the width is known, it is full');
-  eq([bar.model(doing, bar.COMPACT_BELOW + bar.HYSTERESIS - 1, true).compact, bar.model(doing, bar.COMPACT_BELOW + bar.HYSTERESIS, true).compact,
-    bar.model(doing, bar.COMPACT_BELOW + 1, false).compact, bar.HYSTERESIS > 0],
+  const look = (m) => m && [m.compact, m.bubbles.map((b) => b.state + ':' + b.n).join(' '), m.done, m.questions, m.label];
+  eq([look(bar.model(busy, wide)), look(bar.model(parked, wide)), look(bar.model(finished, wide)), look(bar.model(older, wide))], [
+    [false, 'doing:2 waiting:2 discussing:1 todo:2', false, '3 to decide', 'Work plan: 2 doing, 2 waiting, 1 discussing, 2 to do; 3 questions wait for your answer'],
+    [false, '', false, '', 'Work plan: 1 row open'],
+    [false, '', true, '', 'Work plan: all rows done'],
+    [false, 'doing:1 waiting:2 todo:2', false, '1 to decide', 'Work plan: 1 doing, 2 waiting, 2 to do; 1 question waits for your answer'],
+  ], 'a bubble for each of doing, waiting, discussing and todo that has rows, in that order; a row waiting for the answer counts in "to decide" only; parked rows get none; a plan with none open is all done; a summary without `asking` counts its asking rows in their states');
+  {
+    const m = bar.model(busy, wide);
+    eq(m.bubbles.reduce((sum, b) => sum + b.n, 0) + busy.questions + busy.counts.parked, busy.total - busy.done,
+      'the bubbles and "to decide" add up, with the parked rows, to the rows still open');
+  }
+  eq([bar.BUBBLES, bar.WORD.todo], [['doing', 'waiting', 'discussing', 'todo'], 'to do'], 'which states get a bubble, and in what order, is set in one place');
+  eq([look(bar.model(busy, narrow)).slice(0, 4), look(bar.model(busy, bar.COMPACT_BELOW))[0], look(bar.model(busy, 0))[0]],
+    [[true, 'doing:2 waiting:2 discussing:1 todo:2', false, '3'], false, false],
+    'below the threshold the bar is compact and "to decide" keeps only its number; at the threshold, or before the width is known, it is full');
+  eq([bar.model(busy, bar.COMPACT_BELOW + bar.HYSTERESIS - 1, true).compact, bar.model(busy, bar.COMPACT_BELOW + bar.HYSTERESIS, true).compact,
+    bar.model(busy, bar.COMPACT_BELOW + 1, false).compact, bar.HYSTERESIS > 0],
   [true, false, false, true], 'a compact bar is drawn full again only once it is HYSTERESIS pixels past the threshold, so a width near it does not flip the form');
   eq([bar.model(null, wide), bar.model({ total: 0 }, wide), bar.model('x', wide), look(bar.model({ total: 0, done: 0, counts: {}, allDone: true }, wide))],
-    [null, null, null, [false, '', '', ['done', 'All rows done', true], '']],
+    [null, null, null, [false, '', true, '', 'Work plan: all rows done']],
     'no summary, or one with nothing counted and something not done, draws no bar; one with every row archived or dropped is all done');
-  eq([bar.model(doing, wide).list, bar.model(finished, wide).list],
-    [{ now: '3.2 CLI: budget subcommand', head: '8 rows not done', rows: [{ state: 'doing', text: '3 CLI', depth: 1 }, { state: 'doing', text: '3.2 CLI: budget subcommand', depth: 2 }], more: 6 }, null],
-    'the hover has the current row\'s whole title, then the open rows it was given and how many more are open; a plan with none open has none');
   {
-    const many = Object.assign({}, doing, { total: 140, done: 4, open: Array.from({ length: 40 }, (_, i) => ({ number: String(i + 1), title: 'Row ' + (i + 1), state: 'todo', depth: 1 })) });
-    const list = bar.model(many, wide).list;
-    eq([list.rows.length, bar.MAX_LIST, list.rows[29].text, list.more], [30, 30, '30 Row 30', 106], 'the hover ends at 30 rows and says how many more are open');
+    const l = bar.model(busy, wide).lists;
+    eq([Object.keys(l).sort(), l[''].now, l[''].head, l[''].rows.length, l[''].rows[1], l[''].more],
+      [['', 'ask', 'discussing', 'doing', 'todo', 'waiting'], '3.2 CLI: budget subcommand', '10 rows not done', 10, { state: 'doing', text: '3.2 CLI: budget subcommand', depth: 2 }, 0],
+      'hovering the rest of the bar lists every open row, under the current row\'s whole title and how many are not done');
+    eq([l.waiting, l.discussing.rows.map((r) => r.text)],
+      [{ now: '', head: '2 waiting', rows: [{ state: 'waiting', text: '5 Report', depth: 1 }, { state: 'waiting', text: '6 Fonts', depth: 1 }], more: 0 }, ['9 Colours']],
+      'hovering a bubble lists the rows of its state, without the ones that wait for the answer');
+    eq([l.ask.head, l.ask.rows.map((r) => r.state + ' ' + r.text), l.ask.more], ['3 questions for you', ['question 4 Skip negative amounts?', 'question 7 This month or last?', 'question 8 Names'], 0],
+      'hovering "to decide" lists the questions, or the row\'s title where a row asks none');
+    eq([bar.model(finished, wide).lists, Object.keys(bar.model(parked, wide).lists)], [{}, ['']], 'a plan with none open has no list; parked rows are in the bar\'s list only');
+  }
+  {
+    const many = Object.assign({}, busy, { total: 140, done: 4, counts: { todo: 136, done: 4 }, asking: {}, questions: 0,
+      open: Array.from({ length: 30 }, (_, i) => ({ number: String(i + 1), title: 'Row ' + (i + 1), state: 'todo', depth: 1 })) });
+    const l = bar.model(many, wide).lists;
+    eq([l[''].rows.length, bar.MAX_LIST, l[''].more, l.todo.rows.length, l.todo.more], [30, 30, 106, 30, 106], 'a list ends at 30 rows and says how many more there are');
   }
   eq(Object.keys(bar.COLOR).map((k) => k + ' ' + bar.COLOR[k].replace(/^var\(--vscode-([\w-]+).*$/, '$1')), [
     'done charts-green', 'doing charts-blue', 'waiting charts-orange', 'discussing charts-yellow', 'todo charts-purple', 'parked descriptionForeground'],
@@ -104,16 +123,16 @@ module.exports = async ({ eq, root, wait }) => {
   {
     const view = fs.readFileSync(path.join(root, 'src', 'workplan-view.js'), 'utf8');
     const asked = (/ThemeIcon\('question', new vscode\.ThemeColor\('([\w.]+)'\)\)/.exec(view) || [])[1] || '';
-    eq([bar.ASK.replace(/^var\(--vscode-([\w-]+).*$/, '$1'), bar.ASK_DOT], [asked.replace('.', '-'), `color-mix(in srgb, ${bar.ASK} 80%, black)`],
-      'the questions part is the colour of the question mark the work plan view gives a row waiting for the user, its dot a deeper shade of it');
+    eq(bar.ASK.replace(/^var\(--vscode-([\w-]+).*$/, '$1'), asked.replace('.', '-'),
+      '"to decide" is filled with the colour of the question mark the work plan view gives a row waiting for the user');
   }
   {
     const css = (text.match(/var CSS = ([\s\S]*?);\n/) || [])[1] || '';
-    eq([/\.apb-track\{[^}]*flex:none[^}]*width:' \+ TRACK_WIDTH \+ 'px/.test(css), /\.apb-seg\{[^}]*min-width:' \+ SEGMENT_MIN \+ 'px/.test(css),
-      bar.TRACK_WIDTH, bar.SEGMENT_MIN, /\.apb-count\{[^}]*flex:none[^}]*font-variant-numeric:tabular-nums/.test(css),
-      /\]\{display:flex[^}]*height:26px[^}]*overflow:hidden[^}]*white-space:nowrap/.test(css), /\.apb-text\{[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/.test(css)],
-    [true, true, 72, 2, true, true, true],
-    'the layout does not change with the plan: a track of one width whose segments are at least 2 px, a count in figures of one width, one line of one height, and a title that ends in an ellipsis');
+    eq([/\]\{display:flex[^}]*height:26px[^}]*overflow:hidden[^}]*white-space:nowrap[^}]*--apb-tint:' \+ TINT\.dark \+ '%/.test(css),
+      /body\.vscode-light \[' \+ MARK \+ '\],body\.vscode-high-contrast-light \[' \+ MARK \+ '\]\{--apb-tint:' \+ TINT\.light \+ '%\}/.test(css), bar.TINT.light > bar.TINT.dark,
+      /\.apb-q\{' \+ pill \+ '[^}]*color:' \+ ASK_TEXT \+ ';background:' \+ ASK \+ '\}/.test(css), /body\.vscode-high-contrast \.apb-q,body\.vscode-high-contrast-light \.apb-q\{color:#fff\}/.test(css)],
+    [true, true, true, true, true],
+    'one line of one height; bubbles tinted more in light themes; "to decide" solid with dark words, white ones in the high contrast themes');
   }
 
   const doc = stand();
@@ -125,48 +144,48 @@ module.exports = async ({ eq, root, wait }) => {
   bar.create(doc, {});
   eq(doc.head.childNodes.length, 1, 'a second bar in the same document adds no second style');
   b.fit(wide);
-  b.update(doing);
-  const q = b.el.find('apb-q');
-  const segs = b.el.find('apb-track').childNodes;
-  eq([b.el.style.display, segs.map((s) => s.getAttribute('data-state') + ' ' + s.style.flex), b.el.find('apb-count').textContent,
-    b.el.find('apb-count').style.minWidth, b.el.find('apb-row').getAttribute('data-state'), b.el.find('apb-row').textContent, q && q.textContent,
-    b.el.getAttribute('aria-label')],
-  ['', ['doing 2 1 0px', 'discussing 3 1 0px', 'todo 3 1 0px'], '8 open', '8ch', 'doing', '3.2 CLI: budget subcommand', '2 to decide',
-    'Work plan: 8 rows open; 3.2 CLI: budget subcommand; 2 questions wait for your answer'],
-  'with a summary it shows: the segments, each as long as its share, the count in a box with room for 999 open, the current row, the red part, and a spoken label');
+  b.update(busy);
+  const bubbles = () => b.el.all((c) => c.className === 'apb-b');
+  eq([b.el.style.display, !!b.el.find('apb-name'), bubbles().map((x) => x.getAttribute('data-state') + ' ' + x.textContent),
+    bubbles()[0].style.background, b.el.find('apb-q').textContent, !!b.el.find('apb-chev'), b.el.getAttribute('aria-label')],
+  ['', true, ['doing 2', 'waiting 2', 'discussing 1', 'todo 2'], 'color-mix(in srgb, ' + bar.COLOR.doing + ' var(--apb-tint), transparent)', '3 to decide', true,
+    'Work plan: 2 doing, 2 waiting, 1 discussing, 2 to do; 3 questions wait for your answer'],
+  'with a summary it shows Plan, a bubble for each state with rows, tinted with its colour, "to decide", the arrow and a spoken label');
   b.fit(narrow);
-  eq([b.el.getAttribute('data-compact'), !!b.el.find('apb-track'), !!b.el.find('apb-row'), b.el.find('apb-count').textContent, b.el.find('apb-q').textContent],
-    ['1', false, false, '8 open', '2'], 'narrowed below the threshold it turns compact');
+  eq([b.el.getAttribute('data-compact'), !!b.el.find('apb-name'), bubbles().length, b.el.find('apb-q').textContent, !!b.el.find('apb-chev')],
+    ['1', false, 4, '3', false], 'narrowed below the threshold it drops Plan and the arrow, keeps the bubbles, and "to decide" keeps only its number');
   b.fit(bar.COMPACT_BELOW + 4);
   eq(b.el.getAttribute('data-compact'), '1', 'and stays compact just above the threshold');
   b.fit(wide);
   b.update(parked);
-  eq([b.el.getAttribute('data-compact'), b.el.find('apb-text').className, !!b.el.find('apb-q')], ['0', 'apb-text apb-dim', false],
-    'widened past the hysteresis it is full again; a parked row is grey, and a plan with no question has no red part');
+  eq([b.el.getAttribute('data-compact'), bubbles().length, !!b.el.find('apb-q')], ['0', 0, false], 'widened past the hysteresis it is full again; parked rows alone draw no bubble, and no question no "to decide"');
   b.update(finished);
-  eq([b.el.find('apb-count').textContent, b.el.find('apb-track').childNodes.length, b.el.find('apb-row').getAttribute('data-state'), b.el.find('apb-row').textContent],
-    ['', 0, 'done', 'All rows done'], 'with nothing open the count is empty but keeps its room, the track is empty, and the check says All rows done');
-  eq(b.el.find('apb-sep').style.visibility, 'hidden', 'and the dot after the count keeps its room without showing');
+  eq([b.el.find('apb-text').textContent, b.el.find('apb-text').className], ['All rows done', 'apb-text apb-dim'], 'with nothing open a check says All rows done');
 
-  b.update(doing);
+  b.update(busy);
   b.el.fire('click');
+  bubbles()[1].fire('click');
   b.el.find('apb-q').fire('click');
   b.el.fire('keydown', { key: 'Enter' });
   b.el.find('apb-q').fire('keydown', { key: 'Enter' });
   b.el.fire('keydown', { key: 'a' });
-  eq(clicks, ['open', 'answer', 'open', 'answer'], 'a click or Enter on the bar opens the plan; on the red part it answers, and does not also open the plan');
+  eq(clicks, ['open', 'open', 'answer', 'open', 'answer'], 'a click or Enter on the bar or a bubble opens the plan; on "to decide" it answers, and does not also open the plan');
 
-  b.el.fire('mouseenter');
-  eq(doc.body.childNodes.length, 1, 'the list of open rows waits a moment before it shows');
+  const texts = () => (doc.body.childNodes[1] ? doc.body.childNodes[1].childNodes.map((c) => c.textContent) : null);
+  b.el.fire('mouseover');
+  eq(doc.body.childNodes.length, 1, 'a list waits a moment before it shows');
   await wait(bar.HOVER_MS + 50);
   const list = doc.body.childNodes[1];
-  eq([list && list.getAttribute(bar.MARK + '-list'), list && list.childNodes.map((c) => c.textContent), list && list.childNodes[3].style.paddingLeft],
-    ['1', ['3.2 CLI: budget subcommand', '8 rows not done', '3 CLI', '3.2 CLI: budget subcommand', 'and 6 more open'], '12px'],
-    'then it shows the current row\'s whole title and the rows not done, each indented by its depth, and how many more are open');
-  eq([list.style.left, list.style.top], ['20px', '468px'], 'placed just above the bar when there is room, at its left edge');
+  eq([list && list.getAttribute(bar.MARK + '-list'), texts().slice(0, 4), list && list.childNodes[3].style.paddingLeft, list.style.left, list.style.top],
+    ['1', ['3.2 CLI: budget subcommand', '10 rows not done', '3 CLI', '3.2 CLI: budget subcommand'], '12px', '20px', '468px'],
+    'over the bar it lists the open rows under the current row\'s title, each indented by its depth, just above the bar at its left edge');
+  bubbles()[1].fire('mouseover');
+  eq(texts(), ['2 waiting', '5 Report', '6 Fonts'], 'moved onto a bubble while a list shows, the list is at once that state\'s rows');
+  b.el.find('apb-q').childNodes[1].fire('mouseover');
+  eq(texts(), ['3 questions for you', '4 Skip negative amounts?', '7 This month or last?', '8 Names'], 'and onto "to decide", its questions');
   b.el.fire('mouseleave');
   eq(doc.body.childNodes.length, 1, 'and it goes when the pointer leaves');
-  b.el.fire('mouseenter');
+  b.el.fire('mouseover');
   await wait(bar.HOVER_MS + 50);
   b.update(null);
   eq([b.el.style.display, doc.body.childNodes.length], ['none', 1], 'a null summary hides the bar and its list');

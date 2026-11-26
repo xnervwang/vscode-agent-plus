@@ -4,44 +4,35 @@
 // Source: vscode-agent-plus shared/page/plan-bar.js; sync-shared.js copies it, so edit it there.
 
 /*
- * The plan bar: one line above an agent's input box. Claude Code Plus draws it in Claude Code's panel and Codex Plus in
- * the Codex page, each from the summary Agent Plus gives for the conversation (planSummary in docs/protocol.md).
- * Exported as one global, agentPlusPlanBar; under Node it is also a module, for the tests. The source is ASCII and ES5,
- * like the page scripts.
+ * The plan bar: one line above an agent's input box. Claude Code Plus draws it in Claude Code's panel, Codex Plus in the
+ * Codex page and OpenCode Agent Plus in its chat page, each from the summary Agent Plus gives for the conversation
+ * (planSummary in docs/protocol.md). Exported as one global, agentPlusPlanBar; under Node it is also a module, for the
+ * tests. The source is ASCII and ES5, like the page scripts.
  *
- * Narrower than COMPACT_BELOW, the bar drops the track and the current row. Hovering shows the current row's whole
- * title and lists the rows still open.
+ * It counts the open rows by state in bubbles, one for each state of BUBBLES that has rows, and the rows waiting for
+ * the user's answer in a solid "N to decide" part; a row that asks is counted there only, so the numbers add up to the
+ * rows still open but parked. Narrower than COMPACT_BELOW, it drops the word Plan and the arrow, and "to decide" keeps
+ * only its number. Hovering a bubble lists its rows, hovering "to decide" its questions, and hovering the rest of the
+ * bar every open row.
  */
 var agentPlusPlanBar = (function () {
   'use strict';
-  /* Below this measured width, in CSS pixels, the bar keeps only "Plan", the count, the number of questions and the
-     arrow. At this width the full bar still leaves its current row about a hundred pixels. */
+  /* Below this measured width, in CSS pixels, the bar is compact. Four bubbles and "to decide" still fit below it. */
   var COMPACT_BELOW = 400;
   var HYSTERESIS = 24;
-  /* The track's width in CSS pixels, whatever the plan holds; more rows only make the segments thinner.
-     Every segment drawn is at least SEGMENT_MIN wide, so a state with one row among many still shows. */
-  var TRACK_WIDTH = 72;
-  var SEGMENT_MIN = 2;
-  /* The hover lists at most this many open rows, the same limit as the summary's. */
+  /* A hover list shows at most this many rows, the same limit as the summary's. */
   var MAX_LIST = 30;
   var HOVER_MS = 350;
   var MARK = 'data-agent-plus-plan-bar';
 
-  /*
-   * What the bar counts, decided here and nowhere else. A plan keeps every row it was ever given, so done against total
-   * says little about a long conversation; what is left does. So the track shows the open rows by state, in the order
-   * below (what is moving, then what waits to start), and the count says how many are open. To count done against total
-   * instead, put 'done' first in SEGMENTS and have countOf() return s.done + '/' + s.total: the summary carries both.
-   * COUNT_ROOM is the longest count the layout keeps room for, so the title does not move as the count grows.
-   */
-  var SEGMENTS = ['doing', 'waiting', 'discussing', 'todo', 'parked'];
-  var countOf = function (s) {
-    var left = Math.max(0, (+s.total || 0) - (+s.done || 0));
-    return left ? left + ' open' : '';
-  };
-  var COUNT_ROOM = '999 open';
+  /* The states that get a bubble, in their order on the bar: what is moving, what is held up, what is still being talked
+     over, what waits to start. Parked and done rows have none. WORD names a state in the hover and the spoken label. */
+  var BUBBLES = ['doing', 'waiting', 'discussing', 'todo'];
+  var WORD = { doing: 'doing', waiting: 'waiting', discussing: 'discussing', todo: 'to do', parked: 'parked', done: 'done' };
 
-  /* The colours of the work plan view's state icons (LOOK in src/workplan-view.js), as the page's theme variables. */
+  /* The colours of the work plan view's state icons (LOOK in src/workplan-view.js), as the page's theme variables. A
+     bubble draws its icon in its state's colour on a tint of it: TINT percent of the colour, more in light themes, whose
+     orange and yellow are so close that lighter tints of them look the same. */
   var COLOR = {
     done: 'var(--vscode-charts-green, #89d185)',
     doing: 'var(--vscode-charts-blue, #3794ff)',
@@ -50,11 +41,12 @@ var agentPlusPlanBar = (function () {
     todo: 'var(--vscode-charts-purple, #b180d7)',
     parked: 'var(--vscode-descriptionForeground, #8c8c8c)'
   };
-  /* The colour of the question mark the work plan view gives a row waiting for the user's answer (src/workplan-view.js).
-     The questions part is tinted with it and its dot is a deeper shade of it. Not the status bar's warning colour, which
-     some themes make red, so that a question to answer would read as an error. */
+  var TINT = { dark: 24, light: 45 };
+  /* "to decide" is filled with the colour of the question mark the work plan view gives a row waiting for the user's
+     answer (src/workplan-view.js), with dark words on it; the high contrast themes make that colour a deep orange or a
+     dark blue, where the words are white. Not the status bar's warning colour, which some themes make red. */
   var ASK = 'var(--vscode-charts-orange, #d18616)';
-  var ASK_DOT = 'color-mix(in srgb, ' + ASK + ' 80%, black)';
+  var ASK_TEXT = '#1f1f1f';
   var MUTED = 'var(--vscode-descriptionForeground, #8c8c8c)';
 
   /* 16 by 16 shapes in the spirit of the work plan view's icons; each takes the colour of the text around it. */
@@ -70,32 +62,32 @@ var agentPlusPlanBar = (function () {
     todo: svg('<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/>'),
     parked: svg('<g fill="currentColor"><rect x="4" y="3" width="2.5" height="10" rx=".5"/><rect x="9.5" y="3" width="2.5" height="10" rx=".5"/></g>'),
     done: svg('<circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.75 8.25l2.25 2.25 4.25-4.5" fill="none" stroke="var(--vscode-editor-background, #1e1e1e)" stroke-width="1.6"/>'),
+    question: svg('<g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/>'
+      + '<path d="M6.1 6.2a1.95 1.95 0 1 1 2.9 1.7c-.6.35-1 .8-1 1.5v.4" stroke-linecap="round"/></g><circle cx="8" cy="11.6" r=".9" fill="currentColor"/>'),
     chevron: svg('<path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.5"/>')
   };
 
+  var pill = 'display:flex;align-items:center;gap:4px;flex:none;box-sizing:border-box;height:18px;border-radius:9px;font-variant-numeric:tabular-nums;';
   var CSS = '[' + MARK + ']{display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;min-width:0;height:26px;'
     + 'margin:0 0 6px;padding:0 8px 0 10px;overflow:hidden;cursor:pointer;user-select:none;font-size:12px;line-height:18px;'
     + 'white-space:nowrap;color:var(--vscode-foreground, #ccc);background:var(--vscode-input-background, #252526);'
-    + 'border:1px solid var(--vscode-input-border, var(--vscode-widget-border, rgba(128,128,128,.35)));border-radius:6px}'
+    + 'border:1px solid var(--vscode-input-border, var(--vscode-widget-border, rgba(128,128,128,.35)));border-radius:6px;'
+    + '--apb-tint:' + TINT.dark + '%}'
+    + 'body.vscode-light [' + MARK + '],body.vscode-high-contrast-light [' + MARK + ']{--apb-tint:' + TINT.light + '%}'
     + '[' + MARK + ']:hover{border-color:var(--vscode-focusBorder, #007fd4)}'
     + '[' + MARK + ']:focus-visible{outline:1px solid var(--vscode-focusBorder, #007fd4);outline-offset:-1px}'
     + '[' + MARK + '] svg{display:block;flex:none}'
     + '.apb-icon{display:flex;flex:none;color:' + MUTED + '}'
     + '.apb-name{flex:none;font-weight:700}'
-    + '.apb-track{display:flex;flex:none;gap:1px;width:' + TRACK_WIDTH + 'px;height:6px;border-radius:3px;overflow:hidden;'
-    + 'background:var(--vscode-input-border, rgba(128,128,128,.35))}'
-    + '.apb-seg{display:block;height:100%;min-width:' + SEGMENT_MIN + 'px}'
-    + '.apb-count{flex:none;box-sizing:content-box;text-align:right;font-variant-numeric:tabular-nums;color:' + MUTED + '}'
-    + '.apb-sep{flex:none;color:' + MUTED + '}'
-    + '.apb-row{display:flex;align-items:center;gap:5px;flex:1 1 0;min-width:0;overflow:hidden}'
+    + '.apb-b{' + pill + 'padding:0 7px 0 5px}'
     + '.apb-text{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     + '.apb-dim{color:' + MUTED + '}'
     + '.apb-gap{flex:1 1 0;min-width:0}'
-    + '.apb-q{display:flex;align-items:center;gap:5px;flex:none;padding:0 8px;border-radius:9px;'
-    + 'background:color-mix(in srgb, ' + ASK + ' 30%, transparent)}'
-    + '.apb-q:hover{background:color-mix(in srgb, ' + ASK + ' 48%, transparent)}'
-    + '.apb-q:focus-visible{outline:1px solid var(--vscode-focusBorder, #007fd4)}'
-    + '.apb-dot{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:' + ASK_DOT + '}'
+    + '.apb-q{' + pill + 'padding:0 8px 0 5px;font-weight:600;color:' + ASK_TEXT + ';background:' + ASK + '}'
+    + 'body.vscode-high-contrast .apb-q,body.vscode-high-contrast-light .apb-q{color:#fff}'
+    + '.apb-q:hover{background:color-mix(in srgb, ' + ASK + ' 82%, white)}'
+    + '.apb-q:focus-visible{outline:1px solid var(--vscode-focusBorder, #007fd4);outline-offset:1px}'
+    + '.apb-q .apb-icon{color:inherit}'
     + '.apb-chev{display:flex;flex:none;color:' + MUTED + '}'
     + '[' + MARK + ']:hover .apb-chev{color:var(--vscode-foreground, #ccc)}'
     + '[' + MARK + '-list]{position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;max-width:420px;padding:6px 8px;'
@@ -110,45 +102,66 @@ var agentPlusPlanBar = (function () {
   var plural = function (n, one, many) { return n + ' ' + (n === 1 ? one : many); };
 
   /*
-   * What the bar draws for `summary` at `width`, or null for no bar: { compact, segments: [{ state, n }], count,
-   * current: { state, text, dim } or null, questions: the questions part's text or '', label: the bar's spoken text, list:
-   * { now, head, rows: [{ state, text, depth }], more } or null }. `wasCompact` is the form drawn last, for the
-   * hysteresis. A width of 0 is one not measured yet, and draws the full bar.
+   * What the bar draws for `summary` at `width`, or null for no bar: { compact, bubbles: [{ state, n }], done, questions:
+   * the "to decide" text or '', label: the bar's spoken text, lists: the hover list for each part, under the bubble's
+   * state, 'ask' for "to decide" and '' for the rest of the bar, each { now, head, rows: [{ state, text, depth }], more } }.
+   * `wasCompact` is the form drawn last, for the hysteresis. A width of 0 is one not measured yet, and draws the full bar.
+   * A summary without `asking` (from a core older than the bubbles) counts its asking rows in their states' bubbles too.
    */
   function model(summary, width, wasCompact) {
     var s = summary;
     if (!s || typeof s !== 'object' || !(s.total > 0 || s.allDone)) return null;
-    var counts = s.counts || {};
+    var counts = s.counts || {}, asking = s.asking || {};
     var compact = width > 0 && width < (wasCompact ? COMPACT_BELOW + HYSTERESIS : COMPACT_BELOW);
-    var segments = [];
-    for (var i = 0; i < SEGMENTS.length; i++) {
-      var n = +counts[SEGMENTS[i]] || 0;
-      if (n > 0) segments.push({ state: SEGMENTS[i], n: n });
-    }
     var q = +s.questions || 0;
-    var current = null;
-    if (s.allDone) current = { state: 'done', text: 'All rows done', dim: true };
-    else if (s.current && s.current.title) {
-      current = { state: s.current.state, text: (s.current.number ? s.current.number + ' ' : '') + s.current.title, dim: !!s.current.dim };
-    }
     var open = Array.isArray(s.open) ? s.open : [];
     var rows = [];
-    for (var j = 0; j < open.length && rows.length < MAX_LIST; j++) {
+    for (var j = 0; j < open.length; j++) {
       var r = open[j];
-      if (r && r.title) rows.push({ state: r.state, text: (r.number ? r.number + ' ' : '') + r.title, depth: Math.max(1, +r.depth || 1) });
+      if (r && r.title) rows.push({ state: r.state, text: (r.number ? r.number + ' ' : '') + r.title, depth: Math.max(1, +r.depth || 1), asks: !!r.asks });
     }
+    var take = function (list) {
+      var out = [];
+      for (var k = 0; k < list.length && out.length < MAX_LIST; k++) out.push({ state: list[k].state, text: list[k].text, depth: list[k].depth });
+      return out;
+    };
     var left = Math.max(0, (+s.total || 0) - (+s.done || 0));
-    var label = 'Work plan: ' + (s.allDone ? 'all rows done' : plural(left, 'row', 'rows') + ' open')
-      + (current && !s.allDone ? '; ' + current.text : '') + (q ? '; ' + plural(q, 'question waits', 'questions wait') + ' for your answer' : '');
+    var now = s.current && s.current.title ? (s.current.number ? s.current.number + ' ' : '') + s.current.title : '';
+    var lists = {};
+    if (left) {
+      var all = take(rows);
+      lists[''] = { now: s.allDone ? '' : now, head: plural(left, 'row', 'rows') + ' not done', rows: all, more: Math.max(0, left - all.length) };
+    }
+    var bubbles = [], said = [];
+    for (var i = 0; i < BUBBLES.length; i++) {
+      var state = BUBBLES[i];
+      var n = Math.max(0, (+counts[state] || 0) - (+asking[state] || 0));
+      if (!n) continue;
+      bubbles.push({ state: state, n: n });
+      said.push(n + ' ' + WORD[state]);
+      var mine = [];
+      for (var m = 0; m < rows.length; m++) if (rows[m].state === state && !rows[m].asks) mine.push({ state: state, text: rows[m].text, depth: 1 });
+      var shown = take(mine);
+      lists[state] = { now: '', head: n + ' ' + WORD[state], rows: shown, more: Math.max(0, n - shown.length) };
+    }
+    if (q) {
+      var asks = Array.isArray(s.asks) ? s.asks : [], qs = [];
+      for (var a = 0; a < asks.length; a++) {
+        var x = asks[a];
+        if (x && (x.question || x.title)) qs.push({ state: 'question', text: (x.number ? x.number + ' ' : '') + (x.question || x.title), depth: 1 });
+      }
+      var shownQ = take(qs);
+      lists.ask = { now: '', head: plural(q, 'question', 'questions') + ' for you', rows: shownQ, more: Math.max(0, q - shownQ.length) };
+    }
+    var label = 'Work plan: ' + (s.allDone ? 'all rows done' : said.length ? said.join(', ') : plural(left, 'row', 'rows') + ' open')
+      + (q ? '; ' + plural(q, 'question waits', 'questions wait') + ' for your answer' : '');
     return {
       compact: compact,
-      segments: segments,
-      count: countOf(s),
-      current: current,
+      bubbles: bubbles,
+      done: !!s.allDone,
       questions: q ? (compact ? String(q) : q + ' to decide') : '',
       label: label,
-      list: left ? { now: current && !s.allDone ? current.text : '', head: plural(left, 'row', 'rows') + ' not done', rows: rows,
-        more: Math.max(0, left - rows.length) } : null
+      lists: lists
     };
   }
 
@@ -176,12 +189,10 @@ var agentPlusPlanBar = (function () {
     e.innerHTML = ICON[name] || ICON.todo;
     return e;
   };
-  /* `ch` is the width of one figure in the bar's font, so the count's box fits COUNT_ROOM. */
-  var countWidth = COUNT_ROOM.length + 'ch';
 
   /*
    * A bar for document `doc`. `opts.onOpen()` runs on a click on the bar or Enter on it, `opts.onAnswer()` on a click
-   * on the questions part; `opts.css` is added to the bar's own style, for a page that wants it closer to its input box.
+   * on "to decide"; `opts.css` is added to the bar's own style, for a page that wants it closer to its input box.
    * Returns { el, update(summary), fit(width), model(), destroy() }.
    */
   function create(doc, opts) {
@@ -193,7 +204,8 @@ var agentPlusPlanBar = (function () {
     el.setAttribute('tabindex', '0');
     if (o.css) el.style.cssText = o.css;
     el.style.display = 'none';
-    var shown = null, summary = null, width = 0, compact = false, drawn = '', list = null, timer = 0, hovering = false;
+    /* `key` is the part the pointer is over: a bubble's state, 'ask', or '' for the rest of the bar. */
+    var shown = null, summary = null, width = 0, compact = false, drawn = '', list = null, timer = 0, hovering = false, key = '';
     var win = doc.defaultView || (typeof window === 'object' ? window : null);
     var call = function (fn) { if (typeof fn === 'function') { try { fn(); } catch (e) { /* the page's own handler */ } } };
 
@@ -204,20 +216,21 @@ var agentPlusPlanBar = (function () {
     }
     function showList() {
       timer = 0;
-      if (!hovering || !shown || !shown.list || !el.parentNode || !doc.body) return;
+      var l = hovering && shown && shown.lists ? shown.lists[key] : null;
+      if (!l || !el.parentNode || !doc.body) return;
       if (list && list.parentNode) list.parentNode.removeChild(list);
       var box = part(doc, 'div', '');
       box.setAttribute(MARK + '-list', '1');
-      if (shown.list.now) box.appendChild(part(doc, 'div', 'apb-now', shown.list.now));
-      box.appendChild(part(doc, 'div', 'apb-head', shown.list.head));
-      for (var i = 0; i < shown.list.rows.length; i++) {
-        var r = shown.list.rows[i], li = part(doc, 'div', 'apb-li');
+      if (l.now) box.appendChild(part(doc, 'div', 'apb-now', l.now));
+      box.appendChild(part(doc, 'div', 'apb-head', l.head));
+      for (var i = 0; i < l.rows.length; i++) {
+        var r = l.rows[i], li = part(doc, 'div', 'apb-li');
         li.style.paddingLeft = ((r.depth - 1) * 12) + 'px';
-        li.appendChild(icon(doc, r.state, COLOR[r.state]));
+        li.appendChild(icon(doc, r.state, r.state === 'question' ? ASK : COLOR[r.state]));
         li.appendChild(part(doc, 'span', 'apb-text', r.text));
         box.appendChild(li);
       }
-      if (shown.list.more) box.appendChild(part(doc, 'div', 'apb-more', 'and ' + shown.list.more + ' more open'));
+      if (l.more) box.appendChild(part(doc, 'div', 'apb-more', 'and ' + l.more + ' more' + (key ? '' : ' open')));
       doc.body.appendChild(box);
       list = box;
       var at = null, size = null;
@@ -241,47 +254,35 @@ var agentPlusPlanBar = (function () {
       }
       compact = m.compact;
       if (el.style.display === 'none') el.style.display = '';
-      var key = JSON.stringify(m);
-      if (key === drawn) return;
-      drawn = key;
+      var json = JSON.stringify(m);
+      if (json === drawn) return;
+      drawn = json;
       while (el.firstChild) el.removeChild(el.firstChild);
       el.setAttribute('aria-label', m.label);
       el.setAttribute('data-compact', m.compact ? '1' : '0');
       el.appendChild(icon(doc, 'list', ''));
-      el.appendChild(part(doc, 'span', 'apb-name', 'Plan'));
-      if (!m.compact) {
-        var track = part(doc, 'span', 'apb-track');
-        for (var i = 0; i < m.segments.length; i++) {
-          var seg = part(doc, 'span', 'apb-seg');
-          seg.setAttribute('data-state', m.segments[i].state);
-          seg.style.flex = m.segments[i].n + ' 1 0px';
-          seg.style.background = COLOR[m.segments[i].state];
-          track.appendChild(seg);
-        }
-        el.appendChild(track);
+      if (!m.compact) el.appendChild(part(doc, 'span', 'apb-name', 'Plan'));
+      for (var i = 0; i < m.bubbles.length; i++) {
+        var b = part(doc, 'span', 'apb-b');
+        b.setAttribute('data-state', m.bubbles[i].state);
+        b.setAttribute('data-key', m.bubbles[i].state);
+        b.style.background = 'color-mix(in srgb, ' + COLOR[m.bubbles[i].state] + ' var(--apb-tint), transparent)';
+        b.appendChild(icon(doc, m.bubbles[i].state, COLOR[m.bubbles[i].state]));
+        b.appendChild(part(doc, 'span', '', String(m.bubbles[i].n)));
+        el.appendChild(b);
       }
-      var count = part(doc, 'span', 'apb-count', m.count);
-      count.style.minWidth = countWidth;
-      el.appendChild(count);
-      if (m.compact) {
-        if (m.current && m.current.state === 'done') el.appendChild(icon(doc, 'done', COLOR.done));
-        el.appendChild(part(doc, 'span', 'apb-gap'));
-      } else if (m.current) {
-        var sep = part(doc, 'span', 'apb-sep', String.fromCharCode(183));
-        if (!m.count) sep.style.visibility = 'hidden';
-        el.appendChild(sep);
-        var cur = part(doc, 'span', 'apb-row');
-        cur.setAttribute('data-state', m.current.state);
-        cur.appendChild(icon(doc, m.current.state, COLOR[m.current.state]));
-        cur.appendChild(part(doc, 'span', 'apb-text' + (m.current.dim ? ' apb-dim' : ''), m.current.text));
-        el.appendChild(cur);
-      } else el.appendChild(part(doc, 'span', 'apb-gap'));
+      if (m.done) {
+        el.appendChild(icon(doc, 'done', COLOR.done));
+        if (!m.compact) el.appendChild(part(doc, 'span', 'apb-text apb-dim', 'All rows done'));
+      }
+      el.appendChild(part(doc, 'span', 'apb-gap'));
       if (m.questions) {
         var q = part(doc, 'span', 'apb-q');
         q.setAttribute('role', 'button');
         q.setAttribute('tabindex', '0');
+        q.setAttribute('data-key', 'ask');
         q.setAttribute('aria-label', 'Answer the questions in the plan');
-        q.appendChild(part(doc, 'span', 'apb-dot'));
+        q.appendChild(icon(doc, 'question', ''));
         q.appendChild(part(doc, 'span', '', m.questions));
         q.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); hideList(); call(o.onAnswer); });
         q.addEventListener('keydown', function (ev) {
@@ -290,22 +291,39 @@ var agentPlusPlanBar = (function () {
         });
         el.appendChild(q);
       }
-      var chev = icon(doc, 'chevron', '');
-      chev.className = 'apb-chev';
-      el.appendChild(chev);
+      if (!m.compact) {
+        var chev = icon(doc, 'chevron', '');
+        chev.className = 'apb-chev';
+        el.appendChild(chev);
+      }
       if (list) showList();
     }
 
+    /* The part of the bar `target` is in. */
+    var keyOf = function (target) {
+      for (var n = target; n && n !== el; n = n.parentNode) {
+        var k = n.getAttribute ? n.getAttribute('data-key') : null;
+        if (k) return k;
+      }
+      return '';
+    };
     el.addEventListener('click', function (ev) { ev.preventDefault(); hideList(); call(o.onOpen); });
     el.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault(); call(o.onOpen);
     });
-    el.addEventListener('mouseenter', function () {
+    /* A list comes after the pointer rests a moment; moved to another part while one shows, the list changes at once. */
+    el.addEventListener('mouseover', function (ev) {
+      var next = keyOf(ev.target);
+      if (hovering && next === key && (list || timer)) return;
+      var showing = !!list;
       hovering = true;
-      if (!timer && !list) timer = setTimeout(showList, HOVER_MS);
+      key = next;
+      hideList();
+      if (showing) showList();
+      else timer = setTimeout(showList, HOVER_MS);
     });
-    el.addEventListener('mouseleave', function () { hovering = false; hideList(); });
+    el.addEventListener('mouseleave', function () { hovering = false; key = ''; hideList(); });
 
     var watcher = null;
     if (win && typeof win.ResizeObserver === 'function') {
@@ -340,7 +358,7 @@ var agentPlusPlanBar = (function () {
     return bar;
   }
 
-  return { COMPACT_BELOW: COMPACT_BELOW, HYSTERESIS: HYSTERESIS, TRACK_WIDTH: TRACK_WIDTH, SEGMENT_MIN: SEGMENT_MIN, MAX_LIST: MAX_LIST,
-    SEGMENTS: SEGMENTS, COUNT_ROOM: COUNT_ROOM, COLOR: COLOR, ASK: ASK, ASK_DOT: ASK_DOT, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
+  return { COMPACT_BELOW: COMPACT_BELOW, HYSTERESIS: HYSTERESIS, MAX_LIST: MAX_LIST, BUBBLES: BUBBLES, WORD: WORD, COLOR: COLOR, TINT: TINT,
+    ASK: ASK, ASK_TEXT: ASK_TEXT, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
 })();
 if (typeof module === 'object' && module) module['exports'] = agentPlusPlanBar;

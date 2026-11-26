@@ -40,6 +40,10 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [10, 1, { discussing: 1, todo: 1, doing: 6, waiting: 1, parked: 0, done: 1 },
         { number: '2.1.1', title: 'Write the CSV exporter and its tests', state: 'doing', dim: false }, false, 2],
       'with rows doing, the current row is the deepest one, the earlier of two at the same depth; dropped rows are not counted, and both questions waiting on the user are');
+    eq([s.asking, s.asks, s.open.filter((r) => r.asks).map((r) => r.number), s.asking.discussing + s.asking.waiting],
+      [{ discussing: 1, waiting: 1 }, [{ number: '4', title: 'Which month to default to', question: 'This month or last month?' },
+        { number: '5', title: 'Refunds', question: 'Skip negative amounts?' }], ['4', '5'], s.questions],
+      'it says how many rows of each state wait for the answer, lists those questions with their rows, and marks those rows among the open ones; the counts add up to the questions');
   }
   {
     const s = summarize(plan([row('A', 'done'), row('B', 'todo'), row('C', 'done', { children: [row('C1', 'waiting', { waitingOn: 'build' }),

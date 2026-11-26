@@ -18,7 +18,7 @@ const { planQuestions } = require('./folders');
 /* The states a bar counts. `dropped` is not counted, and neither is a state this build does not know (docs/protocol.md,
    Plan files). */
 const COUNTED = ['done', 'doing', 'waiting', 'discussing', 'todo', 'parked'];
-/* How many open rows the summary lists, for the bar's hover. */
+/* How many open rows, and how many questions, the summary lists, for the bar's hover. */
 const MAX_OPEN = 30;
 const MAX_TITLE = 200;
 
@@ -35,6 +35,8 @@ function walk(nodes, prefix = '', depth = 1, out = []) {
 }
 
 const row = (r, dim) => ({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), state: r.n.state, dim: !!dim });
+/* Whether a row waits for the user's answer, as planQuestions in src/folders.js counts them. */
+const asks = (n) => n.waitingOn === 'user' && (n.state === 'waiting' || n.state === 'discussing');
 
 /*
  * The summary of `plan`, or null when there is nothing for a bar to draw, such as no plan or a plan that does not parse
@@ -48,14 +50,22 @@ function summarize(plan) {
   if (!plan || plan.error || !Array.isArray(plan.nodes) || !plan.nodes.length) return null;
   const rows = walk(plan.nodes);
   const counts = { discussing: 0, todo: 0, doing: 0, waiting: 0, parked: 0, done: 0 };
-  const open = [];
+  const asking = { discussing: 0, waiting: 0 };
+  const open = [], questions = [];
   let deepest = null, unknown = 0;
   for (const r of rows) {
     const state = r.n.state;
     if (!COUNTED.includes(state)) { if (state !== 'dropped') unknown++; continue; }
     counts[state]++;
     if (state === 'done') continue;
-    if (open.length < MAX_OPEN) open.push({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), state, depth: r.depth });
+    const ask = asks(r.n);
+    if (ask) {
+      asking[state]++;
+      if (questions.length < MAX_OPEN) {
+        questions.push({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), question: String(r.n.question || r.n.title || '').slice(0, MAX_TITLE) });
+      }
+    }
+    if (open.length < MAX_OPEN) open.push({ number: r.number, title: String(r.n.title || '').slice(0, MAX_TITLE), state, depth: r.depth, ...(ask ? { asks: true } : {}) });
     if (state === 'doing' && (!deepest || r.depth > deepest.depth)) deepest = r;
   }
   const total = COUNTED.reduce((sum, k) => sum + counts[k], 0);
@@ -64,7 +74,7 @@ function summarize(plan) {
   const current = deepest ? row(deepest, false) : null;
   return {
     total, done: counts.done, counts, current, allDone,
-    questions: planQuestions(plan.nodes).length, open,
+    questions: planQuestions(plan.nodes).length, asking, asks: questions, open,
   };
 }
 

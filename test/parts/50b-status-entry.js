@@ -5,7 +5,7 @@
 'use strict';
 /*
  * The Conversations entry in the status bar (src/views.js): the number of conversations that need the user, the list of
- * them in its tooltip and its warning background, or the number running when none does. It counts, each once, the
+ * them in its tooltip, or the number running when none does. It counts, each once, the
  * running conversations with a question in their plan and those the attention watcher (src/attention.js) finds waiting
  * for the user; one that stopped with an unread reply is left out.
  */
@@ -34,7 +34,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     changed.fire();
     for (let t = 0; t < 5000 && entry().text !== '$(comment-discussion) ' + text; t += 50) await wait(50);
     const e = entry();
-    return [e.shown, e.text, e.tooltip, e.backgroundColor ? e.backgroundColor.id : null];
+    return [e.shown, e.text, e.tooltip, e.backgroundColor ? 'background ' + e.backgroundColor.id : e.color ? e.color.id : null];
   };
 
   plan('a', 0);
@@ -47,12 +47,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   plan('b', 1);
   plan('c', 3);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta'), conv('c', 'Gamma', false)], '2 conversations need you'),
-    [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.warningBackground'],
+    [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions\nBeta · 1 question', null],
     'it counts conversations, not questions: 2 here for three questions');
 
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 conversation needs you'),
-    [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions', 'statusBarItem.warningBackground'],
+    [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions', null],
     'with one left the text is singular');
 
   const many = Array.from({ length: 12 }, (_, i) => { plan(`m${i}`, 1); return conv(`m${i}`, `Task ${i + 1}`); });
@@ -63,7 +63,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
 
   vscode.env.language = 'zh-cn';
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 个对话等你'),
-    [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\n在等你回答计划里问题的：\nAlpha · 2 个问题', 'statusBarItem.warningBackground'],
+    [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\n在等你回答计划里问题的：\nAlpha · 2 个问题', null],
     'with VS Code\'s display language set to Chinese, the entry and its tooltip use the Chinese strings');
   b.close();
 
@@ -91,11 +91,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const it = () => q.control.state.status.find((i) => i.id === 'agentPlus.conversations');
     const settle = async (want) => { for (let t = 0; t < 5000 && !(it().shown && it().text.includes(want)); t += 50) await wait(50); return it(); };
     const both = await settle('3 conversations need you');
-    eq([both.text, both.tooltip, both.command, both.backgroundColor && both.backgroundColor.id],
+    eq([both.text, both.tooltip, both.command, both.backgroundColor, both.color && both.color.id],
       ['$(comment-discussion) 3 conversations need you',
         '3 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 1 question\nBeta · 1 question'
         + '\nWaiting for you to approve something or answer:\nAlpha (approve Bash)\nGamma',
-        'agentPlus.showConversations', 'statusBarItem.warningBackground'],
+        'agentPlus.showConversations', undefined, undefined],
       'one entry counts both the conversations with a question in their plan and those waiting for the user, Alpha only once though it is both');
     eq(views._parts.needs.items().filter((it) => it.sessionId === 'd').map((it) => it.kind), ['finished'],
       'Delta, stopped with an unread reply, is among those needing the user but is left to its notification, not counted');
