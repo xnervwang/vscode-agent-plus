@@ -143,9 +143,10 @@ function create({ version = '1.145.0', trusted = true } = {}) {
       showErrorMessage: answer('error'),
       setStatusBarMessage: () => new Disposable(() => {}),
       createQuickPick: () => {
-        const accepted = new EventEmitter(), hidden = new EventEmitter();
-        const qp = { items: [], activeItems: [], selectedItems: [], title: '', placeholder: '', matchOnDetail: false, hidden: false,
-          onDidAccept: accepted.event, onDidHide: hidden.event,
+        const accepted = new EventEmitter(), hidden = new EventEmitter(), typed = new EventEmitter();
+        const qp = { items: [], activeItems: [], selectedItems: [], title: '', placeholder: '', matchOnDetail: false, hidden: false, value: '',
+          onDidAccept: accepted.event, onDidHide: hidden.event, onDidChangeValue: typed.event,
+          type(v) { qp.value = v; typed.fire(v); },
           show() { state.quickPicks.push(qp); if (state.onQuickPick) Promise.resolve().then(() => state.onQuickPick(qp)); },
           hide() { if (qp.hidden) return; qp.hidden = true; hidden.fire(); },
           accept(item) { qp.selectedItems = item ? [item] : []; accepted.fire(); },

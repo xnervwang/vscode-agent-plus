@@ -43,8 +43,9 @@ module.exports = async ({ ok, bad, eq, root }) => {
   eq(pkg.capabilities && pkg.capabilities.untrustedWorkspaces && pkg.capabilities.untrustedWorkspaces.supported, 'limited', 'it runs, limited, in Restricted Mode');
   eq([pkg.icon, fs.existsSync(path.join(root, 'images', 'icon.png')), fs.existsSync(path.join(root, 'images', 'icon.svg'))], ['images/icon.png', true, true], 'the marketplace icon is images/icon.png, with its source beside it');
   const containers = [].concat(pkg.contributes.viewsContainers.activitybar, pkg.contributes.viewsContainers.panel);
-  eq([containers.map((c) => c.icon), fs.existsSync(path.join(root, 'images', 'sidebar.svg'))], [['images/sidebar.svg', 'images/sidebar.svg'], true],
-    'both containers use images/sidebar.svg, which is in the repository');
+  eq([containers.map((c) => c.icon), ['sidebar.svg', 'sessions.svg'].every((f) => fs.existsSync(path.join(root, 'images', f)))],
+    [['images/sidebar.svg', 'images/sessions.svg', 'images/sidebar.svg'], true],
+    'the containers use images/sidebar.svg, and the session list\'s images/sessions.svg, both in the repository');
   /* The package carries extension.js, src/ and images/, and .vscodeignore leaves shared/ out: a module of the extension
      that required a file elsewhere would load in the tests and fail once installed. */
   const walkJs = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkJs(path.join(d, e.name)) : /\.js$/.test(e.name) ? [path.join(d, e.name)] : []));

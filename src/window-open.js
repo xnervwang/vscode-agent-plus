@@ -39,11 +39,12 @@ function createWindowOpen({ dir = path.join(sharedHome(), OPEN_DIR), windowId, h
   waitMs = WAIT_MS, every = 200, log = () => {} }) {
   let closed = false;
 
-  /* Resolves 'here', 'there' (another window took it) or 'nowhere'. */
-  async function open(target) {
+  /* Resolves 'here', 'there' (another window took it) or 'nowhere'. With `elsewhere`, for a conversation known to be
+     shown by another window, this window does not try to show it first. */
+  async function open(target, { elsewhere = false } = {}) {
     const row = { title: String(target.title || ''), cwd: String(target.cwd || '') };
     let shown = false;
-    try { shown = (await reveal(target.sourceId, target.sessionId, row)) === true; } catch (_) { shown = false; }
+    if (!elsewhere) { try { shown = (await reveal(target.sourceId, target.sessionId, row)) === true; } catch (_) { shown = false; } }
     if (shown) return 'here';
     const id = `${now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
     const file = (ext) => path.join(dir, id + ext);

@@ -276,7 +276,7 @@ function create(host, opts = {}) {
     const row = { title: String(target.title || ''), cwd: String(target.cwd || '') };
     try {
       if (typeof sources.get(source, 'open') === 'function') return await sources.call(source, 'open', [target.sessionId, row], 'nowhere');
-      return await opener.open(Object.assign({}, target, row));
+      return await opener.open(Object.assign({}, target, row), { elsewhere: true });
     } catch (e) { say('open: ' + ((e && e.message) || e)); return 'nowhere'; }
   };
   const sessionList = startSessionList({ vscode, context, registry, say, trusted, shared, planOf, openElsewhere }, opts.sessionList || {});
@@ -464,7 +464,7 @@ function create(host, opts = {}) {
         const source = registry.get(c.sourceId);
         c.source = { id: c.sourceId, label: sources.labelOf(source) || c.sourceId };
         c.briefs = sources.supports(source, 'brief');
-        if (several) { try { const icon = rowIcon(source, c.activity); if (icon) c.icon = icon; } catch (_) { /* the row keeps the plain dot */ } }
+        if (several) { try { const icon = rowIcon(source, c.dot || ''); if (icon) c.icon = icon; } catch (_) { /* the row keeps the plain dot */ } }
       }
       const problem = problems.map(([source, what]) => (several ? sources.labelOf(source) + ': ' + what : what)).join('\n');
       conversationsTree.set(data, problem, conversationsLang());

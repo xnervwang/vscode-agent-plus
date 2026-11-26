@@ -24,13 +24,17 @@ const { textFor } = require('./conversations-text');
 const { envelope, onEnvelopeChange } = require('./envelope');
 const { keyPart } = require('./sources');
 
-/* The icon for each activity. A stopped conversation has a blank of the same size, so its title stays where the others'
+/* The icon for each of the session list's dots (src/session-rules.js dotOf): blue for a dialog waiting, red for a question
+   asked once the agent stopped, hollow red for one asked while it still runs, green for a turn running, hollow green for
+   background work only. A conversation with no dot has a blank of the same size, so its title stays where the others'
    are. The tooltip says the activity in words, for a reader who cannot tell the red dot from the green. */
 const LOOK = {
-  working: ['circle-filled', 'charts.green'],
-  background: ['circle', 'charts.green'],
-  waiting: ['circle-filled', 'charts.red'],
-  stopped: ['blank', ''],
+  blue: ['circle-filled', 'charts.blue'],
+  red: ['circle-filled', 'charts.red'],
+  redRing: ['circle', 'charts.red'],
+  green: ['circle-filled', 'charts.green'],
+  greenRing: ['circle', 'charts.green'],
+  '': ['blank', ''],
 };
 const UNSEEN_SCHEME = 'agent-plus-unseen';
 
@@ -161,8 +165,8 @@ class ConversationsProvider {
       const item = new vscode.TreeItem(c.title, !kids ? vscode.TreeItemCollapsibleState.None
         : expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
       item.id = 'conversations/' + where;
-      const activity = LOOK[c.activity] ? c.activity : 'stopped';
-      const [icon, color] = LOOK[activity];
+      const activity = ['working', 'background', 'waiting'].includes(c.activity) ? c.activity : 'stopped';
+      const [icon, color] = LOOK[LOOK[c.dot] ? c.dot : ''];
       item.iconPath = (from && c.icon) || new vscode.ThemeIcon(icon, color ? new vscode.ThemeColor(color) : undefined);
       if (c.unseen === true) item.resourceUri = vscode.Uri.from({ scheme: UNSEEN_SCHEME, path: '/' + where });
       item.description = [t.state[c.state], c.questions.length ? t.questions(c.questions.length) : '',

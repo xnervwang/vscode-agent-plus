@@ -114,8 +114,8 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
   } else bad(`dotted logo: ${a.slice(0, 200)}`);
   const light = path.join(idir, 'black.svg'), dark = path.join(idir, 'white.svg');
   fs.writeFileSync(light, codexLike); fs.writeFileSync(dark, codexLike.replace('#000', '#fff'));
-  const made = icons.iconsFor({ light, dark }, 'working', path.join(idir, 'out'), new Map());
+  const made = icons.iconsFor({ light, dark }, 'green', path.join(idir, 'out'), new Map());
   const gone = icons.iconsFor({ light: path.join(idir, 'missing.svg'), dark }, 'idle', path.join(idir, 'out'), new Map());
-  eq([!!made && made.light !== made.dark && fs.readFileSync(made.light, 'utf8').includes(icons.COLORS.working.light), gone],
+  eq([!!made && made.light !== made.dark && fs.readFileSync(made.light, 'utf8').includes(icons.COLORS.green.light), gone],
     [true, null], 'iconsFor() writes the dotted icons, and gives up without a logo');
 };

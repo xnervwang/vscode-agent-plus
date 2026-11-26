@@ -415,13 +415,13 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     ['done-new', 'Stopped with a reply not read', 'unread', 'stopped', true],
     ['long', LONG, 'unread', 'stopped', true],
   ];
-  const LOOK_OF = { working: ['codicon-circle-filled', 'charts.green'], background: ['codicon-circle', 'charts.green'], waiting: ['codicon-circle-filled', 'charts.red'],
+  const LOOK_OF = { working: ['codicon-circle-filled', 'charts.green'], background: ['codicon-circle', 'charts.green'], waiting: ['codicon-circle-filled', 'charts.blue'],
     stopped: ['codicon-blank', ''] };
   const WORDS = { working: 'Running a turn', background: 'Turn over, only background work running', waiting: 'Waiting for you', stopped: 'Stopped' };
   /* Checks the icon, colour and envelope of each row of DOTS; `glyph` is the envelope the theme should draw. */
   const dotsWrong = async (glyph) => {
     const rows = await convRows() || [];
-    const colors = { 'charts.green': await themeColor('charts.green'), 'charts.red': await themeColor('charts.red') };
+    const colors = { 'charts.green': await themeColor('charts.green'), 'charts.blue': await themeColor('charts.blue') };
     const wrong = [];
     for (const [, title, , activity, unseen] of DOTS) {
       const r = rows.find((x) => x.title === title);
@@ -444,10 +444,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const listed = await until(async () => { const r = await convRows(); return r && DOTS.every(([, t]) => r.some((x) => x.title === t)) && r; }, 20000, 300);
     check(!!listed, `the Conversations view lists the ${DOTS.length} conversations of the stand-in source`, await convRows());
     const wrong = await until(async () => { const x = await dotsWrong(COLOUR); return x.length ? null : x; }, 10000, 500) || await dotsWrong(COLOUR);
-    check(!wrong.length, 'each row\'s icon says its activity: a green dot running a turn, a green ring with only background work left, a red dot waiting for the user, none stopped; and the dark theme\'s envelope ends each row with a reply not read, and no other', wrong);
+    check(!wrong.length, 'each row\'s icon says its activity: a green dot running a turn, a green ring with only background work left, a blue dot at a permission prompt, none stopped; and the dark theme\'s envelope ends each row with a reply not read, and no other', wrong);
     const run = await convRow('Running a turn');
     check(!!run && /working · no work plan/.test(run.description), 'a row\'s description says its state and that it keeps no work plan', run && run.description);
-    await look('conversation-dots', { expect: 'The Conversations view in the panel lists eight conversations. Running a turn and Running, with a reply not read yet have a filled green dot; Only background work left and Background work, reply not read have a hollow green ring; At a permission prompt has a filled red dot; Stopped with a reply not read, Stopped, nothing new and the row with the long title have no dot, their titles lined up with the others. An envelope ends the rows Running, with a reply not read yet; Background work, reply not read; Stopped with a reply not read; and the long one, and no other row. No blue dot anywhere.' },
+    await look('conversation-dots', { expect: 'The Conversations view in the panel lists eight conversations. Running a turn and Running, with a reply not read yet have a filled green dot; Only background work left and Background work, reply not read have a hollow green ring; At a permission prompt has a filled blue dot; Stopped with a reply not read, Stopped, nothing new and the row with the long title have no dot, their titles lined up with the others. An envelope ends the rows Running, with a reply not read yet; Background work, reply not read; Stopped with a reply not read; and the long one, and no other row. No red dot anywhere.' },
       pane('agentPlus.conversations'));
   });
 
@@ -1012,7 +1012,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!drawn, 'with two agents registered, every conversation\'s row is drawn with its agent\'s logo', drawn || await convRows());
     const cc = await convRow('A Claude Code conversation');
     check(!!cc && /\nClaude Code\n/.test(cc.aria), 'and its tooltip names the agent', cc);
-    await look('several-agents', { expect: 'The Conversations view lists seven conversations, each with a small logo instead of a plain dot: a blue square with a white plus for the five Codex ones, an orange circle with a white star for the two Claude Code ones. The logos of running conversations carry a green dot at the top right (a hollow green ring on Only background work left), At a permission prompt carries a red one, and Claude Code, stopped has the logo alone.' },
+    await look('several-agents', { expect: 'The Conversations view lists seven conversations, each with a small logo instead of a plain dot: a blue square with a white plus for the five Codex ones, an orange circle with a white star for the two Claude Code ones. The logos of running conversations carry a green dot at the top right (a hollow green ring on Only background work left), At a permission prompt carries a blue one, and Claude Code, stopped has the logo alone.' },
       pane('agentPlus.conversations'));
     await src('return src.removeOther();');
     check(!!await until(async () => { const r = await convRow('Running a turn'); return r && r.icon === 'codicon-circle-filled' && !/conversation-icons/.test(r.image); }, 15000, 300),
@@ -1322,6 +1322,396 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await startWorking([conv('quiet', 'Nothing to see', 'idle', 'stopped')]);
   });
 
+  /* ── the session list ── */
+  const slFrame = () => until(async () => {
+    for (const f of page.frames()) { try { if (await f.evaluate(() => !!document.querySelector('.sl-root .sl-new'))) return f; } catch (_) { /* not that frame */ } }
+    return null;
+  }, 20000, 300);
+  let sl = null;
+  /* Shows the session list's container and finds its page; `view` is the view's id, named so for the feature list. */
+  const showSessions = async (view) => {
+    await exec('workbench.view.extension.agentPlusSessions');
+    await sleep(500);
+    sl = await slFrame();
+    if (!sl) throw new Error(`the page of ${view} did not load`);
+    return sl;
+  };
+  const slRows = () => sl.evaluate(() => [...document.querySelectorAll('.sl-row')].map((r) => ({ title: r.querySelector('.sl-title').textContent,
+    section: r.closest('.sl-section').dataset.key, label: r.closest('.sl-section').querySelector('.sl-head-label').textContent, dot: r.dataset.dot,
+    stripe: r.dataset.stripe, dim: r.classList.contains('sl-elsewhere'), shown: !!r.offsetParent && !r.closest('.sl-hidden'),
+    pinned: !r.querySelector('.sl-pinned').classList.contains('sl-hidden'), color: r.querySelector('.sl-title').style.color, indent: r.style.paddingLeft,
+    marks: r.querySelector('.sl-marks').textContent })));
+  const slWait = (fn, ms = 15000) => until(async () => { const r = await slRows().catch(() => null); return r && fn(r) ? r : null; }, ms, 300);
+  const slFind = (rows, title, section) => (rows || []).find((r) => r.title === title && (!section || r.section === section));
+  const slRowLoc = (title, section) => sl.locator(section ? `.sl-section[data-key="${section}"] .sl-row` : '.sl-section:not([data-key="closed"]) .sl-row')
+    .filter({ has: sl.locator('.sl-title', { hasText: new RegExp(`^${escapeRe(title)}$`) }) }).first();
+  const slHead = (label) => sl.locator('.sl-head').filter({ has: sl.locator('.sl-head-label', { hasText: new RegExp(`^${escapeRe(label)}$`, 'i') }) }).first();
+  const slOpen = async (label) => { const h = slHead(label); if (!await h.evaluate((e) => e.parentElement.classList.contains('sl-open'))) await h.click(); };
+  const slMenu = () => until(() => sl.evaluate(() => {
+    const b = document.querySelector('.sl-ctx:not(.sl-ctx-sub)');
+    return b ? [...b.querySelectorAll('.sl-ctx-item')].map((x) => x.textContent.replace('›', '').replace('✓', '').trim()) : null;
+  }), 5000, 200);
+  const slItem = (label, sub = false) => sl.locator(sub ? '.sl-ctx-sub .sl-ctx-item' : '.sl-ctx:not(.sl-ctx-sub) .sl-ctx-item').filter({ hasText: label }).first();
+  const slAct = async (title, act, section) => { const r = slRowLoc(title, section); await r.hover(); await r.locator(`.sl-act[data-act="${act}"]`).click(); await page.mouse.move(5, 5); };
+  const slHover = () => sl.evaluate(() => { const h = document.querySelector('.sl-hover'); return h && !h.classList.contains('sl-hidden') ? h.textContent : ''; });
+  const calls = (which) => src(which === 'codex' ? 'return src.state.calls;' : 'return src.otherState(arg).calls;', which);
+  const sidebarBox = () => page.locator('#workbench\\.parts\\.sidebar');
+  const DAY = 86400e3;
+  /* Another VS Code window, as each source's windows/<pid>.json says: this test's own process stands in for it. */
+  const otherWindow = (sessions) => {
+    fs.mkdirSync(path.join(profile.plans, 'windows'), { recursive: true });
+    fs.writeFileSync(path.join(profile.plans, 'windows', `${process.pid}.json`), JSON.stringify({ at: Date.now(), pid: process.pid, name: 'proj-b [SSH: host-b]', sessions }));
+  };
+  const SLT = { run: 'Fix the sessions page filter', bg: 'Background build left running', perm: 'Waits for a permission', ask: 'Asked which branch to release',
+    askrun: 'Asked a question, still working', unread: 'Review archive sweep', other: 'Open in another window', quiet: 'Nothing going on', kid: 'A sub-agent',
+    month: 'Quiet for a month', weeks: 'Quiet for three weeks', cc: 'A Claude Code conversation', ccStop: 'Claude Code, stopped', oc: 'An OpenCode conversation',
+    ocTerm: 'OpenCode in a terminal', ocOld: 'Archived long ago' };
+  let slAt = 0;
+  const slConvs = (t) => [
+    conv('sl-run', SLT.run, 'working', 'working', false, { lastActiveAt: t - 60e3, actions: ['goal.pause'] }),
+    conv('sl-bg', SLT.bg, 'working', 'background', false, { lastActiveAt: t - 120e3 }),
+    conv('sl-perm', SLT.perm, 'prompt', 'waiting', false, { lastActiveAt: t - 180e3, waitingFor: { kind: 'permission', tool: 'Bash' } }),
+    conv('sl-ask', SLT.ask, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 240e3, lastUserAt: t - HOUR }),
+    conv('sl-askrun', SLT.askrun, 'working', 'working', false, { lastActiveAt: t - 300e3, lastUserAt: t - HOUR }),
+    conv('sl-unread', SLT.unread, 'unread', 'stopped', true, { running: false, lastActiveAt: t - 360e3 }),
+    conv('sl-other', SLT.other, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 420e3 }),
+    conv('sl-quiet', SLT.quiet, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 480e3 }),
+    conv('sl-kid', SLT.kid, 'idle', 'stopped', false, { running: false, kind: 'subagent', parentId: 'sl-run', lastActiveAt: t - 500e3 }),
+    conv('sl-month', SLT.month, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 30 * DAY }),
+    conv('sl-weeks', SLT.weeks, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 21 * DAY }),
+  ];
+  const slPlans = (t) => {
+    for (const id of ['sl-ask', 'sl-askrun']) writePlan(id, { nodes: [{ title: 'Pick the branch', state: 'waiting', waitingOn: 'user', question: 'Main or the hotfix branch?', since: iso(t - 60e3), opened: iso(t - HOUR) }] });
+  };
+
+  /* Whether the session list has made its first pass over the project, which archives at once what is due. */
+  const listSwept = () => { try { const d = path.join(profile.shared, 'session-list'); return fs.readdirSync(d).filter((n) => /^[0-9a-f]{16}\.json$/.test(n))
+    .some((n) => JSON.parse(fs.readFileSync(path.join(d, n), 'utf8')).sweepAt > 0); } catch (_) { return false; } };
+
+  await step('sessions-rows', async () => {
+    check(!!await until(async () => listSwept(), 30000, 300), 'the session list makes its first pass over the project once the window opens');
+    slAt = Date.now();
+    slPlans(slAt);
+    await conversations(slConvs(slAt));
+    await src('return src.addOther(arg);', [conv('cc-1', SLT.cc, 'working', 'working', false, { lastActiveAt: slAt - 90e3 }),
+      conv('cc-2', SLT.ccStop, 'idle', 'stopped', false, { running: false, lastActiveAt: slAt - 2 * HOUR })]);
+    await src('return src.addThird(arg[0], arg[1]);', [[conv('oc-1', SLT.oc, 'idle', 'stopped', false, { running: false, lastActiveAt: slAt - 150e3 }),
+      conv('oc-term', SLT.ocTerm, 'working', 'working', false, { lastActiveAt: slAt - 200e3, elsewhere: [{ kind: 'terminal', label: 'terminal pts/3', detail: ['opencode in /work/expense-tracker'], running: true }] }),
+      conv('oc-old', SLT.ocOld, 'idle', 'stopped', false, { running: false, lastActiveAt: slAt - 60 * DAY })],
+    { archived: [{ sessionId: 'oc-old', at: slAt - 60 * DAY }], groups: [], pinned: [], colors: {} }]);
+    otherWindow(['sl-other']);
+    await openConv('sl-run');
+    await showSessions('agentPlus.sessions');
+    await sideBarWidth(420);
+    const rows = await slWait((r) => [SLT.run, SLT.perm, SLT.ask, SLT.other, SLT.cc, SLT.oc, SLT.ocTerm].every((t) => slFind(r, t, 'ungrouped'))
+      && (slFind(r, SLT.other) || {}).stripe === 'elsewhere' && (slFind(r, SLT.ask) || {}).dot === 'red', 25000);
+    check(!!rows, 'the session list lists the conversations of all three agents together, in Ungrouped', rows || await slRows().catch(() => null));
+    if (!rows) return;
+    const dot = (t) => (slFind(rows, t) || {}).dot;
+    check(sameList([SLT.run, SLT.bg, SLT.perm, SLT.ask, SLT.askrun, SLT.quiet].map(dot), ['green', 'greenRing', 'blue', 'red', 'redRing', 'none']),
+      'each of the five dots: a turn running, background work only, a dialog waiting, a question asked and stopped, a question asked while still working, and none', [SLT.run, SLT.bg, SLT.perm, SLT.ask, SLT.askrun, SLT.quiet].map((t) => [t, dot(t)]));
+    const run = slFind(rows, SLT.run), other = slFind(rows, SLT.other), term = slFind(rows, SLT.ocTerm);
+    check(run.stripe === 'here' && !run.dim && other.stripe === 'elsewhere' && other.dim && term.stripe === 'elsewhere' && term.dim && dot(SLT.ocTerm) === 'green',
+      'the conversation in this window\'s tab has the solid stripe; one in another VS Code window and one in a terminal have the outlined stripe and are dimmed, their dot kept', [run, other, term]);
+    const unreadMark = (t) => sl.evaluate((x) => [...document.querySelectorAll('.sl-row')].some((r) => r.querySelector('.sl-title').textContent === x && !!r.querySelector('.sl-unread svg')), t);
+    check(!slFind(rows, SLT.kid) && await unreadMark(SLT.unread) && !await unreadMark(SLT.quiet),
+      'a sub-agent is hidden, and only the unread conversation has the envelope', rows.map((r) => [r.title, r.marks]));
+    const archived = slFind(rows, SLT.ocOld, 'archived');
+    check(!!archived, 'what the agent had archived is imported as archived, the first time the list sees that agent', rows.filter((r) => r.section === 'archived'));
+    const ungrouped = rows.filter((r) => r.section === 'ungrouped').map((r) => r.title);
+    check(ungrouped.indexOf(SLT.run) < ungrouped.indexOf(SLT.cc) && ungrouped.indexOf(SLT.cc) < ungrouped.indexOf(SLT.bg) && ungrouped.indexOf(SLT.weeks) < ungrouped.indexOf(SLT.month),
+      'Ungrouped is in order of the last message, newest first, across the agents', ungrouped);
+    const chips = await sl.evaluate(() => Object.fromEntries([...document.querySelectorAll('.sl-chip')].map((c) => [c.dataset.chip, Number(c.lastChild.textContent)])));
+    check(chips.needs === 3 && chips.running === 5 && chips.open === 1, 'the chips count: Needs you the blue and both red dots, Running the five running, Open the one open here', chips);
+    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted, New in sidebar), chips All, Open 1, Running 5, Needs you 3, then section bands RECENTLY CLOSED is absent, UNGROUPED and ARCHIVED (collapsed) each with a count. Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title.' },
+      sidebarBox());
+    await look('sessions-elsewhere', { expect: 'A close view of the list. The rows Open in another window and OpenCode in a terminal stand out as open somewhere else at a glance: an outlined stripe at the start of the row and greyed title and logo, while the other rows are not greyed. Judge whether that mark is noticeable without being told to look for it.' },
+      sidebarBox());
+  });
+
+  await step('sessions-themes', async () => {
+    needs('sessions-rows');
+    await theme(THEMES.light);
+    await showSessions('agentPlus.sessions');
+    await sleep(800);
+    await look('sessions-light', { expect: 'The same list in a light theme: dark text on a light background, section bands a little darker than the rows, the logos and the five dots in the same colours as in the dark theme, and the stripes visible.' }, sidebarBox());
+    await theme(THEMES.dark);
+    await sideBarWidth(230);
+    await showSessions('agentPlus.sessions');
+    await sleep(800);
+    const fits = await sl.evaluate(() => [...document.querySelectorAll('.sl-row')].filter((r) => r.offsetParent).every((r) => r.scrollWidth <= r.clientWidth + 1));
+    check(fits, 'in a narrow side bar every row still fits, its title cut short');
+    await look('sessions-narrow', { expect: 'The list in a narrow side bar, about 230 pixels: long titles end in an ellipsis, the time stays at the right, nothing overlaps, and the New bar\'s two halves stay on one line, their labels cut short if need be.' }, sidebarBox());
+    await sideBarWidth(420);
+  });
+
+  await step('sessions-hover', async () => {
+    needs('sessions-rows');
+    otherWindow(['sl-other']);
+    await showSessions('agentPlus.sessions');
+    await slRowLoc(SLT.other).hover();
+    const said = await until(async () => { const t = await slHover(); return /Open in the VS Code window "proj-b \[SSH: host-b\]"/.test(t) && t; }, 5000, 200);
+    check(!!said && /Session ID: sl-other/.test(said) && /Ungrouped/.test(said), 'the hover box of a conversation open in another window names that window, the section and the session id', said || await slHover());
+    await look('sessions-hover', { pointer: true, expect: 'A hover box under the row Open in another window, saying Codex · Ungrouped, the session ID sl-other, when it started and was last active, and Open in the VS Code window "proj-b [SSH: host-b]".' }, sidebarBox());
+    await page.mouse.move(5, 5);
+    await sleep(300);
+    await slRowLoc(SLT.ocTerm).hover();
+    const term = await until(async () => { const t = await slHover(); return /Runs in terminal pts\/3/.test(t) && t; }, 5000, 200);
+    check(!!term && /opencode in \/work\/expense-tracker/.test(term) && /A turn is running/.test(term), 'and of one running in a terminal, the terminal and what the agent says of it, and what its dot means', term || await slHover());
+    await page.mouse.move(5, 5);
+  });
+
+  await step('sessions-actions', async () => {
+    needs('sessions-rows');
+    otherWindow(['sl-other']);
+    await showSessions('agentPlus.sessions');
+    await slAct(SLT.quiet, 'pin');
+    const pinned = await slWait((r) => (slFind(r, SLT.quiet) || {}).pinned && r.filter((x) => x.section === 'ungrouped')[0].title === SLT.quiet);
+    check(!!pinned, 'Pin from the row\'s buttons pins it, and a pinned conversation goes first in its section', pinned && pinned.filter((x) => x.section === 'ungrouped').slice(0, 3));
+    await slAct(SLT.unread, 'rename');
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('Review the archive sweep');
+    await page.keyboard.press('Enter');
+    const renamed = await until(async () => (await src('return src.conversations();')).some((c) => c.sessionId === 'sl-unread' && c.title === 'Review the archive sweep'), 10000, 300);
+    check(!!renamed && !!await slWait((r) => slFind(r, 'Review the archive sweep')), 'Rename edits the title in place, and the agent is asked to rename it');
+    await slRowLoc(SLT.quiet).click({ button: 'right' });
+    const menu = await slMenu();
+    check(!!menu && ['Open in Tab', 'Rename', 'Text Color', 'Unpin', 'New Group from Conversation', 'Mark as Unread', 'Archive'].every((x) => menu.includes(x))
+      && !menu.includes('Add to Group') && !menu.includes('Delete...'),
+    'a row\'s menu offers opening, renaming, a text colour, unpinning, a new group, unread and archiving; no Add to Group while there is no group, and no deleting outside Archived', menu);
+    await slItem('Text Color').hover();
+    await slItem('Green', true).click();
+    check(!!await slWait((r) => /charts-green/.test((slFind(r, SLT.quiet) || {}).color || '')), 'Text Color colours the title');
+    await slRowLoc(SLT.run).click({ button: 'right' });
+    const own = await slMenu();
+    check(!!own && own.includes('Pause Goal'), 'an agent\'s own action is in the menu of the rows it names', own);
+    await slItem('Pause Goal').click();
+    check(!!await until(async () => (await calls('codex')).some((c) => c[0] === 'goal.pause' && sameList(c[1], ['sl-run'])), 8000, 300), 'and goes to that agent');
+    await slRowLoc(SLT.ask).click();
+    check(!!await frontIs(SLT.ask), 'clicking a conversation opens it in a tab');
+    await slRowLoc(SLT.other).click();
+    const told = await toastWith('which did not answer', 12000);
+    check(!!told && !(await calls('codex')).some((c) => c[0] === 'open' && c[1][0] === 'sl-other'),
+      'one open in another window that does not answer is not opened here as well, and the user is told', told);
+    await clearToasts();
+    await slRowLoc(SLT.quiet).click({ modifiers: ['ControlOrMeta'] });
+    await slRowLoc(SLT.cc).click({ modifiers: ['ControlOrMeta'] });
+    await slRowLoc(SLT.cc).click({ button: 'right' });
+    const many = await slMenu();
+    check(!!many && many.includes('Archive 2 Conversations') && many.includes('New Group from 2 Conversations'),
+      'Ctrl or Cmd and a click selects several conversations, of any agents, and the menu acts on them all', many);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    check(!!await until(() => sl.evaluate(() => !document.querySelector('.sl-row.sl-selected')), 5000, 200), 'and Esc clears the selection');
+    await sl.locator('.sl-root').focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    const hl = await sl.evaluate(() => { const r = document.querySelector('.sl-row.sl-hl'); return r && r.querySelector('.sl-title').textContent; });
+    await page.keyboard.press('F2');
+    const editingKey = await until(() => sl.evaluate(() => !!document.querySelector('.sl-title.sl-editing')), 5000, 200);
+    await page.keyboard.press('Escape');
+    check(!!hl && !!editingKey, 'the arrow keys move through the rows, and F2 renames the one they are on', hl);
+    await slAct(SLT.quiet, 'archive');
+    const arch = await slWait((r) => slFind(r, SLT.quiet, 'archived') && !slFind(r, SLT.quiet, 'ungrouped'));
+    check(!!arch && !slFind(arch, SLT.quiet, 'archived').pinned, 'Archive moves it to Archived and unpins it', arch && slFind(arch, SLT.quiet));
+    await slOpen('Archived');
+    await look('sessions-archived', { expect: 'The ARCHIVED section expanded under Ungrouped, listing Nothing going on (green title, no pin) and Archived long ago with the dark OpenCode logo; hovering an archived row would show an Unarchive button.' }, sidebarBox());
+    await slAct(SLT.quiet, 'unarchive', 'archived');
+    check(!!await slWait((r) => slFind(r, SLT.quiet, 'ungrouped')), 'Unarchive puts it back in Ungrouped');
+  });
+
+  let slGroup = '';
+  await step('sessions-groups', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    await exec('agentPlus.newSessionGroup');
+    const editing = await until(() => sl.evaluate(() => !!document.querySelector('.sl-head-label.sl-editing')), 8000, 200);
+    check(!!editing, 'New Group makes a group and puts its name up for editing');
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('Plugins');
+    await page.keyboard.press('Enter');
+    const made = await until(() => sl.evaluate(() => { const s = [...document.querySelectorAll('.sl-section[data-kind="group"]')].find((x) => x.querySelector('.sl-head-label').textContent === 'Plugins'); return s && s.dataset.key; }), 8000, 200);
+    check(!!made, 'and the name typed is the group\'s', made);
+    slGroup = made || '';
+    await slRowLoc(SLT.cc).click({ button: 'right' });
+    await slItem('Add to Group').hover();
+    await slItem('Plugins', true).click();
+    check(!!await slWait((r) => slFind(r, SLT.cc, slGroup)), 'Add to Group moves a conversation of any agent into it');
+    await slRowLoc(SLT.perm).dragTo(slHead('Plugins'));
+    const dragged = await slWait((r) => slFind(r, SLT.perm, slGroup), 8000);
+    check(!!dragged, 'and so does dragging a row onto the group', dragged && dragged.filter((x) => x.section === slGroup));
+    await slHead('Plugins').click({ button: 'right' });
+    const gm = await slMenu();
+    check(!!gm && ['New Conversation in This Group', 'New Group', 'Rename Group', 'Delete Group'].every((x) => gm.includes(x)), 'a group\'s menu offers a new conversation in it, a new group, renaming and deleting it', gm);
+    await slItem('New Conversation in This Group').hover();
+    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group with a right-click menu open on its header: New Conversation in This Group with a submenu listing Codex, Claude Code and OpenCode, each with its logo, then New Group, Rename Group, Move Down or Move Up where they apply, and Delete Group after a separator.' }, sidebarBox());
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await look('sessions-groups', { expect: 'Sections in this order: PLUGINS (a folder icon, count 2) holding Waits for a permission and A Claude Code conversation, UNGROUPED, then ARCHIVED; each section header is a band with a line above and below, so the sections can be told apart.' }, sidebarBox());
+    await slHead('Plugins').click({ button: 'right' });
+    await slItem('Delete Group').click();
+    check(!!await slWait((r) => slFind(r, SLT.cc, 'ungrouped') && slFind(r, SLT.perm, 'ungrouped')), 'Delete Group puts its conversations back in Ungrouped');
+  });
+
+  await step('sessions-delete', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    await slRowLoc(SLT.ccStop).click({ button: 'right' });
+    await slItem('Archive').click();
+    await slOpen('Archived');
+    await slWait((r) => slFind(r, SLT.ccStop, 'archived'));
+    await slRowLoc(SLT.ccStop, 'archived').click({ button: 'right' });
+    const m = await slMenu();
+    check(!!m && m.includes('Delete...'), 'an archived conversation\'s menu offers Delete', m);
+    await slItem('Delete...').click();
+    const d = await until(dialog, 8000, 200);
+    check(!!d && /Delete "Claude Code, stopped" from disk\?/.test(d.text) && /cannot be undone/.test(d.text), 'deleting asks first, naming the conversation and saying it cannot be undone', d);
+    await look('sessions-delete-confirm', { expect: 'A VS Code confirmation dialog: Delete "Claude Code, stopped" from disk?, a line naming it with (Claude Code), the line This cannot be undone., and Delete and Cancel buttons.' },
+      page.locator('.monaco-dialog-box').first());
+    await page.locator('.monaco-dialog-box .dialog-buttons .monaco-button').filter({ hasText: /^Delete$/ }).first().click();
+    const gone = await until(async () => (await calls('claude-code')).some((c) => c[0] === 'delete' && sameList(c[1], ['cc-2'])), 8000, 300);
+    check(!!gone && !!await slWait((r) => !slFind(r, SLT.ccStop)), 'and on Delete the agent deletes it and it leaves the list');
+    otherWindow(['sl-other']);
+    await slRowLoc(SLT.other).click({ button: 'right' });
+    await slItem('Archive').click();
+    await slWait((r) => slFind(r, SLT.other, 'archived'));
+    await slRowLoc(SLT.other, 'archived').click({ button: 'right' });
+    const m2 = await slMenu();
+    check(!!m2 && !m2.includes('Delete...'), 'one open in another window cannot be deleted: its menu has no Delete', m2);
+    await page.keyboard.press('Escape');
+    await slAct(SLT.other, 'unarchive', 'archived');
+  });
+
+  await step('sessions-closed', async () => {
+    needs('sessions-rows');
+    await openConv('sl-quiet');
+    await frontIs(SLT.quiet);
+    await src('return src.close(arg);', 'sl-quiet');
+    await showSessions('agentPlus.sessions');
+    const closed = await slWait((r) => slFind(r, SLT.quiet, 'closed') && (slFind(r, SLT.quiet, 'ungrouped') || {}).stripe === 'closed');
+    check(!!closed, 'a conversation whose tab closes is in Recently closed, and its own row has the light blue stripe', closed && closed.filter((r) => r.title === SLT.quiet));
+    await slOpen('Recently closed');
+    const time = await sl.evaluate(() => { const r = document.querySelector('.sl-section[data-key="closed"] .sl-row .sl-time'); return r && r.textContent; });
+    check(/^closed (now|\d+m)$/.test(time || ''), 'and says when it was closed', time);
+    await look('sessions-closed', { expect: 'A RECENTLY CLOSED section with a clock icon at the top of the list, expanded, listing Nothing going on with "closed now" at the right and a light blue stripe at its start; the same conversation also has its row in Ungrouped with the same light blue stripe.' }, sidebarBox());
+    await setting('agentPlus.sessions.recentlyClosed', 0);
+    check(!!await until(() => sl.evaluate(() => { const s = document.querySelector('.sl-section[data-key="closed"]'); return !s || s.classList.contains('sl-hidden'); }), 8000, 300),
+      'with agentPlus.sessions.recentlyClosed 0 the section goes');
+    await setting('agentPlus.sessions.recentlyClosed', null);
+    await exec('agentPlus.reopenClosedConversation');
+    check(!!await frontIs(SLT.quiet), 'Reopen Closed Conversation opens it again in a tab');
+  });
+
+  await step('sessions-search', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    await exec('agentPlus.searchSessions');
+    await until(() => sl.evaluate(() => document.activeElement && document.activeElement.tagName === 'INPUT'), 5000, 200);
+    await page.keyboard.type('archive');
+    const found = await slWait((r) => { const s = r.filter((x) => x.shown && x.section !== 'closed'); return s.length >= 1 && s.every((x) => /archive/i.test(x.title)); });
+    check(!!found, 'Search keeps only the conversations whose title matches', found && found.filter((x) => x.shown).map((x) => x.title));
+    await look('sessions-search', { expect: 'A search box under the chips holding "archive", and only Review the archive sweep left in the list with "archive" highlighted in its title.' }, sidebarBox());
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await sl.locator('.sl-chip[data-chip="needs"]').click();
+    const needsYou = await slWait((r) => { const s = r.filter((x) => x.shown && x.section !== 'closed').map((x) => x.title).sort(); return sameList(s, [SLT.askrun, SLT.ask, SLT.perm].sort()); });
+    await sl.locator('.sl-chip[data-chip="running"]').click();
+    const running = await slWait((r) => { const s = r.filter((x) => x.shown && x.section !== 'closed').map((x) => x.title); return s.length && s.every((t) => [SLT.run, SLT.bg, SLT.askrun, SLT.cc, SLT.ocTerm].includes(t)); });
+    check(!!running, 'Running keeps the conversations running a turn or background work', running && running.filter((x) => x.shown).map((x) => x.title));
+    check(!!needsYou, 'Needs you keeps the three waiting on the user', (needsYou || await slRows()).filter((x) => x.shown).map((x) => [x.title, x.section, x.dot]));
+    await sl.locator('.sl-chip[data-chip="all"]').click();
+    await exec('agentPlus.filterSessions');
+    const agents = await slMenu();
+    check(!!agents && ['Codex', 'Claude Code', 'OpenCode'].every((x) => agents.includes(x)), 'Choose the Agents Shown lists the three agents', agents);
+    await slItem('OpenCode').click();
+    const noOc = await slWait((r) => !r.some((x) => x.shown && (x.title === SLT.oc || x.title === SLT.ocTerm)) && r.some((x) => x.shown && x.title === SLT.cc));
+    check(!!noOc, 'and unticking one hides its conversations');
+    await look('sessions-filter', { pointer: true, expect: 'A small menu at the top right of the list with Codex and Claude Code ticked and OpenCode unticked, each with its logo; no OpenCode row is left in the list.' }, sidebarBox());
+    await slItem('OpenCode').click();
+    await page.keyboard.press('Escape');
+    check(!!await slWait((r) => r.some((x) => x.shown && x.title === SLT.oc)), 'ticking it again shows them again');
+    await viaUi('agentPlus.findConversation', () => start('agentPlus.findConversation'));
+    await page.keyboard.type('sl-ask');
+    const found2 = await until(async () => { const r = await pickRows(); return r && r.length >= 1 && r.every((x) => /sl-ask/.test(x.text)) && r; }, 10000, 300);
+    check(!!found2 && found2.some((x) => x.label === SLT.ask), 'Find Conversation finds conversations by part of the id, with the agent beside each', found2);
+    await pick(SLT.ask);
+    check(!!await frontIs(SLT.ask), 'and picking one opens it');
+  });
+
+  await step('sessions-account', async () => {
+    needs('sessions-rows');
+    await src('return src.configure(arg);', { account: { rows: [{ label: 'Signed in with', value: 'API key' }, { label: 'Tokens today', value: '1.9M' }],
+      bars: [{ label: '5-hour limit', percent: 32, resetsAt: Date.now() + 2 * HOUR + 600e3 }, { label: 'Weekly limit', percent: 86, resetsAt: Date.now() + 3 * DAY }],
+      links: [{ label: 'View details', command: 'agentPlusTest.installPlugin' }], conversation: { title: SLT.run, rows: [{ label: 'Tokens', value: '412k' }] } } });
+    await showSessions('agentPlus.sessions');
+    const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
+    check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32% · resets 2h 1\dm/.test(shown) && /This conversation · Fix the sessions page filter/i.test(shown),
+      'Account & usage shows the agent\'s rows, its limits with when they reset, and the conversation in front', shown);
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, "This conversation · Fix the sessions page filter" with Tokens 412k, Signed in with API key, Tokens today 1.9M, and two bars: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each saying when it resets.' }, sidebarBox());
+    await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
+    check(!!await until(async () => (await src('return src.state.ran;')).includes('installPlugin'), 5000, 200), 'a link runs the command the agent gave');
+    await slHead('Account & usage').click();
+    await look('sessions-account-closed', { expect: 'The ACCOUNT & USAGE header collapsed to one band with its chevron pointing right, and the sections below it moved up.' }, sidebarBox());
+    await slHead('Account & usage').click();
+    await src('return src.configure(arg);', { account: null });
+  });
+
+  await step('sessions-new', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    await sl.locator('.sl-new-agent').click();
+    const m = await slMenu();
+    check(!!m && sameList(m, ['Codex', 'Claude Code', 'OpenCode']), 'the New bar\'s logo opens a list of the agents', m);
+    await look('sessions-new-menu', { pointer: true, expect: 'Under the New bar\'s logo, a small menu listing Codex (with a check mark), Claude Code and OpenCode, each with its logo.' }, sidebarBox());
+    await slItem('Claude Code').click();
+    await until(() => sl.evaluate(() => /Claude Code/.test(document.querySelector('.sl-new-agent').title)), 5000, 200);
+    await sl.locator('.sl-new-half[data-where="sidebar"]').click();
+    check(!!await until(async () => (await calls('claude-code')).some((c) => c[0] === 'create' && c[2].where === 'sidebar'), 8000, 300),
+      'picking Claude Code, then New in sidebar, starts a Claude Code conversation in the sidebar');
+    await sl.locator('.sl-new-agent').click();
+    await slItem('Codex').click();
+    await until(() => sl.evaluate(() => /Codex/.test(document.querySelector('.sl-new-agent').title)), 5000, 200);
+    await sl.locator('.sl-new-half[data-where="tab"]').click();
+    check(!!await frontIs('New conversation 1'), 'and Codex, then New in tab, a Codex conversation in a tab');
+  });
+
+  await step('sessions-rules', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    await setting('agentPlus.sessions.hideBackground', false);
+    const kid = await slWait((r) => { const u = r.filter((x) => x.section === 'ungrouped'); const i = u.findIndex((x) => x.title === SLT.kid); return i > 0 && u[i - 1].title === SLT.run && parseInt(u[i].indent, 10) > 8; });
+    check(!!kid, 'with agentPlus.sessions.hideBackground off, a sub-agent is shown, indented under the conversation that started it', kid && kid.filter((x) => x.section === 'ungrouped').map((x) => [x.title, x.indent]));
+    await look('sessions-background', { expect: 'A sub-agent listed straight under Fix the sessions page filter, indented further than the other rows.' }, sidebarBox());
+    await setting('agentPlus.sessions.hideBackground', null);
+    await setting('agentPlus.sessions.archiveAfterDays', 25);
+    const archived = await slWait((r) => slFind(r, SLT.month, 'archived') && slFind(r, SLT.weeks, 'ungrouped'), 15000);
+    check(!!archived && !!slFind(archived, SLT.ocOld, 'archived'), 'with agentPlus.sessions.archiveAfterDays 25, a conversation inactive for a month is archived at once and one inactive for three weeks is not, '
+      + 'and one archived 60 days ago is not deleted at 90 days', archived && archived.filter((x) => [SLT.month, SLT.weeks, SLT.ocOld].includes(x.title)).map((x) => [x.title, x.section]));
+    await setting('agentPlus.sessions.deleteArchived', false);
+    await setting('agentPlus.sessions.deleteAfterDays', 30);
+    await sleep(3000);
+    check(!(await calls('opencode')).some((c) => c[0] === 'delete'), 'with agentPlus.sessions.deleteArchived off nothing is deleted, even at 30 days');
+    await setting('agentPlus.sessions.deleteArchived', null);
+    const deleted = await until(async () => (await calls('opencode')).some((c) => c[0] === 'delete' && sameList(c[1], ['oc-old'])), 15000, 300);
+    check(!!deleted && !!await slWait((r) => !slFind(r, SLT.ocOld)), 'and with it on again, one archived for 60 days is deleted at agentPlus.sessions.deleteAfterDays 30');
+    for (const k of ['archiveAfterDays', 'deleteAfterDays']) await setting(`agentPlus.sessions.${k}`, null);
+  });
+
+  await step('sessions-empty', async () => {
+    needs('sessions-rows');
+    await src('return src.removeOther() && src.removeThird();');
+    await conversations([]);
+    await src('return src.configure(arg);', { sessionsNotice: { text: 'Codex was not found on this machine.', actions: [{ label: 'Install Codex', command: 'agentPlusTest.installPlugin' }] } });
+    await showSessions('agentPlus.sessions');
+    const empty = await until(() => sl.evaluate(() => { const e = [...document.querySelectorAll('.sl-empty')].find((x) => !x.classList.contains('sl-hidden')); const n = document.querySelector('.sl-notice'); return e && n && { empty: e.textContent, note: n.innerText }; }), 10000, 300);
+    check(!!empty && empty.empty === 'No conversations yet' && /Codex was not found on this machine\./.test(empty.note) && /Install Codex/.test(empty.note),
+      'with no conversation the list says so, and an agent\'s note is shown above it with its button', empty);
+    await look('sessions-empty', { expect: 'The list with no conversations: the New bar, the chips all at 0, a note with the Codex logo saying Codex was not found on this machine. with an Install Codex button, and No conversations yet below.' }, sidebarBox());
+    await src('return src.configure(arg);', { sessionsNotice: null, ran: [] });
+    await sl.locator('.sl-note-btn').filter({ hasText: 'Install Codex' }).click().catch(() => {});
+    await src('return src.configure(arg);', { sessionsNotice: null });
+  });
+
   await step('show-status', async () => {
     await exec('agentPlus.showStatus');
     const said = await until(() => {
@@ -1367,6 +1757,12 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       + 'with no placeholder saying Ctrl+Enter sends', s);
     const mine = (() => { try { return fs.readdirSync(path.join(profile.shared, 'attention')).filter((n) => fs.statSync(path.join(profile.shared, 'attention', n)).mtimeMs > launchedAt); } catch (_) { return []; } })();
     check(!mine.length, 'and the window writes nothing to the folder the windows share', mine);
+    await showSessions('agentPlus.sessions');
+    const note = await until(() => sl.evaluate(() => { const n = document.querySelector('.sl-notice'); return n && n.innerText; }), 10000, 300);
+    check(!!note && /Restricted Mode/.test(note) && /Manage Workspace Trust/.test(note) && !!await slWait((r) => r.some((x) => x.title === 'Asked about the release branch')),
+      'the session list still lists the conversations, says Restricted Mode changes nothing, and offers Manage Workspace Trust', note);
+    check(await sl.evaluate(() => document.querySelector('.sl-new').classList.contains('sl-hidden')), 'and has no New bar');
+    await look('sessions-restricted', { expect: 'The Conversations side bar in Restricted Mode: no New bar, a note saying Restricted Mode: the list shows conversations and changes nothing, with a Manage Workspace Trust button, and the conversations listed below.' }, sidebarBox());
     await look('restricted', { expect: 'The window in Restricted Mode (a Restricted Mode badge at the left of the status bar). The Conversations view lists Asked about the release branch with its question; the Answer view shows that question with a greyed-out box and Send, and says Restricted Mode: this window does not send answers. Trust the workspace to send one.' },
       page.locator('#workbench\\.parts\\.panel'));
   });

@@ -30,6 +30,10 @@ module.exports = async ({ eq, tmp, root }) => {
   eq(await b.o.take(), 1, 'the window that shows it takes the request');
   eq([await asking, b.revealed, b.fronted], ['there', ['theirs'], 1], 'brings the conversation to the front, and itself');
 
+  a.revealed.length = 0;
+  eq([await a.o.open({ sourceId: 'codex', sessionId: 'mine' }, { elsewhere: true }), a.revealed], ['nowhere', []],
+    'asked only of the other windows, for one another window is known to show, this window does not show it first');
+  eq(await b.o.take(), 0, 'and the window that does not show it leaves the request');
   eq(await a.o.open({ sourceId: 'codex', sessionId: 'nobody' }), 'nowhere', 'one no window shows is nowhere');
   eq([await b.o.take(), fs.readdirSync(dir).filter((n) => n.endsWith('.json'))], [0, []],
     'and its request is withdrawn, so no window takes it afterwards');

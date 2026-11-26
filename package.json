@@ -115,6 +115,30 @@
         "command": "agentPlus.writeAboutRow",
         "title": "%agentPlus.writeAboutRow.title%",
         "icon": "$(edit)"
+      },
+      {
+        "command": "agentPlus.searchSessions",
+        "title": "Agent Plus: Search Conversations",
+        "icon": "$(search)"
+      },
+      {
+        "command": "agentPlus.filterSessions",
+        "title": "Agent Plus: Choose the Agents Shown",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "agentPlus.newSessionGroup",
+        "title": "Agent Plus: New Group",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "agentPlus.reopenClosedConversation",
+        "title": "Agent Plus: Reopen Closed Conversation"
+      },
+      {
+        "command": "agentPlus.findConversation",
+        "title": "Agent Plus: Find Conversation by Title or ID...",
+        "icon": "$(search-fuzzy)"
       }
     ],
     "viewsContainers": {
@@ -123,6 +147,11 @@
           "id": "agentPlus",
           "title": "Agent Plus",
           "icon": "images/sidebar.svg"
+        },
+        {
+          "id": "agentPlusSessions",
+          "title": "Conversations",
+          "icon": "images/sessions.svg"
         }
       ],
       "panel": [
@@ -153,6 +182,14 @@
           "name": "Answer",
           "when": "!agentPlus.alone && config.agentPlus.conversationsView"
         }
+      ],
+      "agentPlusSessions": [
+        {
+          "type": "webview",
+          "id": "agentPlus.sessions",
+          "name": "Conversations",
+          "when": "!agentPlus.alone"
+        }
       ]
     },
     "viewsWelcome": [
@@ -181,6 +218,31 @@
           "command": "agentPlus.refreshWorkPlan",
           "when": "view == agentPlus.workPlan",
           "group": "navigation@2"
+        },
+        {
+          "command": "agentPlus.searchSessions",
+          "when": "view == agentPlus.sessions",
+          "group": "navigation@0"
+        },
+        {
+          "command": "agentPlus.filterSessions",
+          "when": "view == agentPlus.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentPlus.newSessionGroup",
+          "when": "view == agentPlus.sessions",
+          "group": "1_groups@0"
+        },
+        {
+          "command": "agentPlus.reopenClosedConversation",
+          "when": "view == agentPlus.sessions",
+          "group": "2_closed@0"
+        },
+        {
+          "command": "agentPlus.findConversation",
+          "when": "view == agentPlus.sessions",
+          "group": "2_closed@1"
         }
       ],
       "view/item/context": [
@@ -326,8 +388,47 @@
           ],
           "default": "ask",
           "markdownDescription": "VS Code's limit on requests in flight for all webview tabs together (32). Raising it to 1000000 edits VS Code's `service-worker.js`. Takes effect after VS Code is restarted; VS Code updates reset it. `Agent Plus: Put Back VS Code's Request Limit` returns it to 32."
+        },
+        "agentPlus.sessions.archiveAfterDays": {
+          "type": "number",
+          "default": 14,
+          "minimum": 0,
+          "maximum": 3650,
+          "markdownDescription": "Archive a conversation in the **Conversations** list once it has been inactive for this many days. 0 turns this off. Conversations open somewhere, running or waiting, unread, in a group or pinned are left alone."
+        },
+        "agentPlus.sessions.deleteArchived": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Delete archived conversations from disk once they have been archived for `#agentPlus.sessions.deleteAfterDays#` days. Pinned conversations and those open anywhere are never deleted."
+        },
+        "agentPlus.sessions.deleteAfterDays": {
+          "type": "number",
+          "default": 90,
+          "minimum": 1,
+          "maximum": 3650,
+          "markdownDescription": "How many days after it was archived, or after its last message if that is later, an archived conversation is deleted."
+        },
+        "agentPlus.sessions.recentlyClosed": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 50,
+          "markdownDescription": "How many conversations closed in this window the **Recently closed** section lists. 0 hides it."
+        },
+        "agentPlus.sessions.hideBackground": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Hide background runs, sub-agents and empty conversations in the **Conversations** list."
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "agentPlus.reopenClosedConversation",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "agentPlus.lastClosedWasConversation"
+      }
+    ]
   }
 }

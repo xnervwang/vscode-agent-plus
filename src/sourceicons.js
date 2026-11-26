@@ -17,12 +17,15 @@ const path = require('path');
 const { writeAtomic } = require('./files');
 const { readBounded } = require('./bounded');
 
-/* charts.green and charts.red, as src/conversations-view.js colours the activities. `ring` draws the dot hollow. */
+/* charts.blue, charts.red and charts.green in the default themes, for the session list's dots as
+   src/conversations-view.js colours them. `ring` draws the dot hollow; '' is the logo alone. */
 const COLORS = {
-  working: { light: '#388a34', dark: '#89d185' },
-  background: { light: '#388a34', dark: '#89d185', ring: true },
-  waiting: { light: '#e51400', dark: '#f14c4c' },
-  stopped: null,
+  blue: { light: '#1a85ff', dark: '#3794ff' },
+  red: { light: '#e51400', dark: '#f14c4c' },
+  redRing: { light: '#e51400', dark: '#f14c4c', ring: true },
+  green: { light: '#388a34', dark: '#89d185' },
+  greenRing: { light: '#388a34', dark: '#89d185', ring: true },
+  '': null,
 };
 const MAX_BYTES = 256 * 1024;
 const MASK = 'awp-source-dot';
@@ -59,7 +62,7 @@ function withDot(svg, color, ring = false) {
     + `<g mask="url(#${MASK})">${logo}</g>` + dot + '</svg>';
 }
 
-/* The activity becomes part of the file name, so only those in COLORS are accepted and the path must stay inside `dir`. */
+/* The dot becomes part of the file name, so only those in COLORS are accepted and the path must stay inside `dir`. */
 function iconsFor(logo, activity, dir, cache) {
   if (!Object.prototype.hasOwnProperty.call(COLORS, activity)) return null;
   const colors = COLORS[activity] || {};
@@ -75,7 +78,7 @@ function iconsFor(logo, activity, dir, cache) {
       if (body === null) throw new Error('no usable logo');
       const svg = withDot(body, colors[theme], colors.ring === true);
       if (!svg) throw new Error('not an SVG');
-      const target = path.join(home, `${crypto.createHash('sha256').update(svg).digest('hex').slice(0, 12)}-${activity}-${theme}.svg`);
+      const target = path.join(home, `${crypto.createHash('sha256').update(svg).digest('hex').slice(0, 12)}-${activity || 'none'}-${theme}.svg`);
       if (path.dirname(target) !== home) throw new Error('outside the icons folder');
       let have = '';
       try { have = fs.readFileSync(target, 'utf8'); } catch (_) { /* not written yet */ }

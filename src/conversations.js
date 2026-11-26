@@ -18,6 +18,7 @@ const fs = require('fs');
 const { OPEN_STATES, countUnknown } = require('./workplan');
 const { folderTest, planQuestions } = require('./folders');
 const { topRows } = require('./brief');
+const { dotOf } = require('./session-rules');
 const { ACTIVITIES, activityOfState } = require('./sources');
 
 /* Stopped conversations are listed only while their plan was written within this many days. */
@@ -63,10 +64,15 @@ function entry(c, plan, located) {
     row: q.num, title: q.title, question: q.question, since: q.since, state: q.state, note: q.note, detail: q.detail }));
   let state = c.running ? c.state : 'idle';
   if (questions.length && state !== 'prompt') state = 'needs';
+  /* The dot, as the session list draws it (src/session-rules.js): from what the agent itself is doing, and whether a
+     question was put after the user last wrote. */
+  const own = c.running === false ? 'stopped' : ACTIVITIES.includes(c.activity) ? c.activity : activityOfState(c.state);
+  const asks = c.lastUserAt > 0 && questions.some((q) => q.since > c.lastUserAt);
   const top = nodes && nodes.find((n) => OPEN_STATES.includes(n.state));
   return {
     sessionId: c.sessionId, cwd: c.cwd, running: c.running, state, questions,
     activity: activityOf(c, questions), unseen: c.unseen === true,
+    dot: dotOf({ activity: own, waitingFor: own === 'waiting' ? c.waitingFor || null : null, asks }),
     doing: doingRows(nodes), open: openCount(nodes), unknown: countUnknown(nodes),
     hasPlan: located || plan ? !!(plan && !plan.error) : c.hasPlan === true,
     title: c.title || (plan && plan.title) || (top && top.title) || c.sessionId,

@@ -45,7 +45,7 @@ const NOTICE_DELAY_MS = 4000;
 const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
   'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit', 'chooseTokenMode', 'openAttention',
   'showAttention', 'showWorkPlanOf', 'answerQuestionOf', 'writeAboutRow', 'searchSessions', 'filterSessions', 'newSessionGroup',
-  'reopenClosedConversation'];
+  'reopenClosedConversation', 'findConversation'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {

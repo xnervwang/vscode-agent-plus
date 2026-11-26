@@ -581,7 +581,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       color: r.color ? `charts.${r.color === 'pink' ? 'pink' : r.color}` : '', pinned: r.pinned, unread, steward: r.steward,
       badges: r.badges, branch: r.branch, worktree: r.worktree, processes: r.processes, depth: depth || 0, hover: hover.join('\n'),
       archived: r.archived, grouped: !!(r.group && store.groupKnown(r.group) && store.groups().some((g) => g.id === r.group)),
-      here: r.here, elsewhere: r.elsewhere.length > 0,
+      here: r.here, elsewhere: r.elsewhere.length > 0, runs: rules.runs(r), needs: !!r.detail && rules.needsYou(r),
       ctx: { row: true, here: r.here, archived: r.archived, pinned: r.pinned, unread, renamable: caps.rename,
         grouped: !!r.group, canTab: caps.open.includes('tab'), canSidebar: caps.open.includes('sidebar'),
         ...Object.fromEntries(r.actions.map((a) => [`own_${a}`, true])) },

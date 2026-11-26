@@ -42,7 +42,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const rec = (name) => (...a) => { asked.push([name, ...a]); return name === 'act' && a[0] === 'newGroupFrom' ? { renameGroup: 'g1' } : name === 'groupAct' && a[0] === 'newGroup' ? { renameGroup: 'g2' } : 'done'; };
     const list = { model: () => model, onDidChange: changes.event, schedule: () => asked.push(['schedule']) };
     for (const n of ['open', 'act', 'groupAct', 'rename', 'renameGroup', 'moveTo', 'create', 'chooseNew', 'wantDetail', 'accountLink', 'noticeAction']) list[n] = rec(n);
-    const v = new V.SessionListView(vscode, { list, extensionUri: vscode.Uri.file('/ext'), envelopeOf: () => 'E' });
+    const v = new V.SessionListView(vscode, { list, extensionUri: vscode.Uri.file('/ext') });
     const view = viewOf(vscode);
     v.resolveWebviewView(view);
     const html = view.webview.html;
@@ -55,8 +55,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const first = view.sent.pop();
     const logo = first.model.logos.codex.dark;
     const decoded = Buffer.from(logo.replace(/^data:image\/svg\+xml;base64,/, ''), 'base64').toString('utf8');
-    eq([first.type, /^data:image\/svg\+xml;base64,/.test(logo), /script/i.test(decoded), /<circle/.test(decoded), first.model.envelope, first.model.sources, view.badge],
-      ['model', true, false, true, 'E', [{ id: 'codex', label: 'Codex', create: ['tab'] }], { value: 2, tooltip: '2 conversations need you' }],
+    eq([first.type, /^data:image\/svg\+xml;base64,/.test(logo), /script/i.test(decoded), /<circle/.test(decoded), first.model.sources, view.badge],
+      ['model', true, false, true, [{ id: 'codex', label: 'Codex', create: ['tab'] }], { value: 2, tooltip: '2 conversations need you' }],
       'the page gets the model with each agent\'s logo as a data: URI with its script taken out, and the view\'s badge counts the conversations that need the user');
     changes.fire();
     eq(view.sent.length, 0, 'the same model again is not sent');
@@ -138,6 +138,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const after1 = control.state.context[H.CLOSED_KEY];
     control.fireTabs({ closed: [control.fileTab('/x/notes.txt')] });
     eq([after1, control.state.context[H.CLOSED_KEY]], [true, false], 'closing a conversation\'s tab gives Ctrl+Shift+T to the list, closing any other tab gives it back');
+    let qp = null;
+    control.state.onQuickPick = (x) => { qp = x; };
+    s.commands.findConversation();
+    await wait(0);
+    const first = qp.items.map((i) => i.label);
+    qp.type('answ');
+    const typed = qp.items.map((i) => [i.label, i.description, i.detail]);
+    qp.accept(qp.items[0]);
+    await wait(0);
+    eq([first, typed, qp.hidden], [['answered', 'asks', 'old'].sort((a, b) => (a === 'old') - (b === 'old')), [['answered', 'Codex', 'answered']], true],
+      'Find Conversation lists the list\'s conversations, newest first, keeps the ones whose title or id holds what is typed, and closes on a pick');
     control.state.commands.length = 0;
     await s.commands.reopenClosedConversation();
     eq(control.state.commands.filter((c) => c[0] !== 'setContext'), [['workbench.action.reopenClosedEditor']],

@@ -52,6 +52,8 @@
     folder: ['M2 4.5A1 1 0 0 1 3 3.5h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'],
     account: ['M8 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5z', 'M3 13.5c.5-2.5 2.5-4 5-4s4.5 1.5 5 4'],
     filter: ['M2.5 3h11L9.5 8v4.5l-3 1V8z'],
+    mail: ['M2.5 4h11v8h-11z', 'M2.5 4.5L8 9l5.5-4.5'],
+    crown: ['M3 12.5h10', 'M3.2 11L2.5 5l3.2 2.6L8 3.5l2.3 4.1L13.5 5l-.7 6z'],
   };
   const icon = (name, cls = 'sl-icon') => {
     const s = document.createElementNS(SVG, 'svg');
@@ -171,7 +173,7 @@
   function fillRow(r, row, place) {
     r._row = row;
     r._place = place;
-    const sig = JSON.stringify([row, ui.searchOpen && ui.search, logoOf(row.s), model.restricted, model.envelope]);
+    const sig = JSON.stringify([row, ui.searchOpen && ui.search, logoOf(row.s), model.restricted]);
     if (sig === r._sig) return;
     r._sig = sig;
     r.dataset.key = row.key;
@@ -186,8 +188,8 @@
     if (!r._editing) markTitle(r);
     r._p.title.style.color = themeColor(row.color);
     const marks = [];
-    if (row.steward) marks.push(el('span', 'sl-crown', '👑'));
-    if (row.unread) { const u = el('span', 'sl-unread', model.envelope || '✉'); u.title = 'Has a reply you have not read'; marks.push(u); }
+    if (row.steward) { const c = el('span', 'sl-crown'); c.appendChild(icon('crown')); c.title = 'A steward: it looks after other conversations'; marks.push(c); }
+    if (row.unread) { const u = el('span', 'sl-unread'); u.appendChild(icon('mail')); u.title = 'Has a reply you have not read'; marks.push(u); }
     for (const b of row.badges || []) { const x = el('span', b.dim ? 'sl-badge sl-dim' : 'sl-badge', b.text); if (b.tooltip) x.title = b.tooltip; marks.push(x); }
     if (row.worktree) marks.push(el('span', 'sl-badge', row.worktree));
     if (row.processes) marks.push(el('span', 'sl-procs', `· ${row.processes} processes`));
@@ -398,7 +400,8 @@
       if (se.dataset.key !== 'closed') shown += n;
       setText(se._p.count, String(n));
       const kind = se._s.kind;
-      const empty = n === 0 && (on || kind === 'closed' || kind === 'archived' || (kind === 'group' && !se._s.made) || (kind === 'ungrouped' && (model.sections || []).length > 3));
+      const empty = model.empty || (n === 0 && (on || kind === 'closed' || kind === 'archived' || (kind === 'group' && !se._s.made)
+        || (kind === 'ungrouped' && (model.sections || []).length > 3)));
       se.classList.toggle('sl-hidden', empty);
       se.classList.toggle('sl-empty-group', kind === 'group' && n === 0);
     }

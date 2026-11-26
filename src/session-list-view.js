@@ -16,7 +16,6 @@
  */
 const fs = require('fs');
 const crypto = require('crypto');
-const { envelope } = require('./envelope');
 
 const PAGE_FILES = ['session-list-page.js', 'session-list-page.css'];
 const MAX_LOGO_BYTES = 256 * 1024;
@@ -39,12 +38,11 @@ function logoUri(file) {
 }
 
 class SessionListView {
-  /* `list` is src/session-list.js's; `extensionUri` this extension's folder; `envelopeOf()` the envelope to draw. */
-  constructor(vscode, { list, extensionUri, envelopeOf = () => envelope(vscode), say = () => {} }) {
+  /* `list` is src/session-list.js's; `extensionUri` this extension's folder. */
+  constructor(vscode, { list, extensionUri, say = () => {} }) {
     this.vscode = vscode;
     this.list = list;
     this.extensionUri = extensionUri;
-    this.envelopeOf = envelopeOf;
     this.say = say;
     this.view = null;
     this.posted = '';
@@ -70,10 +68,10 @@ class SessionListView {
     this.list.schedule();
   }
 
-  /* The model as the page draws it: with each agent's logo, in both forms, and the envelope. */
+  /* The model as the page draws it: with each agent's logo, in both forms. */
   pageModel() {
     const m = this.list.model();
-    const out = Object.assign({}, m, { logos: {}, envelope: this.envelopeOf() });
+    const out = Object.assign({}, m, { logos: {} });
     for (const s of m.sources || []) out.logos[s.id] = s.logo ? { light: logoUri(s.logo.light), dark: logoUri(s.logo.dark) } : null;
     out.sources = (m.sources || []).map((s) => ({ id: s.id, label: s.label, create: s.create }));
     return out;

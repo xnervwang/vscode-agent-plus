@@ -19,6 +19,10 @@ const path = require('path');
 const vscode = require('vscode');
 
 const VIEW = 'agentPlusTest.conversation';
+/* The session fields a conversation of the window test has unless it gives them: started an hour before its last
+   message, its last reply then, and seen unless it is marked unseen. */
+const sessionDefaults = (c) => ({ createdAt: (c.lastActiveAt || Date.now()) - 3600e3, lastReplyAt: c.lastActiveAt,
+  viewedAt: c.unseen ? 0 : c.lastActiveAt });
 const NEW_TITLE = 'New conversation';
 
 function activate(context) {
@@ -35,7 +39,12 @@ function activate(context) {
   /* sessionId -> its tab's panel; '' -> a tab with no conversation yet. */
   const panels = new Map();
   const state = { problem: '', notice: null, canDeliver: true, outcome: { outcome: 'submitted' }, answers: [], revealed: [], ran: [], seenOnOpen: true,
-    prefilled: [], prefillOutcome: { outcome: 'drafted' } };
+    prefilled: [], prefillOutcome: { outcome: 'drafted' },
+    /* The session list's part (docs/protocol.md, Session list): what it was asked to do and told, what it imports, its
+       Account & usage part and its note. */
+    calls: [], seen: [], imported: { archived: [], groups: [], pinned: [], colors: {} }, account: null, sessionsNotice: null, made: 0 };
+  const closedEv = new vscode.EventEmitter(), accountEv = new vscode.EventEmitter(), sessionsNoticeEv = new vscode.EventEmitter();
+  context.subscriptions.push(closedEv, accountEv, sessionsNoticeEv);
 
   const html = (title) => `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"></head>`
     + `<body style="font-family: var(--vscode-font-family); color: var(--vscode-foreground)">`
@@ -69,7 +78,7 @@ function activate(context) {
       if (sid) markSeen(sid);
       focused.fire({ sessionId: sid });
     });
-    panel.onDidDispose(() => { if (panels.get(id) === panel) panels.delete(id); });
+    panel.onDidDispose(() => { if (panels.get(id) === panel) { panels.delete(id); if (id) closedEv.fire({ sessionId: id, where: 'tab' }); } });
     if (id && !preserveFocus) markSeen(id);
     return true;
   };
@@ -79,7 +88,7 @@ function activate(context) {
     id: 'codex',
     label: 'Codex',
     extensionId: 'xnervwang.codex-plus',
-    features: ['brief', 'prefill'],
+    features: ['brief', 'prefill', 'sessions', 'sessionImport', 'sessionSeen', 'sessionClose', 'accountInfo', 'sessionsNotice'],
     logo: { light: vscode.Uri.file(path.join(__dirname, 'logo-codex.svg')), dark: vscode.Uri.file(path.join(__dirname, 'logo-codex.svg')) },
     planPath: (id) => path.join(plans, `${id}.json`),
     planDir: () => plans,
@@ -100,6 +109,43 @@ function activate(context) {
     },
     planNotice: () => state.notice,
     onDidChangePlanNotice: noticeChanged.event,
+    /* The session list. A conversation's session fields are the ones set() gave it. */
+    listSessions: async ({ cursor, limit }) => {
+      const all = [...list.values()].map((c) => Object.assign({ cwd: folder() }, sessionDefaults(c), c));
+      const from = cursor ? Number(cursor) : 0;
+      return { sessions: all.slice(from, from + limit), cursor: from + limit < all.length ? String(from + limit) : null };
+    },
+    onDidChangeSessions: changed.event,
+    sessionActions: { open: ['tab'], create: ['tab'], rename: true, delete: true, own: [{ id: 'goal.pause', title: 'Pause Goal' }] },
+    runSessionAction: async (action, ids, args) => {
+      state.calls.push([action, ids, args]);
+      if (action === 'create') {
+        const id = `made-${++state.made}`;
+        list.set(id, { sessionId: id, title: `New conversation ${state.made}`, state: 'idle', activity: 'stopped', running: false, lastActiveAt: Date.now() });
+        openTab(id);
+        changed.fire();
+        return { results: [{ sessionId: id, outcome: 'done' }] };
+      }
+      const results = ids.map((id) => {
+        const c = list.get(id);
+        if (!c) return { sessionId: id, outcome: 'failed', reason: 'no such conversation' };
+        if (action === 'open') openTab(id);
+        else if (action === 'rename') { c.title = String(args.title); const p = panels.get(id); if (p) p.title = c.title; }
+        else if (action === 'delete') { const p = panels.get(id); if (p) p.dispose(); list.delete(id); }
+        return { sessionId: id, outcome: 'done' };
+      });
+      changed.fire();
+      return { results };
+    },
+    describeDeletion: async (ids) => ids.map((id) => ({ sessionId: id, what: 'its stand-in record' })),
+    wantSessionDetail: (ids) => { state.calls.push(['wantDetail', ids]); },
+    importSessions: async () => state.imported,
+    noteSeen: (ids, seen) => { state.seen.push([ids, seen]); },
+    onDidCloseSession: closedEv.event,
+    accountInfo: () => state.account,
+    onDidChangeAccountInfo: accountEv.event,
+    sessionsNotice: () => state.sessionsNotice,
+    onDidChangeSessionsNotice: sessionsNoticeEv.event,
     /* configure() sets what this answers for a conversation in its list. */
     prefill: async (id, text) => {
       state.prefilled.push({ sessionId: id, text });
@@ -119,6 +165,31 @@ function activate(context) {
   const otherList = new Map();
   const otherChanged = new vscode.EventEmitter();
   context.subscriptions.push(otherChanged);
+  let third = null;
+  const thirdList = new Map();
+  const thirdChanged = new vscode.EventEmitter();
+  context.subscriptions.push(thirdChanged);
+  const otherState = { calls: [], sidebar: [], imported: null }, thirdState = { calls: [], sidebar: [], imported: null };
+  /* A source whose conversations open nowhere: what it is asked to do is recorded, and one opened in the sidebar is shown
+     there. */
+  const sessionsSource = (id, label, logo, m, ev, st, more) => Object.assign({
+    protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows'],
+    logo: { light: vscode.Uri.file(path.join(__dirname, logo)), dark: vscode.Uri.file(path.join(__dirname, logo)) },
+    planDir: () => plans,
+    listSessions: async () => ({ sessions: [...m.values()].map((c) => Object.assign(sessionDefaults(c), c)), cursor: null }),
+    importSessions: async () => st.imported,
+    onDidChangeSessions: ev.event,
+    sessionActions: { open: ['tab', 'sidebar'], create: ['tab', 'sidebar'], rename: true, delete: true, own: [] },
+    runSessionAction: async (action, ids, args) => {
+      st.calls.push([action, ids, args]);
+      if (action === 'open' && args.where === 'sidebar') st.sidebar = ids.slice();
+      if (action === 'delete') for (const x of ids) m.delete(x);
+      if (action === 'rename') for (const x of ids) if (m.get(x)) m.get(x).title = String(args.title);
+      ev.fire();
+      return { results: ids.map((x) => ({ sessionId: x, outcome: 'done' })) };
+    },
+    shows: (x) => st.sidebar.includes(x),
+  }, more);
 
   return {
     result: { accepted: result.accepted, code: result.code, reason: result.reason },
@@ -150,22 +221,36 @@ function activate(context) {
     tabs: () => [...panels.keys()],
     setNotice(notice) { state.notice = notice; noticeChanged.fire(); return true; },
     setProblem(text) { state.problem = text || ''; changed.fire(); return true; },
-    configure(fields) { Object.assign(state, fields); return true; },
+    configure(fields) { Object.assign(state, fields); accountEv.fire(); sessionsNoticeEv.fire(); changed.fire(); return true; },
     addOther(conversations) {
       if (other) return true;
       otherList.clear();
       for (const c of conversations) otherList.set(c.sessionId, Object.assign({ cwd: folder() }, c));
-      const r = core.registerSource({
-        protocol: 1, id: 'claude-code', label: 'Claude Code', extensionId: 'xnervwang.claude-code-plus',
-        logo: { light: vscode.Uri.file(path.join(__dirname, 'logo-claude.svg')), dark: vscode.Uri.file(path.join(__dirname, 'logo-claude.svg')) },
-        planPath: (id) => path.join(plans, `claude-${id}.json`),
-        listConversations: async () => [...otherList.values()],
-        onDidChangeConversations: otherChanged.event,
-      });
+      const r = core.registerSource(sessionsSource('claude-code', 'Claude Code', 'logo-claude.svg', otherList, otherChanged, otherState,
+        { listConversations: async () => [...otherList.values()], onDidChangeConversations: otherChanged.event, planPath: (id) => path.join(plans, `claude-${id}.json`) }));
       other = r.registration;
       return r.accepted;
     },
     removeOther() { if (other) other.dispose(); other = null; return true; },
+    /* A third agent, with conversations for the session list only. */
+    addThird(conversations, imported) {
+      if (third) return true;
+      thirdState.imported = imported || null;
+      thirdList.clear();
+      for (const c of conversations) thirdList.set(c.sessionId, Object.assign({ cwd: folder() }, c));
+      const r = core.registerSource(sessionsSource('opencode', 'OpenCode', 'logo-opencode.svg', thirdList, thirdChanged, thirdState, {}));
+      third = r.registration;
+      return r.accepted;
+    },
+    removeThird() { if (third) third.dispose(); third = null; return true; },
+    setOther(which, conversations) {
+      const [m, ev] = which === 'opencode' ? [thirdList, thirdChanged] : [otherList, otherChanged];
+      m.clear();
+      for (const c of conversations) m.set(c.sessionId, Object.assign({ cwd: folder() }, c));
+      ev.fire();
+      return true;
+    },
+    otherState: (which) => (which === 'opencode' ? thirdState : otherState),
   };
 }
 

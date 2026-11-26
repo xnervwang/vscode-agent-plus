@@ -117,6 +117,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [['Alpha', 'Asks', 'Beta', 'Dialog', 'Other agent'], { all: 5, open: 2, running: 1, needs: 2 }, 'here', 'here', 'blue', 'red', 'green'],
       'rows of every source in one list, background and empty ones hidden, a tab or a sidebar here drawn as open here, with their dots and counts');
     eq(byTitle(m, 'Other agent').stripe, '', 'a sidebar is asked about only for a source that lists shows');
+    const flags = (t) => { const r = byTitle(m, t); return [r.runs, r.needs]; };
+    eq([flags('Beta'), flags('Dialog'), flags('Asks'), flags('Alpha')], [[true, false], [false, true], [false, true], [false, false]],
+      'each row says whether it runs and whether it needs the user, which the page\'s chips filter by');
     eq([m.front, codex.seen, list.store().record('codex', 'a').seenAt], ['["codex","a"]', [[['a'], true]], now0 - 60e3],
       'the conversation in the tab in front is seen, and its source is told');
     t.host.settings = () => ({ hideBackground: false });

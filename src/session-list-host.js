@@ -17,6 +17,7 @@ const sources = require('./sources');
 const { planQuestions } = require('./folders');
 const { createSessionList } = require('./session-list');
 const { SessionListView } = require('./session-list-view');
+const rules = require('./session-rules');
 
 const VIEW_ID = 'agentPlus.sessions';
 const SETTINGS = 'agentPlus.sessions';
@@ -92,6 +93,21 @@ function startSessionList(host, opts = {}) {
       if (!view.visible) await reveal();
       const r = await list.groupAct('newGroup');
       if (r && r.renameGroup) view.tell({ type: 'startRenameGroup', groupId: r.renameGroup });
+    },
+    /* Find Conversation: the list's conversations of every agent, by title, branch, or four or more characters of the id
+       (src/session-rules.js matches); picking one opens it as a click on its row would. */
+    findConversation: () => {
+      const qp = vscode.window.createQuickPick();
+      qp.placeholder = 'Search titles, or four or more characters of a conversation id';
+      const labels = new Map((registry.entries || []).map((e) => [e.id, sources.labelOf(e.source)]));
+      const items = (q) => list.rows().filter((r) => !r.hidden && rules.matches(r, q)).sort(rules.compare).slice(0, 200)
+        .map((r) => ({ label: r.title || '(untitled)', description: `${labels.get(r.sourceId) || r.sourceId}${r.archived ? ' · archived' : ''}`,
+          detail: r.sessionId, key: r.key, alwaysShow: true }));
+      qp.items = items('');
+      if (typeof qp.onDidChangeValue === 'function') qp.onDidChangeValue((q) => { qp.items = items(String(q || '').trim()); });
+      qp.onDidAccept(() => { const it = qp.selectedItems[0]; qp.hide(); if (it) list.open(it.key).catch((e) => say(`find: ${(e && e.message) || e}`)); });
+      qp.onDidHide(() => qp.dispose());
+      qp.show();
     },
     /* Ctrl+Shift+T while a conversation was closed last: the conversation; with none left to reopen, the editor VS Code
        would have reopened. */

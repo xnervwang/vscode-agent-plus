@@ -26,21 +26,24 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const row = (id, activity, unseen, extra = {}) => Object.assign({ sourceId: 'claude-code', sessionId: id, title: 'T ' + id, cwd: '/w',
       running: true, state: 'idle', activity, unseen, questions: [], doing: [], open: 0, unknown: 0, hasPlan: false, since: 0, top: [] }, extra);
     const question = { row: '1', title: 'pick', question: 'Which one?', since: Date.now() - 1000 };
-    const data = { running: [row('w', 'working', false), row('wu', 'working', true), row('b', 'background', false), row('bu', 'background', true),
-      row('q', 'waiting', false, { state: 'needs', questions: [question] }), row('s', 'stopped', false), row('su', 'stopped', true),
-      row('logo', 'background', true, { source: { id: 'codex', label: 'Codex' }, sourceId: 'codex', icon: { light: '/i/l.svg', dark: '/i/d.svg' } })],
-    stopped: [], asks: 1 };
+    const data = { running: [row('w', 'working', false, { dot: 'green' }), row('wu', 'working', true, { dot: 'green' }), row('b', 'background', false, { dot: 'greenRing' }),
+      row('bu', 'background', true, { dot: 'greenRing' }), row('q', 'waiting', false, { state: 'needs', questions: [question], dot: 'red' }), row('s', 'stopped', false, { dot: '' }),
+      row('su', 'stopped', true, { dot: '' }),
+      row('logo', 'background', true, { source: { id: 'codex', label: 'Codex' }, sourceId: 'codex', icon: { light: '/i/l.svg', dark: '/i/d.svg' }, dot: 'greenRing' }),
+      row('p', 'waiting', false, { state: 'prompt', dot: 'blue' }), row('qr', 'working', false, { state: 'needs', questions: [question], dot: 'redRing' })],
+    stopped: [], asks: 2 };
     const tree = new cv.ConversationsProvider();
     tree.set(data, '', 'en');
     const top = tree.getChildren().filter((e) => e.kind === 'conversation');
     const items = top.map((e) => tree.getTreeItem(e));
     const look = (it) => (it.iconPath && it.iconPath.id ? [it.iconPath.id, it.iconPath.color && it.iconPath.color.id] : ['logo', it.iconPath.light]);
     eq(items.map(look), [['circle-filled', 'charts.green'], ['circle-filled', 'charts.green'], ['circle', 'charts.green'], ['circle', 'charts.green'],
-      ['circle-filled', 'charts.red'], ['blank', undefined], ['blank', undefined], ['logo', '/i/l.svg']],
-    'the icon place holds the activity alone: green dot at work, green ring with only background work, red dot waiting, a blank of the same size stopped');
+      ['circle-filled', 'charts.red'], ['blank', undefined], ['blank', undefined], ['logo', '/i/l.svg'], ['circle-filled', 'charts.blue'], ['circle', 'charts.red']],
+    'the icon place holds the session list\'s dot alone: green at work, a green ring with only background work, red for a question once stopped, '
+      + 'blue for a dialog waiting, a red ring for a question while still at work, a blank of the same size with no dot');
     const deco = tree.decorations;
     const badge = (it) => { const d = it.resourceUri ? deco.provideFileDecoration(it.resourceUri) : undefined; return d ? d.badge : ''; };
-    eq(items.map(badge), ['', ENVELOPE, '', ENVELOPE, '', '', ENVELOPE, ENVELOPE],
+    eq(items.map(badge).slice(0, 8), ['', ENVELOPE, '', ENVELOPE, '', '', ENVELOPE, ENVELOPE],
       'a reply not seen is an envelope badge at the row end, beside whatever the icon place shows, the logo included');
     const long = 'A conversation title far longer than any side bar is wide, '.repeat(6).trim();
     const longTree = new cv.ConversationsProvider();
@@ -53,7 +56,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     let redrawn = 0;
     deco.onDidChangeFileDecorations(() => { redrawn++; });
     control.setTheme(1);
-    eq([redrawn, items.map(badge)], [1, ['', ENVELOPE_TEXT, '', ENVELOPE_TEXT, '', '', ENVELOPE_TEXT, ENVELOPE_TEXT]],
+    eq([redrawn, items.map(badge).slice(0, 8)], [1, ['', ENVELOPE_TEXT, '', ENVELOPE_TEXT, '', '', ENVELOPE_TEXT, ENVELOPE_TEXT]],
       'in a light theme the envelope is the plain one in its text form, since a colour font draws both envelopes white there, and a theme change redraws it');
     control.setTheme(4);
     eq(badge(items[1]), ENVELOPE_TEXT, 'and so in a high contrast light theme');
@@ -64,7 +67,14 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     [undefined, true, undefined, 4], 'the badge has no colour of its own, so the title keeps its colour; other resources get nothing; each row has its own address');
     eq([/reply you have not read/.test(items[1].tooltip), /reply you have not read/.test(items[0].tooltip), /only background work/i.test(items[2].tooltip)],
       [true, false, true], 'the tooltip says in words what the envelope and the ring mean');
-    eq(items.every((it) => !(it.iconPath && it.iconPath.color && it.iconPath.color.id === 'charts.blue')), true, 'no conversation row is blue');
+    const conversations = require(path.join(root, 'src', 'conversations.js'));
+    const now = Date.now();
+    const at = (o, plan) => conversations.entry(Object.assign({ sessionId: 'x', cwd: '/w', running: true, state: 'working', activity: 'working', lastUserAt: now - 60e3 }, o), plan, true).dot;
+    const asked = { nodes: [{ title: 'pick', state: 'waiting', waitingOn: 'user', question: 'Which?', since: now - 1000 }] };
+    eq([at({}), at({ activity: 'background' }), at({ activity: 'waiting', state: 'prompt', waitingFor: { kind: 'permission', tool: 'Bash' } }), at({ running: false, activity: 'stopped' }, asked),
+      at({}, asked), at({ activity: 'background' }, asked), at({ running: false }), at({ running: false, lastUserAt: now }, asked)],
+    ['green', 'greenRing', 'blue', 'red', 'redRing', 'redRing', '', ''],
+    'a conversation\'s dot comes from what the agent is doing and a question put after the user last wrote, as in the session list');
     const q = tree.getTreeItem(tree.getChildren(top[4])[0]);
     eq([q.iconPath.id, q.iconPath.color.id], ['question', 'charts.orange'], 'a question row keeps its question mark');
     tree.set(data, '', 'zh-cn');
@@ -82,14 +92,15 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       const f = icons.iconsFor({ light: logo, dark: logo }, activity, path.join(idir, 'out'), new Map());
       return f ? [fs.readFileSync(f.light, 'utf8'), fs.readFileSync(f.dark, 'utf8')] : null;
     };
-    const [wl, wd] = read('working'), [bl, bd] = read('background'), [ql, qd] = read('waiting'), [sl] = read('stopped');
+    const [wl, wd] = read('green'), [bl, bd] = read('greenRing'), [ql, qd] = read('red'), [sl] = read(''), [pl] = read('blue'), [rl] = read('redRing');
     /* The dot is the circle after the masked logo; the mask has one of its own. */
     const circle = (svg) => (/<\/g><circle\b[^>]*>/.exec(svg) || [''])[0];
     eq([circle(wl).includes('fill="#388a34"'), circle(wd).includes('fill="#89d185"'), circle(bl).includes('stroke="#388a34"') && circle(bl).includes('fill="none"'),
-      circle(bd).includes('stroke="#89d185"'), circle(ql).includes('fill="#e51400"'), circle(qd).includes('fill="#f14c4c"'), /<circle|mask/.test(sl)],
-    [true, true, true, true, true, true, false],
-    'on a logo the dot is green at work, a green ring with only background work, red waiting, and absent with the logo whole once stopped');
-    eq([read('unread'), read('idle'), read('needs')], [null, null, null], 'the old state names are not drawn any more');
+      circle(bd).includes('stroke="#89d185"'), circle(ql).includes('fill="#e51400"'), circle(qd).includes('fill="#f14c4c"'), /<circle|mask/.test(sl),
+      circle(pl).includes('fill="#1a85ff"'), circle(rl).includes('stroke="#e51400"') && circle(rl).includes('fill="none"')],
+    [true, true, true, true, true, true, false, true, true],
+    'on a logo the dot is the session list\'s: green, a green ring, red, blue and a red ring, and absent with the logo whole when there is no dot');
+    eq([read('unread'), read('working'), read('waiting')], [null, null, null], 'state and activity names are not drawn');
   }
 
   {
