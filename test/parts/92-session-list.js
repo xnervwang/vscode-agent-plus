@@ -121,6 +121,19 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
+  /* ── A source's say over the conversation in front stops at another tab ── */
+  {
+    const t = setup();
+    const codex = source('codex', [conv('a', { title: 'Alpha' }), conv('q', { title: 'Other tab' })]);
+    t.entries.push({ id: 'codex', source: codex });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    t.control.setTabs([{ label: 'Alpha', input: { source: 'codex', sid: 'a' } }, { label: 'Other tab', input: { source: 'codex', sid: 'q' } }], 0);
+    codex.focused = 'q';
+    await list.refresh();
+    eq(list.model().front, '["codex","a"]', 'a source saying another of its conversations is focused does not move the front to one in another tab, which cannot be in front while this tab is the active one');
+    list.dispose();
+  }
+
   /* ── Rows, this window, the one in front, closed here ── */
   {
     const t = setup();

@@ -155,8 +155,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   /* ── what this window shows ── */
   /*
    * The conversation in front is the active tab's, unless the source of that tab says another of its conversations is
-   * (isFocused), as Codex Plus does for its sidebar shown after the tab; with no conversation tab active, the one a
-   * source says is focused.
+   * (isFocused) and that one is not in a tab, as Codex Plus does for its sidebar shown after the tab: another tab cannot
+   * be in front while this one is the active tab, whatever a source still says. With no conversation tab active, the
+   * one a source says is focused.
    */
   function lookNow() {
     const here = new Set(), where = new Map();
@@ -181,7 +182,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     }
     if (tabFront && sources.call(tabFront.e.source, 'isFocused', [tabFront.id], true) === false) {
       const list = lists.get(tabFront.e.id);
-      const other = ((list && list.sessions) || []).find((s) => s.sessionId !== tabFront.id && sources.call(tabFront.e.source, 'isFocused', [s.sessionId], false) === true);
+      const other = ((list && list.sessions) || []).find((s) => s.sessionId !== tabFront.id && where.get(keyOf(tabFront.e.id, s.sessionId)) !== 'tab'
+        && sources.call(tabFront.e.source, 'isFocused', [s.sessionId], false) === true);
       if (other) front = keyOf(tabFront.e.id, other.sessionId);
     }
     return { here, front, where };
