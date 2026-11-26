@@ -87,3 +87,4 @@ Uninstalling cannot put the limit back. The uninstall hook (`vscode:uninstall`) 
 - `docs/protocol.md`: how an extension shows its agent's conversations in Agent Plus.
 - `node test/check.js` runs all the tests, with nothing to install first.
 - `node test/vscode/run.js <the Agent Plus .vsix> --local` runs the extension in real VS Code windows with a stand-in agent (`--local` lets it run outside CI); `--look` also saves a screenshot of each test step to review. `.github/workflows/vscode.yml` runs `test/vscode/run.js` on Linux, macOS and Windows.
+- `AGENT_PLUS_UI_STEPS`, a regular expression of step names, runs only those window test steps, with the steps they name in `needs('…')`; `vscode.yml` takes it as `steps` when run by hand, with `os` to run on one system. A step that fails keeps a screenshot and the window's HTML and text in the results folder's `state/`.

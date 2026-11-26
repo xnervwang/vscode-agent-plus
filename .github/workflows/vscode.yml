@@ -7,7 +7,7 @@
 # test/vscode/run.js there, with a stand-in agent in place of Codex Plus or Claude Code Plus.
 #
 # Each platform's results folder is kept as an artifact, passed or not: a screenshot of each step, of any step that
-# failed, and VS Code's logs.
+# failed, VS Code's logs, and for a step that failed what the window held then (its state/ folder).
 name: vscode
 
 on:
@@ -15,7 +15,20 @@ on:
     # Try a change to this workflow on a ci/ branch first.
     branches: [main, 'ci/**']
   pull_request:
+  # By hand: one system or all three, and with `steps` only the window test steps whose names match that regular
+  # expression, with the steps they need (test/vscode/lib/steps.js). Used to try a fix of one failure on the system it
+  # failed on.
   workflow_dispatch:
+    inputs:
+      os:
+        description: The system to run on
+        type: choice
+        options: [all, ubuntu-latest, macos-latest, windows-latest]
+        default: all
+      steps:
+        description: A regular expression of window test step names to run; empty runs them all
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -43,8 +56,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
+    env:
+      AGENT_PLUS_UI_STEPS: ${{ inputs.steps }}
     steps:
       # Some checks compare source text, so no CRLF on Windows.
       - run: git config --global core.autocrlf false

@@ -19,12 +19,14 @@
  * a click in the window runs. Every look() saves a screenshot to <out>/shots; with --look each also writes a close view
  * and an entry of <out>/look.json.
  *
- * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match; a step that needs an earlier one
- * fails, naming it, when that step did not run to its end.
+ * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match, and the steps those name in their
+ * needs('…') calls, followed through (lib/steps.js); a step whose need did not run to its end fails, naming it. A step
+ * with a failed check keeps a screenshot, and what the window held then in <out>/state/.
  */
 const fs = require('fs');
 const path = require('path');
 const win = require('./lib/window');
+const steps = require('./lib/steps');
 const pixels = require('./lib/pixels');
 
 const { sleep, until } = win;
@@ -52,21 +54,47 @@ const iso = (ms = Date.now()) => new Date(ms).toISOString();
 const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-async function run({ exe, profile, env, playwright, out, check, note, look: looking }) {
+async function run({ exe, profile, env, playwright, out, check: report, note, look: looking }) {
+  let failedChecks = 0;
+  const check = (cond, what, detail) => { const ok = report(cond, what, detail); if (!ok) failedChecks++; return ok; };
   const shotsDir = path.join(out, 'shots');
   fs.mkdirSync(shotsDir, { recursive: true });
   const linux = process.platform === 'linux';
   let w = null, page = null, call = null, launchedAt = 0;
-  const only = process.env.AGENT_PLUS_UI_STEPS ? new RegExp(process.env.AGENT_PLUS_UI_STEPS) : null;
+  const picked = steps.chosen({ names: steps.namesIn(__filename), only: process.env.AGENT_PLUS_UI_STEPS ? new RegExp(process.env.AGENT_PLUS_UI_STEPS) : null,
+    needs: steps.needsIn(__filename) });
   const done = new Set();
   let current = '';
+  /*
+   * What the window held when a step failed, in <out>/state/<step>/: the workbench's HTML and the text of each frame in it
+   * (the webviews of Agent Plus's views among them), with their addresses, and the notifications shown.
+   */
+  const keepState = async (name) => {
+    const dir = path.join(out, 'state', name.replace(/[^\w.-]+/g, '-').slice(0, 80));
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const frames = [];
+      for (const [i, f] of page.frames().entries()) {
+        const html = await f.content().catch(() => '');
+        const text = await f.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
+        if (html) fs.writeFileSync(path.join(dir, `frame-${i}.html`), html.slice(0, 4 << 20));
+        frames.push({ frame: i, url: f.url().slice(0, 300), name: f.name(), text: text.slice(0, 20000) });
+      }
+      const notifications = await page.evaluate(() => [...document.querySelectorAll('.notification-list-item-message')].map((e) => e.innerText)).catch((e) => String(e));
+      fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ step: name, at: new Date().toISOString(), notifications, frames }, null, 2) + '\n');
+    } catch (e) { note(`${name}: the window's state could not be kept: ${(e && e.message) || e}`); }
+  };
   const step = async (name, fn) => {
-    if (only && !only.test(name)) { note(`${name}: not run, as AGENT_PLUS_UI_STEPS leaves it out`); return; }
+    if (picked && !picked.has(name)) return;
     console.log(`\n── ${name}`);
     current = name;
+    const failedBefore = failedChecks;
     try { await fn(); done.add(name); } catch (e) {
       check(false, `${name}: ran to its end`, String((e && e.stack) || e).split('\n').slice(0, 4).join(' | '));
-      await page.screenshot({ path: path.join(shotsDir, `error-${name}.png`) }).catch(() => {});
+    }
+    if (failedChecks > failedBefore && page) {
+      await page.screenshot({ path: path.join(shotsDir, `failed-${name}.png`) }).catch(() => {});
+      await keepState(name);
     }
   };
   const needs = (name) => { if (!done.has(name)) throw new Error(`this step needs the step ${name}, which did not run to its end`); };
