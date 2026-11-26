@@ -629,7 +629,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     };
   }
 
-  /* What the row's end shows for where else it is open: 'window' for another VS Code window, 'terminal' for anything
+  /* The icon at the row's end for where else it is open: 'window' for another VS Code window, 'terminal' for anything
      else (a terminal, a command-line run, a desktop app), '' for nowhere. */
   const awayOf = (places) => (!places.length ? '' : places.some((x) => x.kind === 'vscode') ? 'window' : 'terminal');
   function stampOf(ms) {

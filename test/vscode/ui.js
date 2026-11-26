@@ -181,7 +181,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const convRows = () => treeRows('agentPlus.conversations');
   const planRows = () => treeRows('agentPlus.workPlan');
   const convRow = async (title) => (await convRows() || []).find((r) => r.title === title) || null;
-  /* Where each view is, since the session list's view in the side bar is titled Conversations too. */
+  /* The part of the window each view is in, as the session list's view in the side bar is titled Conversations too. */
   const SCOPES = { 'agentPlus.workPlan': '[id="workbench.view.extension.agentPlus"]', 'agentPlus.conversations': '[id="workbench.parts.panel"]',
     'agentPlus.answer': '[id="workbench.parts.panel"]' };
   const pane = (view) => page.locator(`${SCOPES[view] || ''} .pane:has(> .pane-header[aria-label^="${HEADERS[view]}"])`).first();
@@ -1421,7 +1421,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     for (const id of ['sl-ask', 'sl-askrun']) writePlan(id, { nodes: [{ title: 'Pick the branch', state: 'waiting', waitingOn: 'user', question: 'Main or the hotfix branch?', since: iso(t - 60e3), opened: iso(t - HOUR) }] });
   };
 
-  /* Whether the session list has made its first pass over the project, which archives at once what is due. */
+  /* Whether the session list has made its first pass over the project, which archives anything already due. */
   const listSwept = () => { try { const d = path.join(profile.shared, 'session-list'); return fs.readdirSync(d).filter((n) => /^[0-9a-f]{16}\.json$/.test(n))
     .some((n) => JSON.parse(fs.readFileSync(path.join(d, n), 'utf8')).sweepAt > 0); } catch (_) { return false; } };
 
@@ -1449,7 +1449,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       'each of the five dots: a turn running, background work only, a dialog waiting, a question asked and stopped, a question asked while still working, and none', [SLT.run, SLT.bg, SLT.perm, SLT.ask, SLT.askrun, SLT.quiet].map((t) => [t, dot(t)]));
     const run = slFind(rows, SLT.run), other = slFind(rows, SLT.other), term = slFind(rows, SLT.ocTerm);
     check(run.stripe === 'here' && !run.dim && other.stripe === 'elsewhere' && other.dim && term.stripe === 'elsewhere' && term.dim && dot(SLT.ocTerm) === 'green',
-      'the conversation in this window\'s tab has the solid stripe; one in another VS Code window and one in a terminal have the outlined stripe and are dimmed, their dot kept', [run, other, term]);
+      'the conversation in this window\'s tab has the solid stripe; one in another VS Code window and one in a terminal have the outlined stripe and are dimmed but keep their dot', [run, other, term]);
     const unreadMark = (t) => sl.evaluate((x) => [...document.querySelectorAll('.sl-row')].some((r) => r.querySelector('.sl-title').textContent === x && !!r.querySelector('.sl-unread svg')), t);
     check(!slFind(rows, SLT.kid) && await unreadMark(SLT.unread) && !await unreadMark(SLT.quiet),
       'a sub-agent is hidden, and only the unread conversation has the envelope', rows.map((r) => [r.title, r.marks]));
@@ -1547,7 +1547,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slRowLoc(SLT.other).click();
     const told = await toastWith('which did not answer', 12000);
     check(!!told && !(await calls('codex')).some((c) => c[0] === 'open' && c[1][0] === 'sl-other'),
-      'one open in another window that does not answer is not opened here as well, and the user is told', told);
+      'a conversation open in another window that does not answer is not also opened here, and a message says so', told);
     await clearToasts();
     await slRowLoc(SLT.quiet).click({ modifiers: ['ControlOrMeta'] });
     await slRowLoc(SLT.cc).click({ modifiers: ['ControlOrMeta'] });
@@ -1846,7 +1846,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await showSessions('agentPlus.sessions');
     const note = await until(() => sl.evaluate(() => { const n = document.querySelector('.sl-notice'); return n && n.innerText; }), 10000, 300);
     check(!!note && /Restricted Mode/.test(note) && /Manage Workspace Trust/.test(note) && !!await slWait((r) => r.some((x) => x.title === 'Asked about the release branch')),
-      'the session list still lists the conversations, says it changes nothing in Restricted Mode, and offers Manage Workspace Trust', note);
+      'the session list still shows the conversations, says it changes nothing in Restricted Mode, and offers Manage Workspace Trust', note);
     check(await sl.evaluate(() => document.querySelector('.sl-new').classList.contains('sl-hidden')), 'and has no New bar');
     const wrote = (() => { try { const d = path.join(profile.shared, 'session-list'); return fs.readdirSync(d).filter((n) => fs.statSync(path.join(d, n)).mtimeMs > launchedAt); } catch (_) { return []; } })();
     check(!wrote.length, 'and writes none of its own data to the folder the windows share', wrote);

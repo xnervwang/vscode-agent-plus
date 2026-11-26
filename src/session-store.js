@@ -183,7 +183,7 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
     since: () => +read().since || 0,
     noteSince: (at) => change({ type: 'since', since: +at || 0 }),
     setGroup: (list, group) => change({ type: 'group', keys: keysOf(list), group: group || null }),
-    /* Archiving moves it out of its group and, unless `keepPin`, unpins it; `since` is when it was archived, when known. */
+    /* Archiving takes it out of its group and unpins it unless `keepPin`; `since`, when known, is when it was archived. */
     archive: (list, on, { since = 0, keepPin = false } = {}) => change({ type: 'archive', keys: keysOf(list), on: !!on, since: +since || 0, keepPin: !!keepPin }),
     pin: (list, on) => change({ type: 'pin', keys: keysOf(list), on: !!on }),
     color: (list, color) => change({ type: 'color', keys: keysOf(list), color: color || null }),
