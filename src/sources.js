@@ -24,7 +24,7 @@ const ACCEPTS = [1];
    announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
    methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards; a source that answers them lists it
-   too. 'stewardList' adds stewardsOf(), which onDidChangeStewards covers as well. */
+   too. 'stewardList' adds stewardsOf(); the same onDidChangeStewards serves it. */
 const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList', 'prefill'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
@@ -34,8 +34,7 @@ const ACTIVITIES = ['working', 'background', 'waiting', 'stopped'];
 const ACTIVITY_OF_STATE = { prompt: 'waiting', working: 'working', unread: 'stopped', idle: 'stopped' };
 const MAX_ID = 200;
 const MAX_CONVERSATIONS = 2000;
-/* Caps on stewardsOf(): the stewards it gives for one conversation, the entries of a source's answer it looks at to
-   find them, and the length of a title. */
+/* Caps on stewardsOf(): stewards given per conversation, entries read from one source's answer, and title length. */
 const MAX_STEWARDS = 20;
 const MAX_STEWARD_ENTRIES = 200;
 const MAX_STEWARD_TITLE = 200;
@@ -199,7 +198,7 @@ function stewardOf(source, sourceId, sessionId) {
 }
 
 /* The stewards the source gives for (sourceId, sessionId), in its order, each a frozen { sourceId, sessionId, title }.
-   An entry without two usable ids is skipped without voiding the rest. */
+   An entry without two usable ids is skipped and the others are kept. */
 function stewardsOf(source, sourceId, sessionId, max = MAX_STEWARDS) {
   if (!supports(source, 'stewardList')) return [];
   const list = call(source, 'stewardsOf', [sourceId, sessionId], null);
@@ -428,10 +427,8 @@ class Focus {
 }
 
 /*
- * A source's prefill(sessionId, text), which brings the conversation to the front and puts `text` in its message box
- * without sending it, as a frozen { outcome, reason }. `outcome` is 'drafted', 'notReceived' or 'uncertain'. A source that
- * does not list 'prefill' or has no such method, one that throws or rejects, and one whose answer has another outcome are
- * 'notReceived' with a reason; one that has not answered within `waitMs` is 'uncertain'.
+ * Asks a source to bring the conversation to the front and put `text` in its message box without sending it. The frozen
+ * answer is 'uncertain' when the source has not answered within `waitMs`.
  */
 const PREFILL_OUTCOMES = ['drafted', 'notReceived', 'uncertain'];
 async function prefill(source, sessionId, text, waitMs) {

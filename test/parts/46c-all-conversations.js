@@ -18,7 +18,7 @@ const { boot } = require('../boot');
 
 module.exports = async ({ eq, tmp, root, wait }) => {
   const viewOptions = { listWaitMs: 40, slowMs: 300, refreshMs: 1e9, openWaitMs: 100, attentionMs: 20, attentionWarmupMs: 0, attentionBatchMs: 10 };
-  const C = 'bbbbbbbb-0000-4000-8000-000000000002', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199a213-81c0-7800-8aa1-bbab2a035a53';
+  const C = 'bbbbbbbb-0000-4000-8000-000000000002', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199cccc-1111-7222-8333-444455556666';
   const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await wait(20); };
   const b = boot(root, tmp, { viewOptions, config: { 'agentPlus.notifications.enabled': false } });
   const claudeChanged = new fake.EventEmitter(), codexChanged = new fake.EventEmitter();

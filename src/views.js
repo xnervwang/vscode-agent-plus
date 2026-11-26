@@ -49,10 +49,9 @@ const WRITING_MS = 2000;
 const LIST_WAIT_MS = 3000;
 const SLOW_MS = 20000;
 const ZONE_KEY = 'agentPlus.timeZone';
-/* True while the plan shown is a conversation whose source can put text in its message box: the Work plan view's rows
-   then show the pen (package.json). */
+/* Context key for the pen on the Work plan view's rows (package.json): true while the source of the conversation
+   shown can put text in its message box. */
 const PREFILL_KEY = 'agentPlus.workPlanCanPrefill';
-/* How long a source has to put a row's text in the message box, and the longest row title the text quotes. */
 const PREFILL_WAIT_MS = 10000;
 const ROW_TITLE_CHARS = 80;
 /* A window shows a few conversations at a time, so the limit is far above what is ever in use. */
@@ -135,14 +134,14 @@ function create(host, opts = {}) {
   workplan.setScoped(true);
   const view = keep(vscode.window.createTreeView('agentPlus.workPlan', { treeDataProvider: workplan }));
   let viewSays;
-  /* Whether the rows of the plan shown get the button that writes about a row in its conversation (writeAboutRow). */
+  /* The value last given to PREFILL_KEY; null until the first paint, so that one always sets it. */
   let canPrefill = null;
   const paintPlanView = () => {
     const s = focus.sourceId ? registry.get(focus.sourceId) : null;
     const says = s ? sources.labelOf(s) : undefined;
     if (says !== viewSays) { viewSays = says; view.description = says; }
     workplan.setProblem(s ? sources.noticeOf(s) : null);
-    const can = !!s && !!focus.sessionId && !!sources.optional(s, 'prefill');
+    const can = !!s && !!focus.sessionId && trusted() && !!sources.optional(s, 'prefill');
     if (can !== canPrefill) {
       canPrefill = can;
       Promise.resolve(vscode.commands.executeCommand('setContext', PREFILL_KEY, can)).catch(() => {});
@@ -171,14 +170,14 @@ function create(host, opts = {}) {
   const conversationsLang = () => conversationsText.language(vscode.env.language);
   const statusEntry = keep(vscode.window.createStatusBarItem('agentPlus.conversations', vscode.StatusBarAlignment.Right, 100));
   statusEntry.name = 'Conversations';
-  /* What the attention watcher last counted (paintAttention below): conversations in any window that wait for the user or
-     stopped with a reply the user has not read. */
+  /* The conversations in any window that wait for the user or stopped with a reply the user has not read, as
+     paintAttention below last set them. */
   let attentionItems = [];
   /* One entry counts the conversations held up by the user: running ones in the Conversations view with a question in
-     their plan, and those waiting for the user to approve something or answer, in any window. A conversation of both
-     kinds is counted once. One that stopped with a reply not read is left to its notification. It counts conversations,
-     not questions: the plan bar a feature extension draws counts the questions of one. With the Conversations view turned
-     off it shows only the second kind, and opens their list rather than the hidden view. */
+     their plan, and those in any window waiting for the user to approve something or answer, each counted once; a
+     stopped one with an unread reply is not, as its notification covers it. It counts conversations, not questions:
+     the plan bar a feature extension draws counts the questions of one. With the Conversations view turned off it
+     shows only the waiting ones, and a click opens their list rather than the hidden view. */
   const paintConversations = () => {
     const t = conversationsText.textFor(conversationsTree.lang);
     const asks = conversationsTree.data.asks;
@@ -864,9 +863,6 @@ function create(host, opts = {}) {
       const body = row.detail || 'No description was written for this one.';
       await vscode.window.showInformationMessage(row.title, { modal: true, detail: head.concat(['', body]).join('\n') });
     },
-    /* The pen on a row of the Work plan view: the plan's conversation comes to the front with "About row N (title): " in
-       its message box, in the display language, left for the user to go on writing and send. When the source could not
-       put it there, the text goes on the clipboard and the user is told why. */
     writeAboutRow: async (element) => {
       const node = element && element.node;
       if (!node || typeof element.num !== 'string') return;
@@ -874,10 +870,13 @@ function create(host, opts = {}) {
       const title = String(node.title || '');
       const text = t.aboutRow(element.num, title.length > ROW_TITLE_CHARS ? title.slice(0, ROW_TITLE_CHARS - 1) + '\u2026' : title);
       const source = workplan.source ? registry.get(workplan.source) : null;
-      const r = source && sources.usableId(workplan.focus)
-        ? await sources.prefill(source, workplan.focus, text, prefillWait) : { outcome: 'notReceived', reason: t.prefillNone };
+      const r = !trusted() ? { outcome: 'notReceived', reason: t.prefillRestricted }
+        : source && sources.usableId(workplan.focus)
+          ? await sources.prefill(source, workplan.focus, text, prefillWait) : { outcome: 'notReceived', reason: t.prefillNone };
       if (r.outcome === 'drafted') return;
-      try { await vscode.env.clipboard.writeText(text); } catch (_) { /* told below either way */ }
+      let copied = true;
+      try { await vscode.env.clipboard.writeText(text); } catch (_) { copied = false; }
+      if (!copied) { vscode.window.showInformationMessage(t.prefillLost(r.outcome === 'uncertain' ? '' : r.reason || t.prefillNone, text)); return; }
       vscode.window.showInformationMessage(r.outcome === 'uncertain' ? t.prefillUnsure : t.prefillCopied(r.reason || t.prefillNone));
     },
     answerQuestion: async (q) => {
@@ -918,9 +917,8 @@ function create(host, opts = {}) {
       if (focus.set(t.sourceId, t.sessionId)) showFocus();
       await vscode.commands.executeCommand('agentPlus.workPlan.focus');
     },
-    /* For the red part of a plan bar: shows the first question of that conversation's plan in the Answer view, in the
-       order the Conversations view lists them. With a `row`, as the Work plan view's question rows give, that row's
-       question instead, when it is still one. */
+    /* For the questions part of a plan bar: shows the first question of that conversation's plan in the Answer view,
+       in the order the Conversations view lists them. */
     answerQuestionOf: async (target) => {
       const t = targetOf(target);
       if (!t) return;
@@ -962,6 +960,7 @@ function create(host, opts = {}) {
   if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
     keep(vscode.workspace.onDidGrantWorkspaceTrust(() => {
       answerView.setRestricted(false);
+      paintPlanView();
       courierNow();
       pumpSoon();
       refreshConversations(false);

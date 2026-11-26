@@ -44,8 +44,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const two = b.api.stewardsOf('opencode-plus', 'ses_A'), one = b.api.stewardsOf({ sourceId: 'opencode-plus', sessionId: 'ses_A' });
     eq([two, one, frozen(two), frozen(one), cc.asked], [[S('a', 'Steward A'), S('b', 'Steward B')], [S('a', 'Steward A'), S('b', 'Steward B')], true, true,
       [['opencode-plus', 'ses_A'], ['opencode-plus', 'ses_A']]],
-      'stewardsOf() takes two ids or one { sourceId, sessionId }, always asks the source with two ids, and returns frozen copies in the source\'s order');
-    eq(b.api.stewardsOf('opencode-plus', 'ses_B'), [], 'another conversation, for which the source has none, gets an empty array');
+      'whether stewardsOf() is given two ids or one { sourceId, sessionId }, the answer comes back as frozen copies in the source\'s order');
+    eq(b.api.stewardsOf('opencode-plus', 'ses_B'), [], 'a conversation the source has no stewards for gets an empty array');
     const asked = cc.asked.length;
     eq([b.api.stewardsOf('opencode-plus', ''), b.api.stewardsOf(' opencode-plus', 'ses_A'), b.api.stewardsOf('opencode-plus', 42),
       b.api.stewardsOf('opencode-plus'), b.api.stewardsOf({ sourceId: 'opencode-plus' }), b.api.stewardsOf(null), b.api.stewardsOf(),
@@ -54,7 +54,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.close();
   }
 
-  /* ── Entries without usable ids are dropped; an answer that is not an array gives none ── */
+  /* ── Answers and entries of the wrong form ── */
   {
     const b = boot(root, tmp, { views: false });
     let answer = null;
@@ -64,7 +64,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const wrongAnswers = [null, S('a'), 'claude-code:a', 42, Promise.resolve([S('a')]), () => { throw new Error('no table'); },
       () => new Proxy([], { get(t, k) { if (k === 'length') throw new Error('length'); return t[k]; } })];
     eq(wrongAnswers.map(got), Array(wrongAnswers.length).fill([]),
-      'an answer that is not an array, or one that throws when called or when its length is read, gives none');
+      'a non-array, a stewardsOf() that throws and an array whose length throws all give none');
     const mixed = got([
       S('kept-1', 'First'),
       { sessionId: 'no-source' },
@@ -106,7 +106,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     ].map((r) => r.accepted);
     eq([accepted, b.api.stewardsOf('opencode-plus', 'ses_A').map((s) => [s.sourceId, s.sessionId, s.title])],
       [[true, true, true, true, true], [['first', 'a', 'A'], ['claude-code', 'shared', 'Shared from first'], ['second', 'b', 'B']]],
-      'a source with no stewardsOf(), or whose stewardsOf() throws when read, is passed over; the other lists are joined in registration order, keeping a steward named twice where it first appears');
+      'a source with no stewardsOf(), or whose stewardsOf() throws when read, is passed over; the other lists are joined in registration order, and a steward in two lists stays at its first place');
     eq([b.api.stewardsOf('claude-code', 'x').length, second.asked[second.asked.length - 1]], [3, ['claude-code', 'x']],
       'a source is asked about a conversation of any source, not only its own');
     const many = keeper('many', () => Array.from({ length: 19 }, (_, i) => S(`m${i}`, '', 'many')));

@@ -35,6 +35,8 @@ const TEXT = {
     prefillCopied: (why) => `Agent Plus could not put it in the conversation's message box: ${why}. It is on the clipboard instead.`,
     prefillUnsure: 'Agent Plus could not tell whether it reached the conversation\'s message box. It is on the clipboard as well.',
     prefillNone: 'no conversation is shown',
+    prefillRestricted: 'this workspace is in Restricted Mode',
+    prefillLost: (why, text) => `Agent Plus could not put it in the conversation's message box${why ? ': ' + why : ''}, nor on the clipboard. The text was: ${text}`,
     badge: (n) => (n === 1 ? '1 question for you' : `${n} questions for you`),
     problem: 'Could not list the running conversations',
     answerEmpty: 'Click a question on the left to answer it here.',

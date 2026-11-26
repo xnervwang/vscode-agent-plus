@@ -40,8 +40,9 @@ const row = (r, dim) => ({ number: r.number, title: String(r.n.title || '').slic
  * The summary of `plan`, or null when there is nothing for a bar to draw, such as no plan or a plan that does not parse
  * or has no rows.
  *
- * The current row is the deepest `doing` row, the earlier in the file at equal depth. With no row `doing` there is none:
- * a row picked from the others would mostly be the oldest one waiting, which says nothing about what is going on.
+ * The current row is the deepest `doing` row, the earlier in the file at equal depth. A plan without a `doing` row has
+ * no current row: a row picked from the others would mostly be the oldest one waiting, which says nothing about what is
+ * going on.
  */
 function summarize(plan) {
   if (!plan || plan.error || !Array.isArray(plan.nodes) || !plan.nodes.length) return null;

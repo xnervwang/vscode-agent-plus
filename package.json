@@ -294,7 +294,7 @@
         "agentPlus.conversationsView": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show the **Conversations** and **Answer** views in the panel, and the Conversations entry in the status bar."
+          "markdownDescription": "Show the **Conversations** and **Answer** views in the panel, and the Conversations entry in the status bar. When off, the entry still appears while a conversation waits for your approval or answer."
         },
         "agentPlus.notifications.enabled": {
           "type": "boolean",

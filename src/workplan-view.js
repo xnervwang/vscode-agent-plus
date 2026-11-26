@@ -23,15 +23,14 @@ const { keyPart } = require('./sources');
  * at all for a name it does not have, so there the watch stands in: a weaker shape, but a shape. A version that cannot
  * be read gets the watch too.
  */
-/* A `waiting` row that waits for the user and has its question written. */
-const asksUser = (node) => !!node && node.state === 'waiting' && node.waitingOn === 'user'
-  && typeof node.question === 'string' && node.question.trim() !== '';
-
 function waitingIcon(version) {
   const have = String(version || '').split(/[.-]/).slice(0, 2).map(Number);
   if (have.length < 2 || have.some((n) => !Number.isFinite(n))) return 'watch';
   return have[0] > 1 || (have[0] === 1 && have[1] >= 111) ? 'clockface' : 'watch';
 }
+
+const asksUser = (node) => !!node && node.state === 'waiting' && node.waitingOn === 'user'
+  && typeof node.question === 'string' && node.question.trim() !== '';
 
 /*
  * Icons say the state, and they are told apart by shape rather than by colour: colour alone disappears for a reader who
@@ -49,11 +48,10 @@ const LOOK = {
      is the shape everything else uses for running. */
   doing: { icon: 'debug-start', color: 'charts.blue', word: 'doing' },
   /* Started, and now held up by someone outside the conversation - the user, another team, a job running elsewhere.
-     A clock face in orange. The shape says time is passing, which is the whole of what this state means; the watch it
-     replaced was a rounded box at sixteen pixels and said nothing. Orange because there are few of these rows and each
-     one wants a look, and because sharing yellow with `discussing` left the colour unable to tell them apart. It is its
-     own state because without it a row that is waiting gets marked `doing`, and a tree that shows those as being worked
-     on gets wrong the one thing it is watched for. */
+     A clock face in orange. The shape says time is passing, which is the whole of what this state means. Orange because
+     there are few of these rows and each one wants a look, and because yellow is already `discussing`. It is its own
+     state because without it a row that is waiting gets marked `doing`, and a tree that shows those as being worked on
+     gets wrong the one thing it is watched for. */
   waiting: { icon: waitingIcon(vscode.version), color: 'charts.orange', word: 'waiting' },
   parked: { icon: 'debug-pause', color: 'descriptionForeground', word: 'parked' },
   done: { icon: 'pass-filled', color: 'charts.green', word: 'done' },
@@ -363,8 +361,8 @@ class WorkPlanProvider {
      * just for those rows would give two rows that look alike different behaviour, with nothing on either saying why.
      */
     item.description = [times, lasted ? 'for ' + lasted : '', look.unknown ? `"${node.state}": ${UNKNOWN_NOTE}` : ''].filter(Boolean).join(' · ');
-    /* A row waiting for the user with its question written is drawn as the Conversations view draws a question, and a
-       click opens it in the Answer view; a row waiting on anyone else keeps the clock. */
+    /* A row that asks the user a question gets the question mark the Conversations view uses, and a click opens the
+       question in the Answer view. */
     const asks = asksUser(node) && !!this.focus;
     item.iconPath = asks ? new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.orange'))
       : new vscode.ThemeIcon(look.icon, new vscode.ThemeColor(look.color));

@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { boot } = require('../boot');
 
-const C = 'dddddddd-0000-4000-8000-000000000004', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199a213-81c0-7800-8aa1-bbab2a035a53';
+const C = 'dddddddd-0000-4000-8000-000000000004', D = 'aaaaaaaa-0000-4000-8000-000000000001', X = '0199cccc-1111-7222-8333-444455556666';
 const row = (title, state, more = {}) => Object.assign({ title, state }, more);
 
 module.exports = async ({ eq, tmp, root, wait }) => {
@@ -45,11 +45,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const s = summarize(plan([row('A', 'done'), row('B', 'todo'), row('C', 'done', { children: [row('C1', 'waiting', { waitingOn: 'build' }),
       row('C2', 'waiting', { waitingOn: 'user', question: 'Which one?' })] }), row('D', 'discussing')]));
     eq([s.current, s.questions, s.done, s.total], [null, 1, 2, 6],
-      'with no row doing there is no current row, though rows wait, are discussed and are to do; a row waiting on a build asks nothing');
+      'with no row doing there is no current row; a row waiting on a build asks nothing');
   }
   eq([summarize(plan([row('A', 'todo'), row('B', 'doing')])).current, summarize(plan([row('A', 'parked'), row('B', 'todo')])).current],
     [{ number: '2', title: 'B', state: 'doing', dim: false }, null],
-    'a row doing is current wherever it is in the plan, and rows to do or parked make none');
+    'a row doing is the current one wherever it sits in the plan');
   {
     const s = summarize(plan([row('A', 'done'), row('B', 'parked'), row('C', 'dropped'), row('D', 'parked')]));
     eq([s.current, s.allDone, s.total, s.done], [null, false, 3, 1], 'nor do parked rows alone');
@@ -180,14 +180,14 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const item = view.provider.getTreeItem(view.provider.getChildren()[0]);
     eq([item.iconPath.id, item.iconPath.color.id, item.command.command, item.command.arguments[0]],
       ['question', 'charts.orange', 'agentPlus.answerQuestionOf', { sourceId: 'codex', sessionId: X, row: '1' }],
-      'in the work plan view, a row waiting for the user with its question is drawn as a question, and a click opens it in the Answer view');
+      'in the work plan view, a row that asks the user a question gets a question mark');
     write(codexDir, X, { nodes: [row('Refunds', 'waiting', { waitingOn: 'user', question: 'Skip negative amounts?' }),
       row('CI', 'waiting', { waitingOn: 'build' }), row('Later', 'waiting', { waitingOn: 'user' })] });
     view.provider.refresh();
     const drawn = view.provider.getChildren().map((e) => view.provider.getTreeItem(e));
     const kept = ['CI', 'Later'].map((t) => drawn.find((i) => i.label.endsWith('. ' + t))).map((i) => [i.iconPath.id, i.command.command]);
     eq(kept, [[LOOK.waiting.icon, 'agentPlus.showWorkPlanDetail'], [LOOK.waiting.icon, 'agentPlus.showWorkPlanDetail']],
-      'a row waiting on anyone else, or on the user with no question written, keeps the clock and opens its description');
+      'other waiting rows keep the clock and open their description');
     write(codexDir, X, { nodes: [row('Refunds', 'waiting', { waitingOn: 'user', question: 'Skip negative amounts?' })] });
   }
   const answer = b.control.state.webviews['agentPlus.answer'];

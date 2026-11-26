@@ -5,8 +5,9 @@
 'use strict';
 /*
  * The Conversations entry in the status bar (src/views.js): the number of conversations that need the user, the list of
- * them in its tooltip and its warning background, or the number running when none does. It counts the running
- * conversations with a question in their plan and those the attention watcher counts (src/attention.js), each once.
+ * them in its tooltip and its warning background, or the number running when none does. It counts, each once, the
+ * running conversations with a question in their plan and those the attention watcher (src/attention.js) finds waiting
+ * for the user; one that stopped with an unread reply is left out.
  */
 const fs = require('fs');
 const path = require('path');
@@ -40,19 +41,19 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], 'Conversations 2'),
     [true, '$(comment-discussion) Conversations 2', 'Show the conversations of this workspace', null],
-    'with no question waiting, the entry shows how many conversations run, on the plain status bar');
+    'with no question waiting, the entry just shows how many conversations run, with no background colour');
 
   plan('a', 2);
   plan('b', 1);
   plan('c', 3);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta'), conv('c', 'Gamma', false)], '2 conversations need you'),
     [true, '$(comment-discussion) 2 conversations need you', '2 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions\nBeta · 1 question', 'statusBarItem.warningBackground'],
-    'two running conversations with three questions between them are counted as 2, listed in the tooltip, on a yellow background; the stopped one is left out');
+    'it counts conversations, not questions: 2 here for three questions');
 
   plan('b', 0);
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 conversation needs you'),
     [true, '$(comment-discussion) 1 conversation needs you', '1 conversation needs you:\nWaiting for your answer to a question in their plan:\nAlpha · 2 questions', 'statusBarItem.warningBackground'],
-    'for one conversation the entry says 1 conversation needs you');
+    'with one left the text is singular');
 
   const many = Array.from({ length: 12 }, (_, i) => { plan(`m${i}`, 1); return conv(`m${i}`, `Task ${i + 1}`); });
   const [, text, tip] = await look(many, '12 conversations need you');
@@ -63,7 +64,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   vscode.env.language = 'zh-cn';
   eq(await look([conv('a', 'Alpha'), conv('b', 'Beta')], '1 个对话等你'),
     [true, '$(comment-discussion) 1 个对话等你', '1 个对话等你：\n在等你回答计划里问题的：\nAlpha · 2 个问题', 'statusBarItem.warningBackground'],
-    'with VS Code in Chinese, the entry and its tooltip are in Chinese');
+    'with VS Code\'s display language set to Chinese, the entry and its tooltip use the Chinese strings');
   b.close();
 
   /* With the attention watcher counting too. */
@@ -95,9 +96,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
         '3 conversations need you:\nWaiting for your answer to a question in their plan:\nAlpha · 1 question\nBeta · 1 question'
         + '\nWaiting for you to approve something or answer:\nAlpha (approve Bash)\nGamma',
         'agentPlus.showConversations', 'statusBarItem.warningBackground'],
-      'one entry counts the conversations with a question in their plan and those waiting for the user, a conversation of both kinds once, and lists the two kinds apart');
+      'one entry counts both the conversations with a question in their plan and those waiting for the user, Alpha only once though it is both');
     eq(views._parts.needs.items().filter((it) => it.sessionId === 'd').map((it) => it.kind), ['finished'],
-      'one that stopped with a reply not read is known to need the user, and is left to its notification rather than counted');
+      'Delta, stopped with an unread reply, is among those needing the user but is left to its notification, not counted');
     q.control.state.config['agentPlus.conversationsView'] = false;
     q.control.changeConfig(['agentPlus.conversationsView']);
     const off = await settle('2 conversations need you');

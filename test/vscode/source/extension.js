@@ -100,7 +100,7 @@ function activate(context) {
     },
     planNotice: () => state.notice,
     onDidChangePlanNotice: noticeChanged.event,
-    /* Records the text and brings the conversation's tab forward; what it answers is set with configure(). */
+    /* configure() sets what this answers for a conversation in its list. */
     prefill: async (id, text) => {
       state.prefilled.push({ sessionId: id, text });
       if (!openTab(id)) return { outcome: 'notReceived', reason: 'no such conversation' };

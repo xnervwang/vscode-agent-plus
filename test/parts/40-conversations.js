@@ -81,7 +81,6 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
     ok('rows show the logo and label, carry the source id, and say how many rows are in unknown states');
   } else bad(`drawn: ${JSON.stringify(items.slice(0, 2))}`);
 
-  /* The conversation in front, the one the Work plan view shows, heads the list; the others keep their order. */
   {
     const key = (c) => `${c.sourceId}/${c.sessionId}`;
     const listed = () => tree.getChildren().filter((e) => e.kind === 'conversation').map((e) => key(e.c));
@@ -99,7 +98,7 @@ module.exports = async ({ ok, bad, eq, tmp, root }) => {
     const group = top.find((e) => e.kind === 'stopped');
     eq([key(top.find((e) => e.kind === 'conversation').c), tree.getChildren(group).map((e) => key(e.c)), tree.getTreeItem(group).label],
       ['codex/parked', ['codex/other'], 'Not running, with open rows (1)'],
-      'one that is not running comes first too, and leaves the group of those not running');
+      'one that is not running comes first too, and moves out of the Not running group');
     tree.setFront('', '');
     eq(listed(), before, 'with nothing in front the list is in its own order again');
   }

@@ -31,6 +31,8 @@ module.exports = {
   prefillCopied: (why) => `Agent Plus 没能放进对话的输入框：${why}。已改为复制到剪贴板。`,
   prefillUnsure: 'Agent Plus 不确定是否已放进对话的输入框，也已复制到剪贴板。',
   prefillNone: '没有正在显示的对话',
+  prefillRestricted: '这个工作区处于受限模式',
+  prefillLost: (why, text) => `Agent Plus 没能放进对话的输入框${why ? '：' + why : ''}，也没能复制到剪贴板。这段字是：${text}`,
   badge: (n) => `${n} 个问题等你回答`,
   problem: '列不出正在运行的对话',
   answerEmpty: '点左边的一个问题，在这里回答。',

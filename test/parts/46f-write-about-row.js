@@ -4,10 +4,9 @@
 
 'use strict';
 /*
- * The pen on a row of the Work plan view (agentPlus.writeAboutRow in src/views.js, prefill in src/sources.js): the plan's
- * conversation is asked to put "About row N (title): " in its message box, in the display language, and the text goes
- * on the clipboard, with the reason, whenever the source did not say it is there. The pen is shown only while the
- * conversation shown is one whose source lists 'prefill'.
+ * The pen on a row of the Work plan view (agentPlus.writeAboutRow in src/views.js, prefill in src/sources.js): the
+ * plan's conversation is asked to put "About row N (title): " in its message box, in the display language. The pen
+ * shows only for a conversation whose source lists 'prefill', and not in Restricted Mode.
  */
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +28,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       asked(async () => { throw new Error('rejected'); }), asked(async () => ({ outcome: 'drafted' }), []),
     ]);
     eq(odd.map((r) => r.outcome), ['notReceived', 'notReceived', 'notReceived', 'notReceived', 'notReceived'],
-      'an outcome it does not know, an answer of another shape, a throw, a rejection and a source not listing prefill are all notReceived');
+      'anything other than an answer in the protocol\'s words is notReceived');
     eq([odd[2].reason, odd[3].reason, Object.isFrozen(odd[0])], ['broke', 'rejected', true], 'with the reason the source gave');
     eq((await asked(() => new Promise(() => {}))).outcome, 'uncertain', 'a source that does not answer in time is uncertain');
   }
@@ -69,15 +68,15 @@ module.exports = async ({ eq, tmp, root, wait }) => {
 
   await b.control.state.handlers['agentPlus.showWorkPlanOf']({ sourceId: 'codex', sessionId: S });
   await wait(40);
-  eq(b.control.state.context[KEY], true, 'the pen shows for a conversation whose source lists prefill');
+  eq(b.control.state.context[KEY], true, 'a source that lists prefill gets the pen');
   b.control.state.said.length = 0;
   await run(rowOf('2.1. ' + title));
   eq([asks.pop(), b.control.state.clipboard, b.control.state.said.length],
     [[S, `About row 2.1 (${title.slice(0, 79)}…): `], '', 0],
-    'a click asks the source to put "About row N (title): " in that conversation\'s message box, the title cut at 80 characters, and nothing else happens when it did');
+    'a click asks the source to put "About row N (title): " in that conversation\'s message box, with the title cut at 80 characters');
   b.vscode.env.language = 'zh-cn';
   await run(rowOf('1. Pick the branch'));
-  eq(asks.pop(), [S, '关于第 1 行（Pick the branch）：'], 'in Chinese the text is 关于第 N 行（标题）：, and a question row has the pen too');
+  eq(asks.pop(), [S, '关于第 1 行（Pick the branch）：'], 'with VS Code in Chinese the text is 关于第 N 行（标题）：');
   b.vscode.env.language = 'en';
 
   answer = { outcome: 'notReceived', reason: 'no tab in this window shows it' };
@@ -89,10 +88,41 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   answer = () => new Promise(() => {});
   await run(rowOf('2. Port it'));
   eq(b.control.state.said.map((m) => m.message), ['Agent Plus could not tell whether it reached the conversation\'s message box. It is on the clipboard as well.'],
-    'a source that does not answer in time leaves it on the clipboard as well, saying it could not tell');
+    'when the source does not answer in time, the text goes on the clipboard as well and the notification says it could not tell');
+  b.control.state.said.length = 0;
+  answer = { outcome: 'notReceived', reason: 'no tab in this window shows it' };
+  const writeText = b.vscode.env.clipboard.writeText;
+  b.vscode.env.clipboard.writeText = async () => { throw new Error('no clipboard'); };
+  await run(rowOf('2. Port it'));
+  b.vscode.env.clipboard.writeText = writeText;
+  eq(b.control.state.said.map((m) => m.message),
+    ['Agent Plus could not put it in the conversation\'s message box: no tab in this window shows it, nor on the clipboard. The text was: About row 2 (Port it): '],
+    'when the clipboard cannot be written either, the notification says so and gives the text');
 
   await b.control.state.handlers['agentPlus.showWorkPlanOf']({ sourceId: 'claude-code', sessionId: N });
   await wait(40);
-  eq(b.control.state.context[KEY], false, 'a conversation whose source does not list prefill gets no pen');
+  eq(b.control.state.context[KEY], false, 'the Claude Code conversation, whose source does not list prefill, has none');
   b.close();
+
+  /* ── Restricted Mode ── */
+  const r = boot(root, tmp, { trusted: false, viewOptions, config: { 'agentPlus.notifications.enabled': false } });
+  r.vscode.workspace.workspaceFolders = [{ uri: r.vscode.Uri.file(ws) }];
+  const tried = [];
+  r.api.registerSource({ protocol: 1, id: 'codex', label: 'Codex', features: ['prefill'], planPath: (id) => path.join(dir, id + '.json'), planDir: () => dir,
+    listConversations: async () => [{ sessionId: S, title: 'Port the importer', cwd: ws, state: 'idle', running: true }],
+    prefill: async (id, text) => { tried.push([id, text]); return { outcome: 'drafted' }; } });
+  await wait(120);
+  await r.control.state.handlers['agentPlus.showWorkPlanOf']({ sourceId: 'codex', sessionId: S });
+  await wait(40);
+  eq(r.control.state.context[KEY], false, 'in Restricted Mode no row has the pen');
+  const restrictedView = r.control.state.views['agentPlus.workPlan'];
+  const pick = restrictedView.provider.getChildren().find((e) => restrictedView.provider.getTreeItem(e).label === '1. Pick the branch');
+  await r.control.state.handlers['agentPlus.writeAboutRow'](pick);
+  eq([tried.length, r.control.state.clipboard, r.control.state.said.map((m) => m.message)],
+    [0, 'About row 1 (Pick the branch): ', ['Agent Plus could not put it in the conversation\'s message box: this workspace is in Restricted Mode. It is on the clipboard instead.']],
+    'and the command, run anyway, does not ask the source to type: the text goes on the clipboard');
+  r.control.grantTrust();
+  await wait(40);
+  eq(r.control.state.context[KEY], true, 'once the workspace is trusted, the pen shows');
+  r.close();
 };

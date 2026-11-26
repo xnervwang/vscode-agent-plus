@@ -66,7 +66,7 @@ class ConversationsProvider {
     this._emitter = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._emitter.event;
     this.data = { running: [], stopped: [], asks: 0 };
-    /* The conversation in front, the one the Work plan view shows: it heads the list, running or not. */
+    /* The conversation the Work plan view shows, which heads the list whether it runs or not. */
     this.front = { sourceId: '', sessionId: '' };
     this.problem = '';
     this.lang = 'en';
@@ -85,7 +85,6 @@ class ConversationsProvider {
     this._theme.dispose();
   }
 
-  /* Returns whether the conversation in front changed, and redraws the list when it did. */
   setFront(sourceId, sessionId) {
     const next = { sourceId: String(sourceId || ''), sessionId: String(sessionId || '') };
     if (next.sourceId === this.front.sourceId && next.sessionId === this.front.sessionId) return false;
