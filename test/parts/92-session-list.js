@@ -144,6 +144,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     clock = now0 + 10000;
     await list.refresh();
     eq([byTitle(list.model(), 'Alpha').unread, codex.seen.length], [false, 2], 'and is seen once it stays');
+    codex.focused = 'b';
+    await list.refresh();
+    eq(list.model().front, '["codex","b"]', 'with a tab of a source in front, the conversation that source says is focused (its sidebar shown after the tab) is the one in front');
+    codex.focused = '';
+    await list.refresh();
+    eq(list.model().front, '["codex","a"]', 'and the tab\'s once the source no longer says so');
     codex.sessions.find((x) => x.sessionId === 'd').unseen = true;
     await list.refresh({ relist: true });
     eq(byTitle(list.model(), 'Dialog').unread, true, 'a row its source says is unseen in the agent\'s own interface has the envelope');

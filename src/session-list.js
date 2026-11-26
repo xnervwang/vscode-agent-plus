@@ -152,9 +152,14 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const fire = () => { for (const fn of listeners) { try { fn(); } catch (_) { /* the listener's own trouble */ } } };
 
   /* ── what this window shows ── */
+  /*
+   * The conversation in front is the active tab's, unless the source of that tab says another of its conversations is
+   * (isFocused), as Codex Plus does for its sidebar shown after the tab; with no conversation tab active, the one a
+   * source says is focused.
+   */
   function lookNow() {
     const here = new Set(), where = new Map();
-    let front = '';
+    let front = '', tabFront = null;
     const groups = (vscode.window.tabGroups && vscode.window.tabGroups.all) || [];
     const active = vscode.window.tabGroups && vscode.window.tabGroups.activeTabGroup;
     for (const e of entries()) {
@@ -163,7 +168,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         if (!sources.usableId(id)) continue;
         const k = keyOf(e.id, id);
         here.add(k); where.set(k, 'tab');
-        if (g === active && t.isActive && !front) front = k;
+        if (g === active && t.isActive && !front) { front = k; tabFront = { e, id }; }
       }
       const list = lists.get(e.id);
       const shows = sources.optional(e.source, 'shows');
@@ -172,6 +177,11 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         if (shows && !here.has(k)) { try { if (shows(s.sessionId) === true) { here.add(k); where.set(k, 'sidebar'); } } catch (_) { /* not shown */ } }
         if (!front && sources.call(e.source, 'isFocused', [s.sessionId], false) === true) front = k;
       }
+    }
+    if (tabFront && sources.call(tabFront.e.source, 'isFocused', [tabFront.id], true) === false) {
+      const list = lists.get(tabFront.e.id);
+      const other = ((list && list.sessions) || []).find((s) => s.sessionId !== tabFront.id && sources.call(tabFront.e.source, 'isFocused', [s.sessionId], false) === true);
+      if (other) front = keyOf(tabFront.e.id, other.sessionId);
     }
     return { here, front, where };
   }
