@@ -50,9 +50,11 @@ var agentPlusPlanBar = (function () {
     todo: 'var(--vscode-charts-purple, #b180d7)',
     parked: 'var(--vscode-descriptionForeground, #8c8c8c)'
   };
-  /* The warning yellow that Agent Plus's status bar entry takes while conversations wait for the user. The questions
-     part uses it too. */
-  var ASK = 'var(--vscode-statusBarItem-warningBackground, #b89500)';
+  /* The colour of the question mark the work plan view gives a row waiting for the user's answer (src/workplan-view.js).
+     The questions part is tinted with it and its dot is a deeper shade of it. Not the status bar's warning colour, which
+     some themes make red, so that a question to answer would read as an error. */
+  var ASK = 'var(--vscode-charts-orange, #d18616)';
+  var ASK_DOT = 'color-mix(in srgb, ' + ASK + ' 80%, black)';
   var MUTED = 'var(--vscode-descriptionForeground, #8c8c8c)';
 
   /* 16 by 16 shapes in the spirit of the work plan view's icons; each takes the colour of the text around it. */
@@ -93,7 +95,7 @@ var agentPlusPlanBar = (function () {
     + 'background:color-mix(in srgb, ' + ASK + ' 30%, transparent)}'
     + '.apb-q:hover{background:color-mix(in srgb, ' + ASK + ' 48%, transparent)}'
     + '.apb-q:focus-visible{outline:1px solid var(--vscode-focusBorder, #007fd4)}'
-    + '.apb-dot{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:' + ASK + '}'
+    + '.apb-dot{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:' + ASK_DOT + '}'
     + '.apb-chev{display:flex;flex:none;color:' + MUTED + '}'
     + '[' + MARK + ']:hover .apb-chev{color:var(--vscode-foreground, #ccc)}'
     + '[' + MARK + '-list]{position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;max-width:420px;padding:6px 8px;'
@@ -339,6 +341,6 @@ var agentPlusPlanBar = (function () {
   }
 
   return { COMPACT_BELOW: COMPACT_BELOW, HYSTERESIS: HYSTERESIS, TRACK_WIDTH: TRACK_WIDTH, SEGMENT_MIN: SEGMENT_MIN, MAX_LIST: MAX_LIST,
-    SEGMENTS: SEGMENTS, COUNT_ROOM: COUNT_ROOM, COLOR: COLOR, ASK: ASK, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
+    SEGMENTS: SEGMENTS, COUNT_ROOM: COUNT_ROOM, COLOR: COLOR, ASK: ASK, ASK_DOT: ASK_DOT, HOVER_MS: HOVER_MS, MARK: MARK, model: model, create: create };
 })();
 if (typeof module === 'object' && module) module['exports'] = agentPlusPlanBar;

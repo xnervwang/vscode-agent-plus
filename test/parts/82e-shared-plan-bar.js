@@ -101,7 +101,12 @@ module.exports = async ({ eq, root, wait }) => {
     const theirs = Object.keys(bar.COLOR).map((k) => look[k].color.replace('.', '-'));
     eq(theirs, Object.keys(bar.COLOR).map((k) => bar.COLOR[k].replace(/^var\(--vscode-([\w-]+).*$/, '$1')), 'the same as LOOK in src/workplan-view.js says');
   }
-  eq(bar.ASK, 'var(--vscode-statusBarItem-warningBackground, #b89500)', 'the questions part is the yellow of the status bar entry that counts the conversations waiting for the user');
+  {
+    const view = fs.readFileSync(path.join(root, 'src', 'workplan-view.js'), 'utf8');
+    const asked = (/ThemeIcon\('question', new vscode\.ThemeColor\('([\w.]+)'\)\)/.exec(view) || [])[1] || '';
+    eq([bar.ASK.replace(/^var\(--vscode-([\w-]+).*$/, '$1'), bar.ASK_DOT], [asked.replace('.', '-'), `color-mix(in srgb, ${bar.ASK} 80%, black)`],
+      'the questions part is the colour of the question mark the work plan view gives a row waiting for the user, its dot a deeper shade of it');
+  }
   {
     const css = (text.match(/var CSS = ([\s\S]*?);\n/) || [])[1] || '';
     eq([/\.apb-track\{[^}]*flex:none[^}]*width:' \+ TRACK_WIDTH \+ 'px/.test(css), /\.apb-seg\{[^}]*min-width:' \+ SEGMENT_MIN \+ 'px/.test(css),
