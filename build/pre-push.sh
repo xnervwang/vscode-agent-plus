@@ -26,7 +26,7 @@ if [ -n "${AGENT_PLUS_VSCODE:-}" ]; then
   run+=(--vscode "$AGENT_PLUS_VSCODE")
   # Beside the executable on Linux and Windows; in Contents/Resources of the app on macOS, one folder up.
   for base in "$(dirname "$AGENT_PLUS_VSCODE")" "$(dirname "$AGENT_PLUS_VSCODE")/.."; do
-    worker=$(find "$base" -maxdepth 9 -path '*/webview/browser/pre/service-worker.js' 2>/dev/null | head -n 1)
+    worker=$(find "$base" -maxdepth 12 -path '*/webview/browser/pre/service-worker.js' 2>/dev/null | head -n 1)
     if [ -n "$worker" ]; then break; fi
   done
   if [ -n "$worker" ]; then cp "$worker" "$out/service-worker.js"; trap 'cp "$out/service-worker.js" "$worker"' EXIT; fi
