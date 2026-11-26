@@ -1614,7 +1614,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       const backTo = await until(() => sl.evaluate(() => { const m = document.querySelector('.sl-ctx:not(.sl-ctx-sub)'); return !document.querySelector('.sl-ctx-sub') && m && m.style.visibility !== 'hidden'
         && [...m.querySelectorAll('.sl-ctx-item')].map((b) => b.textContent.replace('›', '').trim()); }), 5000, 200);
       check(!!backTo && ['New Group', 'Rename Group', 'Delete Group'].every((x) => backTo.includes(x)),
-        'in a side bar too narrow for a submenu beside the menu, the submenu takes the menu\'s place, and its first line goes back to the menu', backTo);
+        'in a side bar too narrow for the submenu to sit beside the menu, the submenu replaces the menu, and its first line leads back to it', backTo);
     } else {
       check(!!placed && !placed.covers, 'a submenu opens beside its menu, clear of the item it belongs to', placed);
     }
@@ -1712,7 +1712,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await until(() => page.evaluate(() => !!(document.activeElement && document.activeElement.closest('.quick-input-widget'))), 10000, 100);
     await page.keyboard.type('sl-ask');
     const found2 = await until(async () => { const r = await pickRows(); return r && r.length >= 1 && r.every((x) => /sl-ask/.test(x.text)) && r; }, 10000, 300);
-    check(!!found2 && found2.some((x) => x.label === SLT.ask), 'Find Conversation finds conversations by part of the id, with the agent beside each', found2);
+    check(!!found2 && found2.some((x) => x.label === SLT.ask), 'Find Conversation matches part of the id and shows the agent beside each conversation', found2);
     await pick(SLT.ask);
     check(!!await frontIs(SLT.ask), 'and picking one opens it');
   });

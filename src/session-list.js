@@ -360,7 +360,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   function sweepLock() {
     const dir = shared('session-list');
     const p = path.join(dir, `${project.key}.sweep`);
-    try { fs.mkdirSync(dir, { recursive: true }); } catch (_) { /* the mkdir below says */ }
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (_) { /* the mkdir below reports it */ }
     try { fs.mkdirSync(p); return () => { try { fs.rmdirSync(p); } catch (_) { /* gone */ } }; } catch (_) { /* taken */ }
     try { if (now() - fs.statSync(p).mtimeMs > SWEEP_LOCK_STALE_MS) { fs.rmdirSync(p); fs.mkdirSync(p); return () => { try { fs.rmdirSync(p); } catch (_) { /* gone */ } }; } } catch (_) { /* another took it */ }
     return null;
