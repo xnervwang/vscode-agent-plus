@@ -80,6 +80,14 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([blocked, a.pending(), b.record('opencode', 'ses_x').pinned], [false, 0, true],
     'a write that finds the lock taken waits, and takes over a lock older than the stale time');
 
+  let may = false;
+  const ro = S.createStore({ dir, key: 'readonly0000000a', now, writable: () => may });
+  ro.pin([['codex', 'ro']], true);
+  const held = [ro.flush(), ro.record('codex', 'ro').pinned, fs.existsSync(path.join(dir, 'readonly0000000a.json'))];
+  may = true;
+  eq([held, ro.flush(), fs.existsSync(path.join(dir, 'readonly0000000a.json'))], [[false, true, false], true, true],
+    'while it may not write, as in Restricted Mode, a change shows in this window only, and is written once it may');
+  ro.dispose();
   eq(b.keys().map((k) => k.join('/')).sort(), ['claude-code/s-b', 'codex/t-a', 'opencode/ses_c', 'opencode/ses_x'], 'keys lists every conversation the store has something for');
   a.markImported('codex'); a.swept(); a.flush();
   eq([b.imported('codex') > 0, b.imported('claude-code'), b.sweepAt() > 0], [true, 0, true], 'it records which sources were imported and when the list last swept');

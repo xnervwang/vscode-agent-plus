@@ -129,7 +129,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   /* How the aria-label of each view's pane header starts; a pane is found by it. */
   const HEADERS = { 'agentPlus.conversations': 'Conversations Section', 'agentPlus.answer': 'Answer Section', 'agentPlus.workPlan': 'Work plan' };
   const treeRows = (view) => page.evaluate((h) => {
-    const pane = [...document.querySelectorAll('.pane')].find((p) => { const x = p.querySelector(':scope > .pane-header'); return x && (x.getAttribute('aria-label') || '').startsWith(h); });
+    const pane = [...document.querySelectorAll('.pane')].find((p) => { const x = p.querySelector(':scope > .pane-header'); return x && (x.getAttribute('aria-label') || '').startsWith(h)
+      && !p.closest('[id="workbench.view.extension.agentPlusSessions"]'); });
     if (!pane || !pane.offsetParent) return null;
     const view = pane.getBoundingClientRect();
     return [...pane.querySelectorAll('.monaco-list-row')].map((el) => {
@@ -152,7 +153,10 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
   const convRows = () => treeRows('agentPlus.conversations');
   const planRows = () => treeRows('agentPlus.workPlan');
   const convRow = async (title) => (await convRows() || []).find((r) => r.title === title) || null;
-  const pane = (view) => page.locator(`.pane:has(> .pane-header[aria-label^="${HEADERS[view]}"])`).first();
+  /* Where each view is, since the session list's view in the side bar is titled Conversations too. */
+  const SCOPES = { 'agentPlus.workPlan': '[id="workbench.view.extension.agentPlus"]', 'agentPlus.conversations': '[id="workbench.parts.panel"]',
+    'agentPlus.answer': '[id="workbench.parts.panel"]' };
+  const pane = (view) => page.locator(`${SCOPES[view] || ''} .pane:has(> .pane-header[aria-label^="${HEADERS[view]}"])`).first();
   const rowLoc = (view, title) => pane(view).locator('.monaco-list-row').filter({ has: page.locator('.label-name', { hasText: new RegExp(`^${escapeRe(title)}$`) }) }).first();
   /* A window that opens small, as on the macOS and Windows runners, has a panel too short for every row: the tree draws
      only the rows in view, so the panel is maximized there. */
@@ -204,7 +208,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     await sleep(500);
   };
   const welcome = (view) => page.evaluate((h) => {
-    const p = [...document.querySelectorAll('.pane')].find((x) => { const y = x.querySelector(':scope > .pane-header'); return y && (y.getAttribute('aria-label') || '').startsWith(h); });
+    const p = [...document.querySelectorAll('.pane')].find((x) => { const y = x.querySelector(':scope > .pane-header'); return y && (y.getAttribute('aria-label') || '').startsWith(h)
+      && !x.closest('[id="workbench.view.extension.agentPlusSessions"]'); });
     const m = p && p.querySelector('.welcome-view-content');
     return m && m.offsetParent ? m.innerText.trim() : '';
   }, HEADERS[view]);
@@ -1762,6 +1767,8 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     check(!!note && /Restricted Mode/.test(note) && /Manage Workspace Trust/.test(note) && !!await slWait((r) => r.some((x) => x.title === 'Asked about the release branch')),
       'the session list still lists the conversations, says Restricted Mode changes nothing, and offers Manage Workspace Trust', note);
     check(await sl.evaluate(() => document.querySelector('.sl-new').classList.contains('sl-hidden')), 'and has no New bar');
+    const wrote = (() => { try { const d = path.join(profile.shared, 'session-list'); return fs.readdirSync(d).filter((n) => fs.statSync(path.join(d, n)).mtimeMs > launchedAt); } catch (_) { return []; } })();
+    check(!wrote.length, 'and writes nothing of the list\'s own to the folder the windows share', wrote);
     await look('sessions-restricted', { expect: 'The Conversations side bar in Restricted Mode: no New bar, a note saying Restricted Mode: the list shows conversations and changes nothing, with a Manage Workspace Trust button, and the conversations listed below.' }, sidebarBox());
     await look('restricted', { expect: 'The window in Restricted Mode (a Restricted Mode badge at the left of the status bar). The Conversations view lists Asked about the release branch with its question; the Answer view shows that question with a greyed-out box and Send, and says Restricted Mode: this window does not send answers. Trust the workspace to send one.' },
       page.locator('#workbench\\.parts\\.panel'));

@@ -93,9 +93,10 @@ function apply(d, op) {
 
 /*
  * `dir` is the folder of the store files, `key` the project's (projectOf). `now()` gives the time; `log` reports a
- * write that failed.
+ * write that failed. While `writable()` is false, as in Restricted Mode, changes show in this window and are written
+ * once it is true again.
  */
-function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = '', now = Date.now, log = () => {} }) {
+function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = '', now = Date.now, log = () => {}, writable = () => true }) {
   const file = path.join(dir, `${key}.json`);
   const lock = `${file}.lock`;
   let cache = null, cacheMtime = '', pending = [], timer = null, closed = false;
@@ -127,6 +128,7 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
   function flush() {
     timer = null;
     if (!pending.length) return true;
+    if (!writable()) return false;
     if (!takeLock()) { if (!closed) timer = setTimeout(flush, RETRY_MS); return false; }
     try {
       const d = readFile(file);

@@ -129,7 +129,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const folders = () => (vscode.workspace.workspaceFolders || []).map((f) => { try { return fs.realpathSync(f.uri.fsPath); } catch (_) { return f.uri.fsPath; } });
   const workspaceFile = () => { const f = vscode.workspace.workspaceFile; return f && f.scheme === 'file' ? f.fsPath : ''; };
   let project = projectOf(folders(), workspaceFile());
-  let store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say });
+  let store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say, writable: () => !host.trusted || host.trusted() });
   const lists = new Map();
   const listeners = new Set();
   const dueListeners = new Set();
@@ -786,7 +786,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       if (next.key === project.key) return;
       store.dispose();
       project = next;
-      store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say });
+      store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say, writable: () => !host.trusted || host.trusted() });
       subs.push(store.onDidChange(() => schedule(30)));
       for (const st of lists.values()) st.dirty = true;
       schedule(0);

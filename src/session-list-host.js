@@ -81,7 +81,9 @@ function startSessionList(host, opts = {}) {
     }
   }));
   keep(vscode.workspace.onDidChangeWorkspaceFolders(() => list.folderChanged()));
-  if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') keep(vscode.workspace.onDidGrantWorkspaceTrust(() => list.schedule()));
+  if (typeof vscode.workspace.onDidGrantWorkspaceTrust === 'function') {
+    keep(vscode.workspace.onDidGrantWorkspaceTrust(() => { list.store().flush(); list.schedule(); }));
+  }
   const tick = setInterval(() => list.schedule(), Number.isFinite(opts.tickMs) ? opts.tickMs : 30000);
   keep({ dispose: () => clearInterval(tick) });
 
