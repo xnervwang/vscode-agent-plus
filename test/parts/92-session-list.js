@@ -307,6 +307,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     eq([acc.slice(-1)[0], list.model().accounts.map((a) => a.info.rows[0].value)], ['ses_aaaaaaaaaaaaaaaaaaaaaaaaaa', ['Bedrock']],
       'an agent\'s Account & usage part is asked about its conversation last in front, after another one comes to the front');
+    const syncAccount = oc.accountInfo, syncNotice = oc.sessionsNotice;
+    oc.accountInfo = async () => ({ rows: [{ label: 'Provider', value: 'Bedrock' }] });
+    oc.sessionsNotice = () => Promise.reject(new Error('later'));
+    await list.refresh();
+    eq([list.model().accounts, list.model().notices], [[], []], 'a source whose accountInfo or sessionsNotice returns a Promise gets no part and no note');
+    oc.accountInfo = syncAccount; oc.sessionsNotice = syncNotice;
     list.noticeAction('opencode', 0);
     await wait(0);
     eq(ran, [['vscode.open', 'https://example.invalid/']], 'and a button runs the command the source gave');

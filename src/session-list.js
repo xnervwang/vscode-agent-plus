@@ -632,10 +632,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const srcs = entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), logo: sources.logoOf(e.source), create: capsOf(e.source).create }));
     const accounts = [];
     for (const e of entries()) {
-      const fn = sources.optional(e.source, 'accountInfo');
-      if (!fn) continue;
-      let info = null;
-      try { info = fn({ sessionId: lastFront.get(e.id) || '' }); } catch (_) { info = null; }
+      const info = accountRaw(e);
       if (info && typeof info === 'object') accounts.push({ id: e.id, label: sources.labelOf(e.source), info: accountOf(info) });
     }
     const last = (host.globalMemento && host.globalMemento.get(LAST_NEW_KEY)) || {};
@@ -647,6 +644,18 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       front: look.front, restricted: !!(host.trusted && !host.trusted()), menu: menuItems(),
       colors: COLORS.map((name) => ({ name, color: THEME_COLOR[name] })), empty: visible.length === 0,
     };
+  }
+
+  /* accountInfo() and sessionsNotice() answer at once. A source that returns a Promise instead gets no part and no
+     note, rather than a part drawn from the Promise, which has no rows. */
+  const settled = (v) => {
+    if (v && typeof v.then === 'function') { Promise.resolve(v).catch(() => { /* not used */ }); return null; }
+    return v;
+  };
+  function accountRaw(e) {
+    const fn = e && sources.optional(e.source, 'accountInfo');
+    if (!fn) return null;
+    try { return settled(fn({ sessionId: lastFront.get(e.id) || '' })); } catch (_) { return null; }
   }
 
   function accountOf(info) {
@@ -664,7 +673,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   function rawNotice(e) {
     const fn = sources.optional(e.source, 'sessionsNotice');
     if (!fn) return null;
-    try { return fn(); } catch (_) { return null; }
+    try { return settled(fn()); } catch (_) { return null; }
   }
   function noticeOf(e) {
     const n = rawNotice(e);
@@ -687,10 +696,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
 
   /* Runs one of the links of a source's Account & usage part. */
   function accountLink(sourceId, i) {
-    const e = entryOf(sourceId);
-    const fn = e && sources.optional(e.source, 'accountInfo');
-    let info = null;
-    try { info = fn ? fn({ sessionId: lastFront.get(sourceId) || '' }) : null; } catch (_) { info = null; }
+    const info = accountRaw(entryOf(sourceId));
     const links = sources.get(info, 'links');
     const l = Array.isArray(links) ? links[i] : null;
     const command = str(sources.get(l, 'command'), 200);
