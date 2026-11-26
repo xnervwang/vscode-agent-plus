@@ -4,7 +4,7 @@
 
 'use strict';
 /*
- * The session list's rules (src/session-rules.js), one section per rule.
+ * The session list's rules (src/session-rules.js).
  */
 const path = require('path');
 
@@ -73,7 +73,7 @@ module.exports = async ({ eq, root }) => {
   /* ── Filters and counts ── */
   const mixed = [row({ title: 'a', here: true }), row({ title: 'b', activity: 'working' }), row({ title: 'c', activity: 'background', asks: true }),
     row({ title: 'd', activity: 'waiting' }), row({ title: 'e' })];
-  eq(R.counts(mixed), { all: 5, open: 1, running: 2, needs: 2 }, 'All, Open (in this window), Running (a turn or background work) and Needs you count');
+  eq(R.counts(mixed), { all: 5, open: 1, running: 2, needs: 2 }, 'the chips count All, Open (in this window), Running (a turn or background work) and Needs you');
 
   /* ── Archiving on its own ── */
   const old = { lastActiveAt: now - 20 * DAY };

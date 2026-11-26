@@ -26,7 +26,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     return view;
   }
 
-  /* ── The view, with a list that records what it is asked ── */
+  /* ── The view, with a stand-in list that records its calls ── */
   {
     const { vscode } = fake.create();
     const dir = tmp('logos');
@@ -53,7 +53,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const decoded = Buffer.from(logo.replace(/^data:image\/svg\+xml;base64,/, ''), 'base64').toString('utf8');
     eq([first.type, /^data:image\/svg\+xml;base64,/.test(logo), /script/i.test(decoded), /<circle/.test(decoded), first.model.sources, view.badge],
       ['model', true, false, true, [{ id: 'codex', label: 'Codex', create: ['tab'] }], { value: 2, tooltip: '2 conversations need you' }],
-      'the page gets the model with each agent\'s logo as a data: URI with its script taken out, and the view\'s badge counts the conversations that need the user');
+      'the page gets the model with each agent\'s logo as a script-free data: URI; the badge counts the conversations that need the user');
     changes.fire();
     eq(view.sent.length, 0, 'an unchanged model is not sent again');
     view.hide();

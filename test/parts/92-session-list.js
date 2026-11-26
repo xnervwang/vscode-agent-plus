@@ -97,7 +97,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── A first look: replies from before the record began count as seen ── */
+  /* ── Replies from before the record began count as seen ── */
   {
     const t = setup();
     const codex = source('codex', [conv('old', { title: 'Old reply', lastReplyAt: now0 - DAY }), conv('new', { title: 'New reply', lastReplyAt: now0 - DAY }),
@@ -132,7 +132,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── Rows, this window, the one in front, closed here ── */
+  /* ── Rows, the conversation in front, and what was closed here ── */
   {
     const t = setup();
     const codex = source('codex', [conv('a', { title: 'Alpha', lastReplyAt: now0 - 60e3 }), conv('b', { title: 'Beta', activity: 'working', running: true }),
@@ -199,7 +199,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     clock = now0 + 40000;
     await list.refresh();
-    eq(byTitle(list.model(), 'Alpha').unread, false, 'and is seen once another has been in front and it has stayed in front again');
+    eq(byTitle(list.model(), 'Alpha').unread, false, 'and is seen only after another conversation has had the front and it has stayed there again');
     codex.sessions.find((x) => x.sessionId === 'a').unseen = true;
     await list.refresh({ relist: true });
     clock = now0 + 50000;
@@ -251,7 +251,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── Another VS Code window, and a terminal ── */
+  /* ── Another VS Code window and a terminal ── */
   {
     const t = setup();
     const codex = source('codex', [conv('w', { title: 'In window B' }), conv('z', { title: 'In a terminal', elsewhere: [{ kind: 'terminal', label: 'terminal pts/3', detail: ['pid 77'], running: true }],
@@ -321,7 +321,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(codex.calls.pop(), ['goal.pause', ['a'], {}], 'and goes to the source for the rows it applies to');
     codex.made = 'new-one';
     await list.groupAct('newInGroup', made.renameGroup, 'codex');
-    eq([codex.calls.pop(), rec('new-one').group === made.renameGroup], [['create', [], { where: 'tab' }], true], 'a new conversation for a group is put in it by the id the source answers');
+    eq([codex.calls.pop(), rec('new-one').group === made.renameGroup], [['create', [], { where: 'tab' }], true], 'a new conversation started for a group goes into it, found by the id the source returns');
     list.dispose();
   }
 
@@ -457,7 +457,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── What a source hands over, held to the protocol's limits ── */
+  /* ── A source's sessions and actions, cut to the protocol's limits ── */
   const s = L.sessionOf({ sessionId: 'x', title: 'T', kind: 'nope', parentId: 'x', elsewhere: Array.from({ length: 12 }, () => ({ kind: 'weird', label: 'L'.repeat(200), detail: ['d'.repeat(500)] })),
     badges: [{ text: 'goal' }, { text: '' }, { text: 'c' }, { text: 'd' }], processes: 3, hover: ['a', 5, '', 'b'], actions: ['x', 3] });
   eq([s.kind, s.parentId, s.elsewhere.length, s.elsewhere[0].kind, s.elsewhere[0].label.length, s.elsewhere[0].detail[0].length, s.badges.map((b) => b.text), s.processes, s.hover, s.actions, s.detail],

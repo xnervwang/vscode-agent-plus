@@ -27,7 +27,7 @@ const { keyPart } = require('./sources');
 /* The icon for each of the session list's dots (src/session-rules.js dotOf): blue for a dialog waiting, red for a question
    asked once the agent stopped, hollow red for one asked while it still runs, green for a turn running, hollow green for
    background work only. A conversation with no dot has a blank of the same size, so its title stays where the others'
-   are. The tooltip says the activity in words, for a reader who cannot tell the red dot from the green. */
+   are. The tooltip names the activity, for a reader who cannot tell the colours apart. */
 const LOOK = {
   blue: ['circle-filled', 'charts.blue'],
   red: ['circle-filled', 'charts.red'],

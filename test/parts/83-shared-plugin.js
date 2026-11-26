@@ -154,7 +154,7 @@ print(json.dumps([A.scratch_dir({"session_id": s} if s is not None else {}) for 
       asks([{ title: 'A', state: 'todo' }, { title: 'Pick', state: 'done', waitingOn: 'user', question: 'Main or hotfix?' }]),
       asks([{ title: 'A', state: 'waiting', waitingOn: 'build' }])],
     [true, false, false, true, true],
-    `${agent}: what the Stop hook says ends by asking for the user's language, and a reply ending in a question draws no reminder while a row already waits on the user, at any depth, but does once that row is closed or waits on someone else`);
+    `${agent}: the Stop hook's note ends by asking for the user's language; a reply ending in a question gets no reminder while any row, at any depth, waits on the user, and gets one once that row is closed or waits on someone else`);
 
     /* No plan yet: the hook's one offer of a plan also ends by asking for the user's language. */
     const bare = tmp(`bare-${agent}`);

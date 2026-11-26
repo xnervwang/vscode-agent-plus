@@ -150,7 +150,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
   const entries = () => (registry.entries || []).filter((e) => sources.supports(e.source, 'sessions'));
-  const fire = () => { for (const fn of listeners) { try { fn(); } catch (_) { /* the listener's own trouble */ } } };
+  const fire = () => { for (const fn of listeners) { try { fn(); } catch (_) { /* a failing listener is ignored */ } } };
 
   /* ── what this window shows ── */
   /*
@@ -189,7 +189,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return { here, front, where };
   }
 
-  /* Closed here: shown at the last look and not now, at the place it was shown; or as a source that tells its closings
+  /* Closed here: shown at the last look and not now, at the place it was shown; or as a source that reports its closings
      (onDidCloseSession) says. */
   function remember(gone, whereOf) {
     if (!gone.length) return;
@@ -198,7 +198,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const add = gone.map((k) => { const r = rows.get(k); const [s, id] = JSON.parse(k); return { k, s, id, title: r ? r.title : '', where: whereOf(k) || 'tab', at }; });
     const keep = add.concat(list.filter((c) => !gone.includes(c.k))).slice(0, CLOSED_KEEP);
     if (host.memento) Promise.resolve(host.memento.update(CLOSED_KEY, keep)).catch(() => {});
-    if (host.closed) { try { host.closed(gone); } catch (_) { /* the host's own trouble */ } }
+    if (host.closed) { try { host.closed(gone); } catch (_) { /* a failing host callback is ignored */ } }
   }
   const tellsClosings = (sourceId) => { const e = entryOf(sourceId); return !!e && sources.supports(e.source, 'sessionClose'); };
   function noteClosed(was, next) {
@@ -309,7 +309,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       if (dueSig.get(e.id) === sig) continue;
       const had = dueSig.has(e.id);
       dueSig.set(e.id, sig);
-      if (had) for (const fn of dueListeners) { try { fn({ sourceId: e.id }); } catch (_) { /* the listener's own trouble */ } }
+      if (had) for (const fn of dueListeners) { try { fn({ sourceId: e.id }); } catch (_) { /* a failing listener is ignored */ } }
     }
   }
 

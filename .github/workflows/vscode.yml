@@ -15,8 +15,7 @@ on:
     # Try a change to this workflow on a ci/ branch first.
     branches: [main, 'ci/**']
   pull_request:
-  # By hand, `steps` picks window test steps by name, and each brings along the steps it needs
-  # (test/vscode/lib/steps.js). Used to try a fix of one failure on the system it failed on.
+  # By hand, for trying a fix on the system where a test failed.
   workflow_dispatch:
     inputs:
       os:

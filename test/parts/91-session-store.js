@@ -76,7 +76,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock = 14000 + S.LOCK_STALE_MS + 1000;
   await wait(S.LOCK_STALE_MS > 0 ? 150 : 0);
   eq([blocked, a.pending(), b.record('opencode', 'ses_x').pinned], [false, 0, true],
-    'a write that finds the lock taken waits, and takes over a lock older than the stale time');
+    'a write waits while another holds the lock, and takes over a lock older than LOCK_STALE_MS');
 
   let may = false;
   const ro = S.createStore({ dir, key: 'readonly0000000a', now, writable: () => may });

@@ -8,10 +8,9 @@
  * Plus's session list (its src/page/sessions-page.js): rows and sections are kept per key and reused, and a field is
  * written only when its value differs, so a one-row change rewrites one row.
  *
- * From the top, the page has the New bar, the filter chips, the search box when open, ACCOUNT & USAGE, and the
- * model's sections. A row has the stripe at its start (open here, open somewhere else, closed here lately), the
- * agent's logo with the status dot at its top right, the title, its marks, and the time, which the row's buttons take
- * the place of while it is hovered.
+ * A row has the stripe at its start (open here, open somewhere else, closed here lately), the agent's logo with the
+ * status dot at its top right, the title, its marks, and the time, which the row's buttons take the place of while it
+ * is hovered.
  *
  * Collapsed sections, the filter, the agents hidden and the search are saved with setState, so they survive VS Code
  * dropping the page while the view is hidden.
@@ -88,8 +87,8 @@
   const newSide = button('sl-new-half', 'Start a conversation in the sidebar', icon('plus'), el('span', '', 'New in sidebar'), icon('side', 'sl-icon sl-place'));
   newSide.dataset.where = 'sidebar';
   newBar.append(newAgent, newTab, newSide);
-  /* A bar too narrow for both labels keeps the default half's and shows only where the other opens, as an icon,
-     rather than a label cut down to a letter or two. */
+  /* A bar too narrow for both labels keeps the default half's label and shows the other half as an icon, rather than
+     as a label cut down to a letter or two. */
   function fitNew() {
     newBar.classList.remove('sl-tight');
     const other = [newTab, newSide].find((b) => !b.classList.contains('sl-primary'));
@@ -446,7 +445,7 @@
     wantDetail();
   }
 
-  /* Rows on screen whose dot and unread mark the source has not read yet: the host asks it to. */
+  /* The host asks the source to read the dot and unread mark of rows on screen that it has not read yet. */
   function wantDetail() {
     const keys = visibleRows().filter((r) => r._row.detail === false).map((r) => r._row.key).slice(0, 200);
     const sig = keys.join('\n');
@@ -535,13 +534,12 @@
     box.setAttribute('role', 'menu');
     const ticks = items.some((it) => it.checkbox || it.checked);
     const buttons = items.map((it) => { if (it.separatorBefore) box.append(el('div', 'sl-ctx-sep')); const b = itemButton(it, ticks); box.append(b); return b; });
-    /* The item under the pointer takes the focus, so that one item at a time is drawn as chosen. */
+    /* The item under the pointer takes the focus, so only one item at a time looks chosen. */
     box.addEventListener('mouseover', (e) => { const b = e.target.closest('.sl-ctx-item'); if (b && document.activeElement !== b) b.focus({ preventScroll: true }); });
     return { box, buttons };
   }
   const rectOf = (e) => { const b = e.getBoundingClientRect(); return { left: b.left, right: b.left + b.width, top: b.top, bottom: b.top + b.height }; };
-  /* `run(item, pick)` is what an item does. A menu given `rebuild` stays open after a pick and is drawn again from it,
-     as the agents' checkboxes are. */
+  /* A menu given `rebuild` stays open after a pick and is drawn again from it, as the agents' checkboxes are. */
   function openCtx(x, y, items, run, { rebuild = null } = {}) {
     closeCtx();
     hideHover();

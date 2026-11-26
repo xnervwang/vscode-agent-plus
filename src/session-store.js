@@ -54,7 +54,7 @@ function readFile(file) {
   return empty();
 }
 
-/* A field [value, at]: the change made last wins. */
+/* Fields are [value, at], and the later change wins. */
 const later = (have, next) => (!Array.isArray(have) || !(have[have.length - 1] > next[next.length - 1]) ? next : have);
 
 /* Applies one operation to `d` in place. */
@@ -113,7 +113,7 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
       cache = readFile(file);
       cacheMtime = m;
     }
-    /* What is not written yet shows at once in this window. */
+    /* Changes not yet written already show in this window. */
     if (!pending.length) return cache;
     const view = JSON.parse(JSON.stringify(cache));
     for (const op of pending) apply(view, op);
@@ -201,7 +201,7 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
     },
     renameGroup(id, name) { const n = cleanName(name); if (n) change({ type: 'renameGroup', id, name: n }); return !!n; },
     deleteGroup: (id) => change({ type: 'deleteGroup', id }),
-    /* Puts group `id` before `before`, or last with no `before`. */
+    /* Moves group `id` in front of group `before`, or to the end when `before` is not given. */
     moveGroup(id, before) {
       const list = this.groups().filter((g) => g.id !== id);
       const at = before ? list.findIndex((g) => g.id === before) : -1;

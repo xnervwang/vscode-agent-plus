@@ -20,8 +20,8 @@
  * and an entry of <out>/look.json.
  *
  * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match, and the steps those name in their
- * needs('…') calls, followed through (lib/steps.js); a step whose need did not run to its end fails, naming it. A step
- * with a failed check keeps a screenshot, and what the window held then in <out>/state/.
+ * needs('…') calls, followed through (lib/steps.js); when a step it needs did not finish, the step fails and names it.
+ * A step with a failed check keeps a screenshot, and the window's HTML and text in <out>/state/.
  */
 const fs = require('fs');
 const path = require('path');
@@ -66,8 +66,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const done = new Set();
   let current = '';
   /*
-   * What the window held when a step failed, in <out>/state/<step>/: the workbench's HTML and the text of each frame in it
-   * (the webviews of Agent Plus's views among them), with their addresses, and the notifications shown.
+   * Kept in <out>/state/<step>/ when a step fails: the workbench's HTML, the text of each frame in it (the webviews of
+   * Agent Plus's views among them) with their addresses, and the notifications shown.
    */
   const keepState = async (name) => {
     const dir = path.join(out, 'state', name.replace(/[^\w.-]+/g, '-').slice(0, 80));
@@ -1460,7 +1460,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(ungrouped.indexOf(SLT.run) < ungrouped.indexOf(SLT.cc) && ungrouped.indexOf(SLT.cc) < ungrouped.indexOf(SLT.bg) && ungrouped.indexOf(SLT.weeks) < ungrouped.indexOf(SLT.month),
       'Ungrouped is in order of the last message, newest first, across the agents', ungrouped);
     const chips = await sl.evaluate(() => Object.fromEntries([...document.querySelectorAll('.sl-chip')].map((c) => [c.dataset.chip, Number(c.lastChild.textContent)])));
-    check(chips.needs === 3 && chips.running === 5 && chips.open === 1, 'the chips count: Needs you the blue and both red dots, Running the five running, Open the one open here', chips);
+    check(chips.needs === 3 && chips.running === 5 && chips.open === 1, 'the chips count the blue and both red dots for Needs you, the five running for Running, and the one open here for Open', chips);
     const whole = await sl.evaluate(() => { const s = document.querySelector('.sl-new-half.sl-primary span'); return !!s && s.scrollWidth <= s.clientWidth + 1 && s.textContent; });
     check(whole === 'New in tab', 'the New bar\'s default half shows its whole label', whole);
     const heads = await sl.evaluate(() => [...document.querySelectorAll('.sl-section')].filter((x) => !x.classList.contains('sl-hidden') && x.dataset.key !== 'account')
@@ -1586,7 +1586,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await page.keyboard.type('Plugins');
     await page.keyboard.press('Enter');
     const made = await until(() => sl.evaluate(() => { const s = [...document.querySelectorAll('.sl-section[data-kind="group"]')].find((x) => x.querySelector('.sl-head-label').textContent === 'Plugins'); return s && s.dataset.key; }), 8000, 200);
-    check(!!made, 'and the name typed is the group\'s', made);
+    check(!!made, 'and the group gets the name typed', made);
     slGroup = made || '';
     await slRowLoc(SLT.cc).click({ button: 'right' });
     await slItem('Add to Group').click();
@@ -1616,13 +1616,13 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       check(!!placed && !placed.covers, 'a submenu opens beside its menu, clear of the item it belongs to', placed);
     }
     await slClose();
-    /* Out by way of the list's top, which is no row: a pointer that jumps straight out of the webview leaves it holding
-       the last place it saw, and the row that comes under that place once the menu goes takes the hover. */
+    /* Out by way of the list's top, which is no row: the webview keeps the pointer's last position, and once the menu
+       goes the row under it would take the hover. */
     await sl.locator('.sl-chips').hover({ position: { x: 1, y: 1 } });
     await page.mouse.move(5, 5);
     await sl.evaluate(() => { const g = document.querySelector('.sl-section[data-key^="group:"]'); if (g) g.scrollIntoView({ block: 'start' }); });
     await sleep(300);
-    await look('sessions-groups', { expect: 'At the top, a PLUGINS section (a folder icon, count 2) holding Waits for a permission and A Claude Code conversation, then UNGROUPED below it; each section header is a band with a line above and below, so the sections can be told apart.' }, sidebarBox());
+    await look('sessions-groups', { expect: 'At the top, a PLUGINS section (a folder icon, count 2) holding Waits for a permission and A Claude Code conversation, then UNGROUPED below it; each section header is a band with a line above and below.' }, sidebarBox());
     await slHead('Plugins').click({ button: 'right' });
     await slItem('Delete Group').click();
     check(!!await slWait((r) => slFind(r, SLT.cc, 'ungrouped') && slFind(r, SLT.perm, 'ungrouped')), 'Delete Group puts its conversations back in Ungrouped');
@@ -1701,7 +1701,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slItem('OpenCode').click();
     const noOc = await slWait((r) => !r.some((x) => x.shown && (x.title === SLT.oc || x.title === SLT.ocTerm)) && r.some((x) => x.shown && x.title === SLT.cc));
     check(!!noOc, 'and unticking one hides its conversations');
-    await look('sessions-filter', { pointer: true, expect: 'A small menu at the top right of the list with Codex and Claude Code ticked and OpenCode unticked, each with its logo; no OpenCode row is left among the rows in view.' }, sidebarBox());
+    await look('sessions-filter', { pointer: true, expect: 'A small menu at the top right of the list with Codex and Claude Code ticked and OpenCode unticked, each with its logo; no OpenCode row is in view.' }, sidebarBox());
     await slItem('OpenCode').click();
     await slClose();
     check(!!await slWait((r) => r.some((x) => x.shown && x.title === SLT.oc)), 'ticking it again shows them again');
@@ -1722,8 +1722,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await showSessions('agentPlus.sessions');
     const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
     check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32%\s+resets 2h 1\dm/.test(shown) && /This conversation\s+Fix the sessions page filter/i.test(shown),
-      'Account & usage shows the agent\'s rows, its limits with when they reset, and the conversation in front', shown);
-    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, below a thin line, a small heading THIS CONVERSATION in capitals, under it Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k; the account\'s figures above it must not look like the conversation\'s.' }, sidebarBox());
+      'Account & usage shows the agent\'s rows, its limits and when they reset, and the conversation in front', shown);
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars come a thin line and a small heading THIS CONVERSATION in capitals; under it, Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k; the account\'s figures above it must not look like the conversation\'s.' }, sidebarBox());
     await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
     check(!!await until(async () => (await src('return src.state.ran;')).includes('installPlugin'), 5000, 200), 'a link runs the command the agent gave');
     await slHead('Account & usage').click();
@@ -1844,10 +1844,10 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await showSessions('agentPlus.sessions');
     const note = await until(() => sl.evaluate(() => { const n = document.querySelector('.sl-notice'); return n && n.innerText; }), 10000, 300);
     check(!!note && /Restricted Mode/.test(note) && /Manage Workspace Trust/.test(note) && !!await slWait((r) => r.some((x) => x.title === 'Asked about the release branch')),
-      'the session list still lists the conversations, says Restricted Mode changes nothing, and offers Manage Workspace Trust', note);
+      'the session list still lists the conversations, says it changes nothing in Restricted Mode, and offers Manage Workspace Trust', note);
     check(await sl.evaluate(() => document.querySelector('.sl-new').classList.contains('sl-hidden')), 'and has no New bar');
     const wrote = (() => { try { const d = path.join(profile.shared, 'session-list'); return fs.readdirSync(d).filter((n) => fs.statSync(path.join(d, n)).mtimeMs > launchedAt); } catch (_) { return []; } })();
-    check(!wrote.length, 'and writes nothing of the list\'s own to the folder the windows share', wrote);
+    check(!wrote.length, 'and writes none of its own data to the folder the windows share', wrote);
     await look('sessions-restricted', { expect: 'The Conversations side bar in Restricted Mode: no New bar, a note saying Restricted Mode: the list shows conversations and changes nothing, with a Manage Workspace Trust button, and the conversations listed below.' }, sidebarBox());
     await look('restricted', { expect: 'The window in Restricted Mode (a Restricted Mode badge at the left of the status bar). The Conversations view lists Asked about the release branch with its question; the Answer view shows that question with a greyed-out box and Send, and says Restricted Mode: this window does not send answers. Trust the workspace to send one.' },
       page.locator('#workbench\\.parts\\.panel'));

@@ -6,8 +6,8 @@
 /*
  * What the core tells sources about the session list (docs/protocol.md): 'sessionList' among its features,
  * sessionListManages() true while the list archives and deletes on its own in this window and false in Restricted Mode,
- * sessionDeletionDue() saying when each conversation will be deleted, and its event when that changes, here because the
- * user turned off agentPlus.sessions.deleteArchived.
+ * sessionDeletionDue() with when each conversation will be deleted, and the event that fires when that changes, here
+ * because the user turned off agentPlus.sessions.deleteArchived.
  */
 const path = require('path');
 const { boot } = require('../boot');
@@ -38,7 +38,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.control.changeConfig(['agentPlus.sessions.deleteArchived']);
     await wait(1200);
     eq([heard.slice(0, 1), b.api.sessionDeletionDue('codex').a, b.api.sessionDeletionDue('nobody')], [[{ sourceId: 'codex' }], null, {}],
-      'turning deleting on its own off is told, and then nothing is due; a source with no conversations in the list has none');
+      'turning off agentPlus.sessions.deleteArchived is reported, and then nothing is due; a source with no conversations in the list has none');
     b.close();
   }
   {

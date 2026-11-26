@@ -5,8 +5,8 @@
 'use strict';
 /*
  * Sets up the session list in a window, for src/views.js: the list (src/session-list.js) with what it needs from this
- * window, its webview view (src/session-list-view.js), the commands in its view title and Ctrl+Shift+T, and the
- * context key that gives Ctrl+Shift+T to the list only when the last thing this window closed was a conversation.
+ * window, its webview view (src/session-list-view.js), its title bar commands and Ctrl+Shift+T, and the context key
+ * that gives Ctrl+Shift+T to the list only when the last thing this window closed was a conversation.
  *
  * A conversation counts as asking the user something when a question row in its plan is newer than the user's last
  * message, as in the Conversations view (src/conversations.js activityOf). Plans are read only for conversations active
@@ -96,7 +96,7 @@ function startSessionList(host, opts = {}) {
       if (r && r.renameGroup) view.tell({ type: 'startRenameGroup', groupId: r.renameGroup });
     },
     /* Find Conversation: the list's conversations of every agent, by title, branch, or four or more characters of the id
-       (src/session-rules.js matches); picking one opens it as a click on its row would. */
+       (src/session-rules.js matches); picking one opens it. */
     findConversation: () => {
       const qp = vscode.window.createQuickPick();
       qp.placeholder = 'Search titles, or four or more characters of a conversation id';

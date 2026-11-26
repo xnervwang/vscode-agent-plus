@@ -99,7 +99,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
       circle(bd).includes('stroke="#89d185"'), circle(ql).includes('fill="#e51400"'), circle(qd).includes('fill="#f14c4c"'), /<circle|mask/.test(sl),
       circle(pl).includes('fill="#1a85ff"'), circle(rl).includes('stroke="#e51400"') && circle(rl).includes('fill="none"')],
     [true, true, true, true, true, true, false, true, true],
-    'on a logo the dot is the session list\'s: green, a green ring, red, blue and a red ring, and absent with the logo whole when there is no dot');
+    'a logo carries the session list\'s dot in each of its five looks, and is drawn whole when there is no dot');
     eq([read('unread'), read('working'), read('waiting')], [null, null, null], 'state and activity names are not drawn');
   }
 

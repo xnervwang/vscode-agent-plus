@@ -5,8 +5,8 @@
 'use strict';
 /*
  * The session list's webview view (agentPlus.sessions). It posts the model of src/session-list.js to the page
- * (src/page/session-list-page.js) and passes the page's requests back to the list. The page is sent a model only while
- * it is on screen and only when it differs from the last one sent.
+ * (src/page/session-list-page.js) and passes the page's requests back to the list. The model goes to the page only
+ * while the page is on screen, and only when it has changed since the last one sent.
  *
  * Each agent's logo is an SVG file in the agent's own extension, outside this extension's folder, which the page may
  * not load from. The view reads it once and sends it as a data: URI, with any script taken out.
@@ -20,7 +20,7 @@ const PAGE_FILES = ['session-list-page.js', 'session-list-page.css'];
 const MAX_LOGO_BYTES = 256 * 1024;
 
 const logos = new Map();
-/* The SVG at `file` as a data: URI, or '' when it cannot be read or is too large. */
+/* Reads the SVG at `file` into a data: URI; '' when it cannot be read or is too large. */
 function logoUri(file) {
   if (!file) return '';
   if (logos.has(file)) return logos.get(file);
@@ -67,7 +67,6 @@ class SessionListView {
     this.list.schedule();
   }
 
-  /* The model, with each agent's logo for light and dark themes. */
   pageModel() {
     const m = this.list.model();
     const out = Object.assign({}, m, { logos: {} });

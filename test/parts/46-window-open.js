@@ -32,7 +32,7 @@ module.exports = async ({ eq, tmp, root }) => {
 
   a.revealed.length = 0;
   eq([await a.o.open({ sourceId: 'codex', sessionId: 'mine' }, { elsewhere: true }), a.revealed], ['nowhere', []],
-    'asked only of the other windows, for one another window is known to show, this window does not show it first');
+    'for a conversation known to be shown in another window, only the other windows are asked, and this window does not try to show it first');
   eq(await b.o.take(), 0, 'and the window that does not show it leaves the request');
   eq(await a.o.open({ sourceId: 'codex', sessionId: 'nobody' }), 'nowhere', 'one no window shows is nowhere');
   eq([await b.o.take(), fs.readdirSync(dir).filter((n) => n.endsWith('.json'))], [0, []],

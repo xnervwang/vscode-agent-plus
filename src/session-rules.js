@@ -18,8 +18,9 @@ const DAY_MS = 24 * 3600 * 1000;
 const DOTS = ['blue', 'red', 'redRing', 'green', 'greenRing', ''];
 const FILTERS = ['all', 'open', 'running', 'needs'];
 
-/* The dot: a dialog waiting for the user wins, then a question in the plan, then a turn or background work running. A
-   question while a turn or background work runs is drawn as a ring, since the agent is not yet waiting on it. */
+/* A dialog waiting for the user takes precedence over a question in the plan, and both over a turn or background work
+   running. A question while a turn or background work runs is drawn as a ring, since the agent is not yet waiting on
+   it. */
 function dotOf(row) {
   const a = row && row.activity;
   const kind = row && row.waitingFor && row.waitingFor.kind;
@@ -43,7 +44,7 @@ function stripeOf(row) {
   return '';
 }
 
-/* Unread: marked unread by the user, or a reply later than the last one seen here and than the agent's own record of
+/* Unread: marked unread by the user, or a reply newer than both the last one seen here and the agent's own record of
    showing it. Seeing a conversation, or marking it read, clears the mark. */
 function unread(row) {
   if (!row) return false;
@@ -62,7 +63,7 @@ function compare(a, b) {
 /*
  * The sections: Recently closed, then each group in `groups` order, Ungrouped, Archived. A conversation is in its
  * group, Ungrouped or Archived once; one closed in this window lately is in Recently closed as well, newest closed
- * first, at most `recent` of them. A group shows when it holds a row or `made` says the user made it here, which keeps
+ * first, at most `recent` of them. A group shows when it holds a row or was made in this window (`made`), which keeps
  * an empty group the user just made. `groups` is [{ id, name, made }] in the order the user put them.
  */
 function sections(rows, { groups = [], recent = 10 } = {}) {
@@ -117,8 +118,8 @@ function deleteBlocker(row) {
   return '';
 }
 
-/* When the list deletes an archived conversation on its own, counting from the later of when it was first seen
-   archived and its last activity, or null for one it will not delete. */
+/* When an archived conversation is due for deletion, counting from the later of when it was first seen archived and
+   its last activity, or null for one that will not be deleted. */
 function deleteDueAt(row, { days, on = true } = {}) {
   if (!on || !(days > 0) || !row || !row.archived || row.pinned) return null;
   const from = Math.max(+row.archivedAt || 0, +row.lastActiveAt || 0);

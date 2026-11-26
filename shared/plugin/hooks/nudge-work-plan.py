@@ -288,10 +288,10 @@ def unrecorded_question(payload, path, tail):
     can still leave one in the reply only.
 
     The reply comes from the Stop event's `last_assistant_message`. A question counts as recorded when a row command or tool
-    stamped its `asked` during the turn, or when a row already waits on the user: the view then shows the conversation
-    waiting for them, and a reply often ends by bringing that question up again. A new question asked while an older
-    one is open is not caught. It stays quiet on a Stop that follows one that kept the turn going (stop_hook_active), or
-    it would ask again after its own reminder.
+    stamped its `asked` during the turn, or when a row already waits on the user, since the view then shows the
+    conversation waiting for them and a reply often ends by bringing that question up again. A new question asked while
+    an older one is open is not caught. It stays quiet on a Stop that follows one that kept the turn going
+    (stop_hook_active), or it would ask again after its own reminder.
     """
     if payload.get("stop_hook_active"):
         return None

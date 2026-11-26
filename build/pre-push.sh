@@ -11,7 +11,7 @@
 # Needs what test/vscode/run.js needs: @vscode/test-electron and playwright-core where node finds them (NODE_PATH), and
 # on Linux a display, or xvfb-run. AGENT_PLUS_VSCODE names a VS Code executable to run instead of downloading one; the
 # two steps have Agent Plus raise the request limit in that VS Code's service-worker.js (src/webview-limit.js), and the
-# file is put back as it was afterwards, since a later run needs the limit VS Code ships.
+# file is restored afterwards, since a later run needs the limit VS Code ships.
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
