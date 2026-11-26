@@ -90,7 +90,7 @@ function sessionOf(raw) {
   });
 }
 
-/* What `sessionActions` says a source can do, with nothing for what it leaves out. */
+/* What `sessionActions` says a source can do; whatever it does not list is taken as not supported. */
 function capsOf(source) {
   let a = sources.get(source, 'sessionActions');
   if (typeof a === 'function') { try { a = a.call(source); } catch (_) { a = null; } }
@@ -355,7 +355,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     pendingGroup = null;
   }
 
-  /* ── archiving and deleting on their own ── */
+  /* ── automatic archiving and deleting ── */
   let sweeping = null;
   function sweepLock() {
     const dir = shared('session-list');

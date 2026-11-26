@@ -394,7 +394,7 @@
           "default": 14,
           "minimum": 0,
           "maximum": 3650,
-          "markdownDescription": "Archive a conversation in the **Conversations** list once it has been inactive for this many days. 0 turns this off. Conversations that are open, running, waiting for you, unread, pinned or in a group are never archived."
+          "markdownDescription": "Archive a conversation in the **Conversations** list once it has been inactive for this many days. 0 turns this off. Conversations that are open, running, waiting for your approval or answer, unread, pinned or in a group are never archived."
         },
         "agentPlus.sessions.deleteArchived": {
           "type": "boolean",
@@ -413,7 +413,7 @@
           "default": 10,
           "minimum": 0,
           "maximum": 50,
-          "markdownDescription": "The number of conversations closed in this window that the **Recently closed** section shows. 0 hides the section."
+          "markdownDescription": "The number of conversations closed in this window that the **Recently closed** section of the **Conversations** list shows. 0 hides the section."
         },
         "agentPlus.sessions.hideBackground": {
           "type": "boolean",

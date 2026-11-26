@@ -52,7 +52,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock = 11000; b.archive([A], true, { keepPin: true }); b.flush();
   eq([[archived.archived, archived.archivedAt, archived.group, archived.pinned], a.record(...B).archivedAt, [a.record(...A).archivedAt, a.record(...A).pinned]],
     [[true, 8000, null, false], 8000, [777, true]],
-    'archiving moves it out of its group and unpins it, keeps the first time it was archived, and an import can give that time and keep the pin');
+    'archiving takes a conversation out of its group and unpins it, and keeps when it was first archived; an import can set that time and keep the pin');
   clock = 12000; a.archive([B], false); a.flush();
   eq([b.record(...B).archived, b.record(...B).archivedAt, b.record(...B).group], [false, 0, null], 'unarchiving puts it in no group');
 
@@ -86,7 +86,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([held, ro.flush(), fs.existsSync(path.join(dir, 'readonly0000000a.json'))], [[false, true, false], true, true],
     'while writing is not allowed, as in Restricted Mode, a change shows only in this window and is written once it is allowed');
   ro.dispose();
-  eq(b.keys().map((k) => k.join('/')).sort(), ['claude-code/s-b', 'codex/t-a', 'opencode/ses_c', 'opencode/ses_x'], 'keys lists every conversation the store has something for');
+  eq(b.keys().map((k) => k.join('/')).sort(), ['claude-code/s-b', 'codex/t-a', 'opencode/ses_c', 'opencode/ses_x'], 'keys() lists every conversation the store holds data for');
   a.markImported('codex'); a.swept(); a.flush();
   eq([b.imported('codex') > 0, b.imported('claude-code'), b.sweepAt() > 0], [true, 0, true], 'it records which sources were imported and when the list last swept');
   a.dispose(); b.dispose();

@@ -20,7 +20,7 @@ module.exports = ({ eq, tmp, root }) => {
   eq([names, needs], [['a', "b's", 'c', 'd'], { "b's": ['a'], c: ["b's"] }], 'the steps are read in order, each with the steps it needs');
   const run = (only) => { const s = steps.chosen({ names, only, needs }); return s && names.filter((x) => s.has(x)); };
   eq([run(null), run(/^c$/), run(/^d$/), run(/^z$/)], [null, ['a', "b's", 'c'], ['d'], []],
-    'with no expression every step runs; one runs the steps it matches and what they need, followed through');
+    'with no expression every step runs; with one, the steps it matches run, with the steps they need, followed through');
   eq(steps.unknown({ names, needs: { c: ['x'] } }), ['x'], 'a needs() naming a step that does not exist is reported');
 
   const ui = path.join(root, 'test', 'vscode', 'ui.js');

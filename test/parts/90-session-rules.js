@@ -94,7 +94,7 @@ module.exports = async ({ eq, root }) => {
   eq([at({ archivedAt: now - 100 * DAY, lastActiveAt: now - 200 * DAY }), at({ archivedAt: now - 100 * DAY, lastActiveAt: now - 10 * DAY }),
     at({ archived: false }), at({ pinned: true }), R.deleteDueAt(row({ title: 'off', archived: true, archivedAt: 1 }), { days: 90, on: false })],
   [now - 10 * DAY, now + 80 * DAY, null, null, null],
-  'deleting on its own counts from the later of when it was first seen archived and its last activity; never for one not archived, pinned, or with it off');
+  'deleting on its own counts from the later of when it was first seen archived and its last activity; never for a conversation that is not archived, is pinned, or when deleting is off');
   eq([R.deleteDue(row({ title: 'a', archived: true, archivedAt: now - 91 * DAY, lastActiveAt: now - 91 * DAY }), { days: 90, now }),
     R.deleteDue(row({ title: 'b', archived: true, archivedAt: now - 91 * DAY, lastActiveAt: now - 91 * DAY, here: true }), { days: 90, now })],
   [true, false], 'a conversation that is due is deleted only if nothing blocks it');

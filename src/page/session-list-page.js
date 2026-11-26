@@ -75,7 +75,7 @@
   const labelOf = (sourceId) => { const s = model && (model.sources || []).find((x) => x.id === sourceId); return s ? s.label : sourceId; };
   const setLogo = (img, sourceId) => { const src = logoOf(sourceId); if (img.getAttribute('src') !== src) { if (src) img.setAttribute('src', src); else img.removeAttribute('src'); } img.alt = labelOf(sourceId); };
 
-  /* ── the page's fixed parts ── */
+  /* ── the parts above the sections ── */
   const top = el('div', 'sl-top');
   const newBar = el('div', 'sl-new');
   const newAgent = button('sl-new-agent', 'Choose the agent of a new conversation');
@@ -226,7 +226,7 @@
     /* An open hover box for this row is updated with it. */
     if (r === hoverRow && !hoverBox.classList.contains('sl-hidden')) hoverBox.textContent = row.hover || row.title;
   }
-  /* The title, with the part the search matched marked. */
+  /* The title, with the search match highlighted. */
   function markTitle(r) {
     const title = r._row.title;
     const q = term();
@@ -508,7 +508,8 @@
     if (!hasSub || left + w - 2 + w <= window.innerWidth - EDGE || left - w + 2 >= EDGE) return left;
     return Math.max(EDGE, window.innerWidth - EDGE - w + 2 - w);
   }
-  /* Where a submenu goes beside its item, right or left, or null when the list is too narrow for either. */
+  /* The left edge of a submenu beside its item, on its right or else its left, or null when the list is too narrow for
+     either. */
   function subBeside(at, w) {
     if (at.right - 2 + w <= window.innerWidth - EDGE) return at.right - 2;
     if (at.left - w + 2 >= EDGE) return at.left - w + 2;

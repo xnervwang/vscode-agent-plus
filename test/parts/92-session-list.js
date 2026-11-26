@@ -128,7 +128,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     t.control.setTabs([{ label: 'Alpha', input: { source: 'codex', sid: 'a' } }, { label: 'Other tab', input: { source: 'codex', sid: 'q' } }], 0);
     codex.focused = 'q';
     await list.refresh();
-    eq(list.model().front, '["codex","a"]', 'a source saying another of its conversations is focused does not move the front to one in another tab, which cannot be in front while this tab is the active one');
+    eq(list.model().front, '["codex","a"]', 'a source saying another of its conversations is focused does not move the front to one in another tab, since only the active tab can be in front');
     list.dispose();
   }
 
@@ -350,7 +350,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── Archiving and deleting on their own ── */
+  /* ── Automatic archiving and deleting ── */
   {
     const t = setup();
     const mk = () => source('codex', [conv('idle', { title: 'Idle', lastActiveAt: now0 - 20 * DAY, lastReplyAt: now0 - 20 * DAY, viewedAt: now0 - 20 * DAY }),
@@ -463,5 +463,5 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([s.kind, s.parentId, s.elsewhere.length, s.elsewhere[0].kind, s.elsewhere[0].label.length, s.elsewhere[0].detail[0].length, s.badges.map((b) => b.text), s.processes, s.hover, s.actions, s.detail],
     ['user', '', 8, 'other', 80, 200, ['goal', 'c'], 3, ['a', 'b'], ['x'], true], 'a session is held to the protocol: kinds, places, lengths and counts');
   eq(L.capsOf({ sessionActions: () => ({ open: ['tab', 'window'], rename: 1, own: [{ id: 'g', title: 'Go' }, { id: '' }] }) }),
-    { open: ['tab'], create: [], rename: false, delete: false, own: [{ id: 'g', title: 'Go' }] }, 'what a source says it can do, with nothing it did not say');
+    { open: ['tab'], create: [], rename: false, delete: false, own: [{ id: 'g', title: 'Go' }] }, 'sessionActions is taken as given, with no actions added');
 };

@@ -13,8 +13,8 @@
  * operation stamped with its time; a write takes the lock folder beside the file, reads the file as it is now, applies
  * the pending operations to it, writes the result and releases the lock. A field keeps the change made last, and the
  * newest reply seen only ever grows, so two windows changing different conversations, or different fields of the same
- * one, both keep their change. A write that finds the lock taken tries again shortly. A lock older than LOCK_STALE_MS
- * was left by a window that died while writing, and is taken over.
+ * one, both keep their change. If the lock is taken, the write tries again shortly. A lock older than LOCK_STALE_MS was
+ * left by a window that died while writing, and is taken over.
  *
  * A conversation is keyed by its source and id. A deleted group leaves a marker so that a window that had not seen
  * the deletion does not bring it back; its conversations read as ungrouped.
@@ -94,9 +94,8 @@ function apply(d, op) {
 }
 
 /*
- * `dir` is the folder of the store files, `key` the project's (projectOf). `now()` gives the time; `log` reports a
- * write that failed. While `writable()` is false, as in Restricted Mode, changes show in this window and are written
- * once it is true again.
+ * `dir` is the folder of the store files, `key` the project's (projectOf), and `log` reports a write that failed. While
+ * `writable()` is false, as in Restricted Mode, changes show in this window and are written once it is true again.
  */
 function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = '', now = Date.now, log = () => {}, writable = () => true }) {
   const file = path.join(dir, `${key}.json`);
@@ -113,7 +112,6 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
       cache = readFile(file);
       cacheMtime = m;
     }
-    /* Changes not yet written already show in this window. */
     if (!pending.length) return cache;
     const view = JSON.parse(JSON.stringify(cache));
     for (const op of pending) apply(view, op);

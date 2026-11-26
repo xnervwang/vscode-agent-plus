@@ -39,7 +39,7 @@ module.exports = async ({ ok, bad, eq, tmp, root, wait }) => {
     const look = (it) => (it.iconPath && it.iconPath.id ? [it.iconPath.id, it.iconPath.color && it.iconPath.color.id] : ['logo', it.iconPath.light]);
     eq(items.map(look), [['circle-filled', 'charts.green'], ['circle-filled', 'charts.green'], ['circle', 'charts.green'], ['circle', 'charts.green'],
       ['circle-filled', 'charts.red'], ['blank', undefined], ['blank', undefined], ['logo', '/i/l.svg'], ['circle-filled', 'charts.blue'], ['circle', 'charts.red']],
-    'the icon place holds the session list\'s dot alone: green at work, a green ring with only background work, red for a question once stopped, '
+    'the icon slot shows only the session list\'s dot: green at work, a green ring with only background work, red for a question once stopped, '
       + 'blue for a dialog waiting, a red ring for a question while still at work, a blank of the same size with no dot');
     const deco = tree.decorations;
     const badge = (it) => { const d = it.resourceUri ? deco.provideFileDecoration(it.resourceUri) : undefined; return d ? d.badge : ''; };

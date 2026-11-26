@@ -1361,7 +1361,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     return null;
   }, 20000, 300);
   let sl = null;
-  /* Shows the session list's container and finds its page; `view` is the view's id, named so for the feature list. */
+  /* Shows the session list's container and finds its page; `view` is the view's id, under that name because the feature
+     list check looks for it. */
   const showSessions = async (view) => {
     await exec('workbench.view.extension.agentPlusSessions');
     await sleep(500);
@@ -1384,7 +1385,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const b = document.querySelector('.sl-ctx:not(.sl-ctx-sub)');
     return b ? [...b.querySelectorAll('.sl-ctx-item')].map((x) => x.textContent.replace('›', '').replace('✓', '').trim()) : null;
   }), 5000, 200);
-  /* Closes the list's menus: Escape closes the innermost one, and a submenu the pointer opened may be up as well. */
+  /* Escape closes only the innermost menu, and a submenu the pointer opened may be up too, so it is pressed until none
+     is left. */
   const slClose = async () => { for (let i = 0; i < 4 && await sl.evaluate(() => !!document.querySelector('.sl-ctx')); i++) await page.keyboard.press('Escape'); };
   const slItem = (label, sub = false) => sl.locator(sub ? '.sl-ctx-sub .sl-ctx-item' : '.sl-ctx:not(.sl-ctx-sub) .sl-ctx-item').filter({ hasText: label }).first();
   const slAct = async (title, act, section) => { const r = slRowLoc(title, section); await r.hover(); await r.locator(`.sl-act[data-act="${act}"]`).click(); await page.mouse.move(5, 5); };
@@ -1469,7 +1471,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const away = await sl.evaluate(() => [...document.querySelectorAll('.sl-row')].filter((r) => r.querySelector('.sl-away:not(.sl-hidden) svg'))
       .map((r) => [r.querySelector('.sl-title').textContent, r.querySelector('.sl-away').dataset.away]).sort());
     check(sameList(away.map((x) => x.join(':')), [`${SLT.other}:window`, `${SLT.ocTerm}:terminal`].sort()),
-      'a row open in another VS Code window ends in a windows icon, and one open in a terminal in a terminal icon; no other row has one', away);
+      'a row open in another VS Code window ends in a windows icon and one open in a terminal ends in a terminal icon; no other row has one', away);
     await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then the section bands: no RECENTLY CLOSED, and UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title. Quiet for three weeks, if it is in the picture, has a feature-x badge and a red · 2 processes after its title.' },
       sidebarBox());
     await exec('notifications.clearAll');
@@ -1520,7 +1522,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await showSessions('agentPlus.sessions');
     await slAct(SLT.quiet, 'pin');
     const pinned = await slWait((r) => (slFind(r, SLT.quiet) || {}).pinned && r.filter((x) => x.section === 'ungrouped')[0].title === SLT.quiet);
-    check(!!pinned, 'Pin from the row\'s buttons pins it, and a pinned conversation goes first in its section', pinned && pinned.filter((x) => x.section === 'ungrouped').slice(0, 3));
+    check(!!pinned, 'the pin button on a row pins it, and pinned conversations go first in their section', pinned && pinned.filter((x) => x.section === 'ungrouped').slice(0, 3));
     await slAct(SLT.unread, 'rename');
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('Review the archive sweep');
@@ -1616,8 +1618,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       check(!!placed && !placed.covers, 'a submenu opens beside its menu, clear of the item it belongs to', placed);
     }
     await slClose();
-    /* Out by way of the list's top, which is no row: the webview keeps the pointer's last position, and once the menu
-       goes the row under it would take the hover. */
+    /* Leave through the chips at the top, which are not a row: the webview keeps the pointer's last position, and once
+       the menu goes the row under it would take the hover. */
     await sl.locator('.sl-chips').hover({ position: { x: 1, y: 1 } });
     await page.mouse.move(5, 5);
     await sl.evaluate(() => { const g = document.querySelector('.sl-section[data-key^="group:"]'); if (g) g.scrollIntoView({ block: 'start' }); });
@@ -1769,8 +1771,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await setting('agentPlus.sessions.hideBackground', null);
     await setting('agentPlus.sessions.archiveAfterDays', 25);
     const archived = await slWait((r) => slFind(r, SLT.month, 'archived') && slFind(r, SLT.weeks, 'ungrouped'), 15000);
-    check(!!archived && !!slFind(archived, SLT.ocOld, 'archived'), 'with agentPlus.sessions.archiveAfterDays 25, a conversation inactive for a month is archived at once and one inactive for three weeks is not, '
-      + 'and one archived 60 days ago is not deleted at 90 days', archived && archived.filter((x) => [SLT.month, SLT.weeks, SLT.ocOld].includes(x.title)).map((x) => [x.title, x.section]));
+    check(!!archived && !!slFind(archived, SLT.ocOld, 'archived'), 'with agentPlus.sessions.archiveAfterDays 25, a conversation inactive for a month is archived at once but one inactive for three weeks is not; '
+      + 'one archived 60 days ago is not deleted at 90 days', archived && archived.filter((x) => [SLT.month, SLT.weeks, SLT.ocOld].includes(x.title)).map((x) => [x.title, x.section]));
     await setting('agentPlus.sessions.deleteArchived', false);
     await setting('agentPlus.sessions.deleteAfterDays', 30);
     await sleep(3000);
