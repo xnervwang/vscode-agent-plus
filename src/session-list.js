@@ -44,6 +44,10 @@ const CLOSED_KEY = 'agentPlus.sessions.closed';
 const CLOSED_KEEP = 50;
 const LAST_NEW_KEY = 'agentPlus.sessions.lastNew';
 const KINDS = ['user', 'background', 'subagent', 'empty'];
+/* The theme colour of each title colour, as Claude Code Plus and Codex Plus draw them: VS Code has no chart colour for
+   pink or cyan. */
+const THEME_COLOR = { red: 'charts.red', blue: 'charts.blue', green: 'charts.green', yellow: 'charts.yellow', purple: 'charts.purple',
+  orange: 'charts.orange', pink: 'terminal.ansiBrightMagenta', cyan: 'terminal.ansiCyan' };
 const ELSEWHERE_KINDS = ['vscode', 'terminal', 'desktop', 'exec', 'other'];
 
 /* A member the protocol gates on a feature of another name ('sessionImport' gives importSessions), bound to its source;
@@ -578,7 +582,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       ...r.hover].filter(Boolean);
     return {
       key: r.key, s: r.sourceId, id: r.sessionId, title: withoutMarks(r.title) || '(untitled)', time: span, detail: r.detail, dot, stripe: rules.stripeOf(r),
-      color: r.color ? `charts.${r.color === 'pink' ? 'pink' : r.color}` : '', pinned: r.pinned, unread, steward: r.steward,
+      color: THEME_COLOR[r.color] || '', pinned: r.pinned, unread, steward: r.steward,
       badges: r.badges, branch: r.branch, worktree: r.worktree, processes: r.processes, depth: depth || 0, hover: hover.join('\n'),
       archived: r.archived, grouped: !!(r.group && store.groupKnown(r.group) && store.groups().some((g) => g.id === r.group)),
       here: r.here, elsewhere: r.elsewhere.length > 0, runs: rules.runs(r), needs: !!r.detail && rules.needsYou(r),
@@ -641,7 +645,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       problems: entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), text: (lists.get(e.id) || {}).problem || '' })).filter((p) => p.text),
       notices: entries().map((e) => { const n = noticeOf(e); return n ? Object.assign({ id: e.id, label: sources.labelOf(e.source) }, n) : null; }).filter(Boolean),
       front: look.front, restricted: !!(host.trusted && !host.trusted()), menu: menuItems(),
-      colors: COLORS.map((name) => ({ name, color: `charts.${name}` })), empty: visible.length === 0,
+      colors: COLORS.map((name) => ({ name, color: THEME_COLOR[name] })), empty: visible.length === 0,
     };
   }
 

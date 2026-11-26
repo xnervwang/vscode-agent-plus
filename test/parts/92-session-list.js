@@ -192,6 +192,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const made = await list.groupAct('newGroup');
     await list.act('addToGroup', [k('a'), k('b')], made.renameGroup);
     eq([rec('a').pinned, rec('a').color, rec('b').group === made.renameGroup], [true, 'purple', true], 'pin, a colour, and a new group with conversations added');
+    await list.act('color', [k('b')], 'pink');
+    await list.refresh();
+    const drawn = list.model();
+    eq([drawn.sections.flatMap((x) => x.rows).find((r) => r.id === 'b').color, drawn.colors.find((c) => c.name === 'cyan').color],
+      ['terminal.ansiBrightMagenta', 'terminal.ansiCyan'], 'pink and cyan are drawn in theme colours VS Code has');
     await list.act('removeFromGroup', [k('b')]);
     await list.act('markUnread', [k('b')]);
     eq([rec('b').group, rec('b').unreadMark, codex.seen.pop()], [null, true, [['b'], false]], 'out of the group; marked unread, which the source is told');
