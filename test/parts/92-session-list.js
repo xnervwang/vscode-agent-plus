@@ -78,7 +78,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const codex = source('codex', many, { imported: { archived: [{ sessionId: 'c-0001', at: now0 - 50 * DAY }, { sessionId: 'c-late', at: now0 - 40 * DAY }], groups: [{ name: 'Plugins', sessionIds: ['c-0002', 'c-0003', 'c-0001'] }],
       pinned: ['c-0003'], colors: { 'c-0004': 'green', 'c-9999': 'red' } } });
     t.entries.push({ id: 'claude-code', source: claude }, { id: 'codex', source: codex });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     const st = list.store();
     st.flush();
@@ -99,6 +99,28 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
+  /* ── A first look: replies from before the record began count as seen ── */
+  {
+    const t = setup();
+    const codex = source('codex', [conv('old', { title: 'Old reply', lastReplyAt: now0 - DAY }), conv('new', { title: 'New reply', lastReplyAt: now0 - DAY }),
+      conv('far', { title: 'Far back', lastActiveAt: now0 - 30 * DAY, lastReplyAt: now0 - 30 * DAY, lastUserAt: now0 - 31 * DAY })]);
+    t.entries.push({ id: 'codex', source: codex });
+    const near = [];
+    t.host.asksOf = (id, x, o) => { near.push([x.sessionId, !!(o && o.near)]); return false; };
+    const list = L.createSessionList(t.host, { now });
+    t.control.setTabs([{ label: 'Far back', input: { source: 'codex', sid: 'far' } }, { label: 'x', input: {} }], 1);
+    await list.refresh();
+    codex.sessions.find((x) => x.sessionId === 'new').lastReplyAt = now0 + 1000;
+    clock = now0 + 2000;
+    await list.refresh({ relist: true });
+    const byT = (title) => list.model().sections.flatMap((x) => x.rows).find((r) => r.title === title);
+    eq([byT('Old reply').unread, byT('New reply').unread, list.store().since()], [false, true, now0],
+      'on a first look a reply from before the record began counts as seen, and one after it does not');
+    eq(near.filter(([id]) => id === 'far').pop(), ['far', true], 'a conversation open in this window has its plan read however long ago it was active');
+    clock = now0;
+    list.dispose();
+  }
+
   /* ── Rows, this window, the one in front, closed here ── */
   {
     const t = setup();
@@ -110,7 +132,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     oc.sidebar.add('ses_aaaaaaaaaaaaaaaaaaaaaaaaaa');
     t.entries.push({ id: 'codex', source: codex }, { id: 'opencode', source: oc });
     t.asks.add('q');
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     t.control.setTabs([{ label: 'Alpha', input: { source: 'codex', sid: 'a' } }, { label: 'x', input: {} }], 0);
     codex.sidebar.add('b');
     await list.refresh();
@@ -211,7 +233,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     fs.mkdirSync(path.join(codex.planDirPath, 'windows'), { recursive: true });
     fs.writeFileSync(path.join(codex.planDirPath, 'windows', `${process.ppid}.json`), JSON.stringify({ at: clock, pid: process.ppid, name: 'proj-b [SSH: host-b]', sessions: ['w', 'v'] }));
     t.entries.push({ id: 'codex', source: codex });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     const m = list.model();
     const row = (title) => m.sections.flatMap((s) => s.rows).find((r) => r.title === title);
@@ -240,7 +262,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const codex = source('codex', [conv('a', { title: 'A', actions: ['goal.pause'] }), conv('b', { title: 'B' }), conv('c', { title: 'C', running: true, activity: 'working',
       elsewhere: [{ kind: 'terminal', label: 'terminal pts/1', running: true }] })], { own: [{ id: 'goal.pause', title: 'Pause Goal' }] });
     t.entries.push({ id: 'codex', source: codex });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     const k = (x) => JSON.stringify(['codex', x]);
     const rec = (x) => { list.store().flush(); return list.store().record('codex', x); };
@@ -281,7 +303,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const t = setup();
     const codex = source('codex', [conv('a', { title: 'Old' }), conv('b', { title: 'Live' }), conv('p', { title: 'Pinned' })]);
     t.entries.push({ id: 'codex', source: codex });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     list.store().archive([['codex', 'a'], ['codex', 'p']], true); list.store().pin([['codex', 'p']], true); list.store().flush();
     await list.refresh();
@@ -308,7 +330,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       conv('fresh', { title: 'Fresh' }), conv('gone', { title: 'Long archived', lastActiveAt: now0 - 200 * DAY, lastReplyAt: now0 - 200 * DAY })]);
     const codex = mk();
     t.entries.push({ id: 'codex', source: codex });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     const st = list.store();
     st.archive([['codex', 'gone']], true, { since: now0 - 100 * DAY });
     st.swept();
@@ -329,7 +351,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const t2 = setup({ folder: t.folder, shared: t.shared });
     clock = now0 + 2 * 3600e3;
     t2.entries.push({ id: 'codex', source: mk() });
-    const list2 = L.createSessionList(t2.host, { now });
+    const list2 = L.createSessionList(t2.host, { now, since: now0 - 300 * DAY });
     await list2.refresh();
     clock += 2 * 3600e3;
     fs.mkdirSync(path.join(t.shared, 'session-list', `${list.project().key}.sweep`), { recursive: true });
@@ -349,7 +371,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     oc.sessionsNotice = () => notice;
     oc.onDidChangeSessionsNotice = ev.event;
     t.entries.push({ id: 'opencode', source: oc });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     eq(list.model().notices, [{ id: 'opencode', label: 'opencode', text: 'OpenCode was not found on this machine.', actions: [{ i: 0, label: 'Download OpenCode' }] }],
       'a source with sessionsNotice has its note drawn above the list, with its buttons');
@@ -380,7 +402,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const t2 = setup();
     const codex = source('codex', [conv('old', { title: 'Old', lastActiveAt: now0 - 30 * DAY, lastReplyAt: now0 - 30 * DAY, viewedAt: now0 - 30 * DAY })]);
     t2.entries.push({ id: 'codex', source: codex });
-    const l2 = L.createSessionList(t2.host, { now });
+    const l2 = L.createSessionList(t2.host, { now, since: now0 - 300 * DAY });
     l2.store().swept(); l2.store().flush();
     await l2.refresh();
     t2.host.settings = () => ({ archiveAfterDays: 20 });
@@ -394,7 +416,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const t = setup({ trusted: false });
     const codex = source('codex', [conv('a', { title: 'A' })]);
     t.entries.push({ id: 'codex', source: codex });
-    const list = L.createSessionList(t.host, { now });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     await list.act('pin', ['["codex","a"]']);
     await list.rename('["codex","a"]', 'B');

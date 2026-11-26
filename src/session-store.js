@@ -86,6 +86,8 @@ function apply(d, op) {
     case 'deleteGroup': if (d.groups[op.id]) Object.assign(d.groups[op.id], { del: true, at: op.at }); break;
     case 'imported': d.imported[op.sourceId] = op.at; break;
     case 'sweep': d.sweepAt = Math.max(d.sweepAt || 0, op.at); break;
+    /* When the record began, the earliest any window says: a reply before it counts as seen. */
+    case 'since': if (op.since > 0 && !(d.since > 0 && d.since <= op.since)) d.since = op.since; break;
     case 'label': d.label = op.label; break;
     default: break;
   }
@@ -154,6 +156,7 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
   }
 
   if (label) change({ type: 'label', label });
+  change({ type: 'since', since: now() });
 
   const keysOf = (list) => [...new Set((list || []).map((x) => (Array.isArray(x) ? keyOf(x[0], x[1]) : String(x))))];
 
@@ -178,6 +181,10 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
     groupKnown: (id) => !!read().groups[id],
     imported: (sourceId) => +read().imported[sourceId] || 0,
     sweepAt: () => +read().sweepAt || 0,
+    /* When this project's record began; a reply before then counts as seen, so that a first look does not show every old
+       conversation as unread. */
+    since: () => +read().since || 0,
+    noteSince: (at) => change({ type: 'since', since: +at || 0 }),
     setGroup: (list, group) => change({ type: 'group', keys: keysOf(list), group: group || null }),
     /* Archiving moves it out of its group and, unless `keepPin`, unpins it; `since` is when it was archived, when known. */
     archive: (list, on, { since = 0, keepPin = false } = {}) => change({ type: 'archive', keys: keysOf(list), on: !!on, since: +since || 0, keepPin: !!keepPin }),

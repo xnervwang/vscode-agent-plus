@@ -125,13 +125,14 @@ function resultsOf(answer, ids, why) {
  * shared(name) }. `asksOf` says whether the conversation's plan asks the user a question put after their last
  * message; `open` brings another window's conversation forward (src/window-open.js).
  */
-function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = ACTION_MS, relistMs = RELIST_MS } = {}) {
+function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = ACTION_MS, relistMs = RELIST_MS, since = 0 } = {}) {
   const { vscode, registry, say = () => {} } = host;
   const shared = host.shared || ((name) => path.join(sharedHome(), name));
   const folders = () => (vscode.workspace.workspaceFolders || []).map((f) => { try { return fs.realpathSync(f.uri.fsPath); } catch (_) { return f.uri.fsPath; } });
   const workspaceFile = () => { const f = vscode.workspace.workspaceFile; return f && f.scheme === 'file' ? f.fsPath : ''; };
   let project = projectOf(folders(), workspaceFile());
   let store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say, writable: () => !host.trusted || host.trusted() });
+  if (since > 0) store.noteSince(since);
   const lists = new Map();
   const listeners = new Set();
   const dueListeners = new Set();
@@ -279,10 +280,13 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         const elsewhere = others.map((w) => ({ kind: 'vscode', label: windowLabel(w), detail: [], running: false, known: true }))
           .concat(x.elsewhere.filter((y) => y.kind !== 'vscode' || !others.length));
         let asks = false;
-        try { asks = !!(host.asksOf && host.asksOf(e.id, x)); } catch (_) { asks = false; }
+        /* Open here or elsewhere, or running, its plan is read however long ago it was last active, as the status bar's
+           count reads it. */
+        const near = look.here.has(k) || elsewhere.length > 0 || rules.busy(x);
+        try { asks = !!(host.asksOf && host.asksOf(e.id, x, { near })); } catch (_) { asks = false; }
         next.set(k, Object.assign({}, x, { key: k, sourceId: e.id, asks, here: look.here.has(k), elsewhere: look.here.has(k) ? [] : elsewhere,
           group: rec.group, archived: rec.archived, archivedAt: rec.archivedAt, pinned: rec.pinned, color: rec.color,
-          seenAt: rec.seenAt, unreadMark: rec.unreadMark, closedAt: look.here.has(k) ? 0 : closedAt.get(k) || 0,
+          seenAt: Math.max(rec.seenAt, store.since()), unreadMark: rec.unreadMark, closedAt: look.here.has(k) ? 0 : closedAt.get(k) || 0,
           hidden: s.hideBackground && x.kind !== 'user' }));
       }
     }

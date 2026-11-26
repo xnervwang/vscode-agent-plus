@@ -11,7 +11,8 @@
  *
  * A conversation asks the user a question when its plan has a question row put after the user's last message, as for
  * the Conversations view (src/conversations.js activityOf). Plans are read only for conversations active in the last
- * ASKS_DAYS days, since the list may hold thousands; an older question is one the user has seen for that long.
+ * ASKS_DAYS days, since the list may hold thousands, and for those open here or elsewhere or running whatever their age,
+ * which the status bar's count covers too.
  */
 const sources = require('./sources');
 const { planQuestions } = require('./folders');
@@ -40,8 +41,8 @@ function startSessionList(host, opts = {}) {
       deleteAfterDays: num('deleteAfterDays', 90, 1, 3650), recentlyClosed: num('recentlyClosed', 10, 0, 50),
       hideBackground: c.get('hideBackground', true) !== false };
   };
-  const asksOf = (sourceId, s) => {
-    if (!(s.lastUserAt > 0) || now() - (s.lastActiveAt || 0) > ASKS_DAYS * 86400e3) return false;
+  const asksOf = (sourceId, s, { near = false } = {}) => {
+    if (!(s.lastUserAt > 0) || (!near && now() - (s.lastActiveAt || 0) > ASKS_DAYS * 86400e3)) return false;
     const got = host.planOf(sourceId, s.sessionId);
     const plan = got && got.plan;
     if (!plan || plan.error) return false;
