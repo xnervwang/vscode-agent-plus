@@ -107,7 +107,7 @@ const settle = (p, ms, fallback) => new Promise((resolve) => {
   Promise.resolve(p).then((v) => { if (!done) { done = true; clearTimeout(t); resolve(v); } }, () => { if (!done) { done = true; clearTimeout(t); resolve(fallback); } });
 });
 
-/* The results of an action in the protocol's shape, one per id asked about; anything missing is failed. */
+/* The results of an action in the protocol's shape, one per id asked about; an id with no result counts as failed. */
 function resultsOf(answer, ids, why) {
   const got = new Map();
   const list = sources.get(answer, 'results');
@@ -685,7 +685,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   }
 
   /* accountInfo() and sessionsNotice() answer at once. A source that returns a Promise instead gets no part and no
-     note, rather than a part drawn from the Promise, which has no rows. */
+     note. */
   const settled = (v) => {
     if (v && typeof v.then === 'function') { Promise.resolve(v).catch(() => { /* not used */ }); return null; }
     return v;

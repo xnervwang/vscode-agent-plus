@@ -19,9 +19,9 @@
  * a click in the window runs. Every look() saves a screenshot to <out>/shots; with --look each also writes a close view
  * and an entry of <out>/look.json.
  *
- * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match, and the steps those name in their
- * needs('…') calls, followed through (lib/steps.js); when a step it needs did not finish, the step fails and names it.
- * A step with a failed check keeps a screenshot, and the window's HTML and text in <out>/state/.
+ * AGENT_PLUS_UI_STEPS, a regular expression, runs only the steps whose names match it, together with the steps they
+ * name in their needs('…') calls, followed through (lib/steps.js); when a step it needs did not finish, the step fails
+ * and names it. A step with a failed check keeps a screenshot, and the window's HTML and text in <out>/state/.
  */
 const fs = require('fs');
 const path = require('path');
@@ -1394,7 +1394,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const calls = (which) => src(which === 'codex' ? 'return src.state.calls;' : 'return src.otherState(arg).calls;', which);
   const sidebarBox = () => page.locator('#workbench\\.parts\\.sidebar');
   const DAY = 86400e3;
-  /* Another VS Code window, as each source's windows/<pid>.json says: this test's own process stands in for it. */
+  /* A stand-in for another VS Code window: an entry in each source's windows/<pid>.json, with this test's own process
+     as the window. */
   const otherWindow = (sessions) => {
     fs.mkdirSync(path.join(profile.plans, 'windows'), { recursive: true });
     fs.writeFileSync(path.join(profile.plans, 'windows', `${process.pid}.json`), JSON.stringify({ at: Date.now(), pid: process.pid, name: 'proj-b [SSH: host-b]', sessions }));
@@ -1512,7 +1513,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sleep(300);
     await slRowLoc(SLT.ocTerm).hover();
     const term = await until(async () => { const t = await slHover(); return /Runs in terminal pts\/3/.test(t) && t; }, 5000, 200);
-    check(!!term && /opencode in \/work\/expense-tracker/.test(term) && /A turn is running/.test(term), 'and of one running in a terminal, the terminal and what the agent says of it, and what its dot means', term || await slHover());
+    check(!!term && /opencode in \/work\/expense-tracker/.test(term) && /A turn is running/.test(term), 'and the hover box of one running in a terminal names the terminal, what the agent says of it, and what its dot means', term || await slHover());
     await page.mouse.move(5, 5);
   });
 
@@ -1533,7 +1534,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const menu = await slMenu();
     check(!!menu && ['Open in Tab', 'Rename', 'Text Color', 'Unpin', 'New Group from Conversation', 'Mark as Unread', 'Archive'].every((x) => menu.includes(x))
       && !menu.includes('Add to Group') && !menu.includes('Delete...'),
-    'a row\'s menu offers opening, renaming, a text colour, unpinning, a new group, unread and archiving; no Add to Group while there is no group, and no deleting outside Archived', menu);
+    'a row\'s menu offers to open, rename, set a text colour, unpin, make a new group, mark unread and archive; it has no Add to Group while there is no group, and no Delete outside Archived', menu);
     await slItem('Text Color').click();
     await slItem('Green', true).click();
     check(!!await slWait((r) => /charts-green/.test((slFind(r, SLT.quiet) || {}).color || '')), 'Text Color colours the title');
