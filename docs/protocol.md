@@ -290,6 +290,126 @@ In Claude Code Plus and Codex Plus, `onOpen` runs `agentPlus.showWorkPlanOf` and
 | `agentPlus.showWorkPlanOf` | Moves the Work plan view to the conversation, as a focus report does, and runs `agentPlus.workPlan.focus` to reveal the view. The next editor tab change moves the view as usual. |
 | `agentPlus.answerQuestionOf` | Reads the plan as it is now and shows the first question in the Answer view, in the same plan order the Conversations view uses. The argument may also carry `row`, a row number such as `2.1`. If that row still has a question, the command shows it; otherwise it uses the first question in plan order. Clicking a question row in the Work plan view passes its number. This works even for a conversation the Conversations view leaves out, such as one outside the window's folders. If the source's last list omits the conversation, the core calls the source's `listConversations()` once more and waits up to 3 seconds (the same limit the Conversations view uses) before treating the conversation as not running. If there is no question, a message says so. The Answer view's Go to the conversation button opens the conversation through its source's `open()` when the source provides it. |
 
+## Session list
+
+> Draft, not implemented yet. Field names and limits may still change before the first version that ships it.
+
+The session list is a webview view in an activity bar container of Agent Plus's own. It lists the conversations of this window's project from every registered source that lists `'sessions'`, together. The core keeps the list's own state for every source alike: groups, archived, pinned, title colours, the last reply the user saw, recently closed. A source lists its agent's conversations, says where else one is open, and carries out actions on them. A source with no `'sessions'` keeps its conversations out of the list and loses nothing else.
+
+### What the source provides
+
+| Member | Meaning |
+| --- | --- |
+| `features` | `'sessions'`: the source has `listSessions`, `onDidChangeSessions`, `sessionActions` and `runSessionAction`. `'sessionImport'`: it has `importSessions`. `'accountInfo'`: it has `accountInfo` and `onDidChangeAccountInfo` |
+| `listSessions({ folders, cursor, limit })` | `Promise<{ sessions, cursor }>`: one page of this project's conversations, archived ones included, in any order. `folders` is the window's workspace folders as real paths, the first one first; the source lists the conversations it can open in this window from one of them or a folder below one (Claude Code only the first folder's, as it can open no other). `cursor` is `null` on the first call and the previous answer's `cursor` after it; an answer whose `cursor` is `null` or `''` is the last page. `limit` is the most the core wants in one answer. `sessions` is an array of Session (below) |
+| `onDidChangeSessions` | `vscode.Event<void>`: a conversation came or went, or any field of one changed. The core reads the list again within a second of the last event; firing more often than needed is harmless |
+| `sessionActions` | Frozen object, or a function returning one: what `runSessionAction` can do (Actions below). `{ open, create, rename, delete, own }`: `open` and `create` are arrays of the places it can open into, `'tab'` and `'sidebar'`; `rename` and `delete` are booleans; `own` is the source's own row actions, `[{ id, title }]`, drawn at the end of the row's menu |
+| `runSessionAction(action, sessionIds, args)` | `Promise<{ results }>`: carries out `action` on each of `sessionIds` and answers `[{ sessionId, outcome, reason }]`, `outcome` being `'done'`, `'refused'` (the source would not, such as for a conversation open in another process) or `'failed'`; `reason` is a sentence for the user. Never rejects |
+| `describeDeletion(sessionIds)` | `Promise<[{ sessionId, what }]>`: for each, one line saying what deleting it removes (its files, sub-agents, their size), for the confirmation |
+| `wantSessionDetail(sessionIds)` | These rows are on screen and have `detail: false`: read what is missing, then fire `onDidChangeSessions` |
+| `importSessions({ folders })` | With `'sessionImport'`. `Promise<{ archived, groups, pinned, colors }>`: what the agent's own list, or this source's own list, had for this project, read once when the list starts for a project. `archived` is `[{ sessionId, at }]`, `at` when it was archived if known; `groups` is `[{ name, sessionIds }]`; `pinned` is an array of ids; `colors` maps an id to a colour name (Title colours below) |
+| `accountInfo()` | With `'accountInfo'`. `null`, or the source's part of the Account & usage section (below) |
+| `onDidChangeAccountInfo` | With `'accountInfo'`. `vscode.Event<void>` |
+
+### Session
+
+| Field | Meaning |
+| --- | --- |
+| `sessionId` | As for Conversations |
+| `title` | As for Conversations |
+| `cwd` | The conversation's folder |
+| `createdAt` | When it started, in epoch milliseconds |
+| `lastActiveAt` | When it last had a message, in epoch milliseconds. Not a file's modification time, nor a time a rename or another change of its metadata moves: the list sorts by it and shows it |
+| `lastReplyAt` | When the agent's last reply landed. A reply later than the newest time the user saw the conversation is unread |
+| `viewedAt` | Optional. When the agent's own interface last showed the conversation to the user, such as OpenCode's `time_viewed`; counts as seen |
+| `kind` | `'user'` (the default), `'background'` (a run nobody watches: `claude -p`, `claude --bg`, `codex exec`, `opencode run`), or `'subagent'` |
+| `parentId` | For a sub-agent or a background run, the conversation that started it, when known. Shown indented under it while background conversations are shown |
+| `branch` | Its git branch, when known |
+| `worktree` | The worktree's name when `cwd` is a git worktree of the project rather than one of the workspace folders |
+| `activity`, `waitingFor`, `running` | As for Conversations. A stopped conversation may leave them out |
+| `detail` | `false` while the source has not read the conversation's state: the row shows no dot and no envelope until it has (see `wantSessionDetail`). Defaults to `true` |
+| `elsewhere` | Optional array of the places outside VS Code where the conversation is open or runs: `[{ kind, label, detail, running }]`, `kind` being `'terminal'`, `'desktop'`, `'exec'` or `'other'`, `label` a few words ("terminal pts/3 in ~/proj"), `detail` lines for the hover (process id, folder, how it was started), `running` whether a turn runs there. The core finds other VS Code windows itself (Open elsewhere) |
+| `processes` | Optional. How many processes have the conversation open, when the source can count them; more than one is drawn as a warning |
+| `badges` | Optional array of the source's own marks after the title, `[{ text, tooltip, dim }]`, at most 2 |
+| `actions` | Optional array of the `own` action ids (see `sessionActions`) that apply to this row now |
+| `hover` | Optional array of extra lines for the row's hover, at most 6, such as what is still running after its turn |
+| `steward` | As for Conversations |
+
+### Actions
+
+| `action` | `args` | The source |
+| --- | --- | --- |
+| `'open'` | `{ where }`, `'tab'` or `'sidebar'` | Opens the conversation in this window. The core never sends it for a conversation another VS Code window shows (it brings that window forward instead) or one `elsewhere` lists as open: two processes writing one conversation would lose turns |
+| `'create'` | `{ where }` | Starts a new conversation; `sessionIds` is empty. Answers `[{ sessionId, outcome }]` with the new id when it has one, else `''` with `'done'`; the core puts a conversation in a group by the id once it appears in the list |
+| `'rename'` | `{ title }` | Gives it that title. The core does not send it for a conversation that runs in another process, which writes its old title back |
+| `'delete'` | `{}` | Deletes it. The core sends only what its rules allow (Deleting below); the source checks again that nothing has it open and nothing runs, and refuses otherwise |
+| an `own` id | `{}` | Whatever that action does |
+
+- The core sends one action to one source at a time and waits for its answer before sending that source another. It gives up waiting after 60 seconds and shows the action as failed; a later answer is ignored.
+- Restricted Mode: the core sends no action, and the list is read only.
+
+### Account & usage
+
+A collapsible section at the top of the list, with one part per source that gives `accountInfo()`. The part's head is the source's logo and label.
+
+| Field of `accountInfo()` | Meaning |
+| --- | --- |
+| `rows` | `[{ label, value, tooltip }]`, at most 12: a label and its value on one line, such as the sign-in method or today's tokens |
+| `bars` | `[{ label, percent, resetsAt, tooltip }]`, at most 4: a bar filled to `percent` (0 to 100), with when it resets in epoch milliseconds when known, such as a rate limit |
+| `links` | `[{ label, command, arguments }]`, at most 3: links that run a command of the source's |
+| `conversation` | Optional `{ title, rows }`: the figures of the conversation of this source in front, rows as above |
+
+### Open elsewhere
+
+A row is open elsewhere when another VS Code window on this machine shows the conversation, or its `elsewhere` lists a place. Each window writes the conversations it shows (`sessionForTab`, `shows`, `isFocused`) to a file of its own in the shared folder, with its workspace's name and remote host, the way it writes its attention file; the core reads every window's file for the first case. A row open elsewhere is drawn dimmed with its dot as it is. Clicking it brings the other VS Code window forward; for a terminal or the desktop app, it opens nothing and the hover says where to close it first.
+
+### Activity dots
+
+The list and the core's other views draw one of five dots, or none, worked out from `activity`, `waitingFor`, `running` and the plan's questions:
+
+| Dot | When |
+| --- | --- |
+| Blue, filled | `activity` is `'waiting'` with a `waitingFor` other than `planQuestion`: a dialog waits for the user (a permission, a choice, a question form, a plan to review). Wins over the others |
+| Red, filled | The plan asks the user a question asked after the user's last message, and no turn runs and no background work runs |
+| Red, ring | The same question, while a turn runs or background work runs |
+| Green, filled | A turn runs |
+| Green, ring | No turn runs, and background work does |
+| None | Stopped, with no question |
+
+"Needs you" counts blue and both reds. The core notifies for blue and filled red only.
+
+### What the core does with them
+
+- **Sections**: Account & usage, Recently closed (this window's, newest first, collapsed at first), the user's groups, Ungrouped, Archived. A conversation is listed once, except that one in Recently closed is also in its own section.
+- **Order**: in each section the pinned conversations first, then the rest, each part by `lastActiveAt`, newest first.
+- **Archived**: a mark the core keeps; the conversation moves out of its group, can still run and be opened, and stays archived when opened. Unarchiving puts it in Ungrouped. A source's own archive is not read or written after the import.
+- **Archiving on its own**: a conversation inactive for `agentPlus.sessions.archiveAfterDays` days (14 by default) is archived, unless it is open in this window or elsewhere, runs or waits, is unread, is in a group, or is pinned.
+- **Deleting**: only an archived conversation that is not pinned, that no window and no other process has open, and in which nothing runs. With `agentPlus.sessions.deleteArchived` on (the default), one archived for `agentPlus.sessions.deleteAfterDays` days (90 by default) is deleted, counting from the later of when the list first saw it archived and its `lastActiveAt`. Only one window on the machine archives and deletes on its own at a time.
+- **Pinned**: kept in its section, first; never archived on its own; not deleted. Archiving a pinned conversation unpins it. One pinned and then archived by the agent's own interface stays pinned.
+- **Unread**: the core records the newest `lastReplyAt` the user has seen of each conversation; `viewedAt` counts too.
+
+### What the core tells sources
+
+| Member of the interface | Meaning |
+| --- | --- |
+| `features` | `'sessionList'` while the core has the session list |
+| `sessionListManages()` | Whether the session list archives and deletes conversations on its own in this window now: `true` while it is on. A source with its own archiving or deleting on its own leaves it off while this is `true`, and asks again each time, so that turning the list off, or the core going, brings it back |
+| `sessionDeletionDue(sourceId)` | A frozen object from session id to when the list will delete that conversation (epoch milliseconds), or `null` for one it will not delete (not archived, pinned, or deleting on its own off). For a source whose agent deletes old conversations by a rule of its own, such as Claude Code's `cleanupPeriodDays`, to keep them until then |
+| `onDidChangeSessionDeletionDue` | `vscode.Event<{ sourceId }>` |
+
+### Title colours
+
+`red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink` and `cyan`, the colours of Claude Code's `/color`, drawn in the theme's chart colours.
+
+### Limits
+
+| What | Limit |
+| --- | --- |
+| Sessions per source | 20000, over all pages; the core asks for 500 a page and stops at the limit |
+| A page | Settles within 10 seconds, or the core keeps the source's previous list and tries again on the next change |
+| `title` | 500 characters, cut |
+| `elsewhere` | 8 places; `label` 80 characters, each `detail` line 200 |
+
 ## Timing and limits
 
 | Item | Value |
