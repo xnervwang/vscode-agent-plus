@@ -44,8 +44,11 @@ module.exports = async ({ ok, bad, eq, root }) => {
   eq([pkg.icon, fs.existsSync(path.join(root, 'images', 'icon.png')), fs.existsSync(path.join(root, 'images', 'icon.svg'))], ['images/icon.png', true, true], 'the marketplace icon is images/icon.png, with its source beside it');
   const containers = [].concat(pkg.contributes.viewsContainers.activitybar, pkg.contributes.viewsContainers.panel);
   eq([containers.map((c) => c.icon), ['sidebar.svg', 'sessions.svg'].every((f) => fs.existsSync(path.join(root, 'images', f)))],
-    [['images/sidebar.svg', 'images/sessions.svg', 'images/sidebar.svg'], true],
+    [['images/sessions.svg', 'images/sidebar.svg', 'images/sidebar.svg'], true],
     'the containers use images/sidebar.svg, and the session list\'s images/sessions.svg, both in the repository');
+  /* VS Code puts an extension's activity bar containers in the order package.json lists them. */
+  eq(pkg.contributes.viewsContainers.activitybar.map((c) => c.id), ['agentPlusSessions', 'agentPlus'],
+    'the session list\'s container comes first in the activity bar, above the Work plan\'s');
   /* The package carries extension.js, src/ and images/, and .vscodeignore leaves shared/ out: a module of the extension
      that required a file elsewhere would load in the tests and fail once installed. */
   const walkJs = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkJs(path.join(d, e.name)) : /\.js$/.test(e.name) ? [path.join(d, e.name)] : []));

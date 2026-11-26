@@ -1393,6 +1393,31 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const slHover = () => sl.evaluate(() => { const h = document.querySelector('.sl-hover'); return h && !h.classList.contains('sl-hidden') ? h.textContent : ''; });
   const calls = (which) => src(which === 'codex' ? 'return src.state.calls;' : 'return src.otherState(arg).calls;', which);
   const sidebarBox = () => page.locator('#workbench\\.parts\\.sidebar');
+  /*
+   * The activity bar's entries of the session list (titled Conversations) and of the Work plan (titled Agent Plus), once
+   * both are drawn: each one's place among the bar's entries, its box in CSS pixels, and the icon file it is masked with.
+   * Null while either is missing or has no size yet.
+   */
+  const barEntries = () => page.evaluate(() => {
+    const items = [...document.querySelectorAll('.activitybar .action-item')];
+    const find = (re) => {
+      const i = items.findIndex((x) => { const l = x.querySelector('.action-label'); return !!l && re.test(l.getAttribute('aria-label') || ''); });
+      if (i < 0) return null;
+      const r = items[i].getBoundingClientRect(), s = getComputedStyle(items[i].querySelector('.action-label'));
+      return r.width > 0 && r.height > 0 ? { index: i, x: r.x, y: r.y, width: r.width, height: r.height, icon: `${s.maskImage || ''} ${s.webkitMaskImage || ''}` } : null;
+    };
+    const sessions = find(/^Conversations/), plan = find(/^Agent Plus/);
+    return sessions && plan ? { sessions, plan } : null;
+  });
+  const barShown = () => until(barEntries, 15000, 200);
+  /* A box around the two entries, with the bar's full width and a little of what is above and below them. */
+  const barBox = (b) => {
+    const top = Math.min(b.sessions.y, b.plan.y), bottom = Math.max(b.sessions.y + b.sessions.height, b.plan.y + b.plan.height);
+    const left = Math.min(b.sessions.x, b.plan.x), right = Math.max(b.sessions.x + b.sessions.width, b.plan.x + b.plan.width);
+    return { x: left, y: top - 8, width: right - left, height: bottom - top + 16 };
+  };
+  /* What both close views of the two entries should show, after the theme's own words. */
+  const BAR_LOOK = 'on top the robot of the Conversations session list (a speech-bubble head with two square eyes, a small ear on each side and an antenna ending in a ring), and right under it the Work plan of Agent Plus (a page with a folded corner, a tick and a list). The two icons look the same size: the robot\'s head is about as wide as the page and the whole robot about as tall, and the outlines of both are equally thick. The robot\'s entry is the one shown, so it is the brighter of the two and may have a marker line at its left edge. Neither icon is cut off, and nothing but a number badge covers either.';
   const DAY = 86400e3;
   /* A stand-in for another VS Code window: an entry in each source's windows/<pid>.json, with this test's own process
      as the window. */
@@ -1441,6 +1466,12 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await openConv('sl-run');
     await showSessions('agentPlus.sessions');
     await sideBarWidth(420);
+    const bar = await barShown();
+    check(!!bar && bar.sessions.index < bar.plan.index && bar.sessions.y + bar.sessions.height <= bar.plan.y + 1
+      && /sessions\.svg/.test(bar.sessions.icon) && /sidebar\.svg/.test(bar.plan.icon),
+    'in the activity bar the session list\'s entry, with the robot of images/sessions.svg, comes above the Work plan\'s, with the document of images/sidebar.svg', bar);
+    await look('sessions-activity-bar-dark', { expect: `A close view of two entries of the activity bar on the left, in a dark theme: light icons on the dark bar, ${BAR_LOOK}` },
+      bar ? barBox(bar) : null);
     const rows = await slWait((r) => [SLT.run, SLT.perm, SLT.ask, SLT.other, SLT.cc, SLT.oc, SLT.ocTerm].every((t) => slFind(r, t, 'ungrouped'))
       && (slFind(r, SLT.other) || {}).stripe === 'elsewhere' && (slFind(r, SLT.ask) || {}).dot === 'red', 25000);
     check(!!rows, 'the session list shows the conversations of all three agents together, in Ungrouped', rows || await slRows().catch(() => null));
@@ -1488,6 +1519,10 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await showSessions('agentPlus.sessions');
     await sleep(800);
     await look('sessions-light', { expect: 'The same list in a light theme: dark text on a light background, section bands a little darker than the rows, the logos and the five dots in the same colours as in the dark theme, and the stripes visible.' }, sidebarBox());
+    const bar = await barShown();
+    check(!!bar, 'the activity bar still draws both entries in the light theme', bar);
+    await look('sessions-activity-bar-light', { expect: `The same two entries of the activity bar in a light theme: dark icons on the light bar, ${BAR_LOOK}` },
+      bar ? barBox(bar) : null);
     await theme(THEMES.dark);
     await sideBarWidth(230);
     await showSessions('agentPlus.sessions');
