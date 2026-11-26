@@ -237,6 +237,22 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
+  /* ── A conversation in a linked git worktree, and one open in more than one process ── */
+  {
+    const t = setup();
+    t.entries.push({ id: 'codex', source: source('codex', [conv('wt', { title: 'In a worktree', worktree: 'feature-x' }),
+      conv('two', { title: 'In two processes', processes: 2 }), conv('one', { title: 'In one process', processes: 1 })]) });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    await list.refresh();
+    const m = list.model();
+    const row = (title) => m.sections.flatMap((s) => s.rows).find((r) => r.title === title);
+    eq([row('In a worktree').worktree, row('In a worktree').processes, row('In two processes').processes, /Open in 2 processes at once/.test(row('In two processes').hover),
+      row('In one process').processes, /processes at once/.test(row('In one process').hover)],
+    ['feature-x', 0, 2, true, 0, false],
+    'a row carries the name of the worktree its conversation is in, and the count of processes it is open in when that is more than one, said in its hover too');
+    list.dispose();
+  }
+
   /* ── Another VS Code window, and a terminal ── */
   {
     const t = setup();

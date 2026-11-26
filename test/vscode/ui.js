@@ -1385,7 +1385,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     conv('sl-quiet', SLT.quiet, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 480e3 }),
     conv('sl-kid', SLT.kid, 'idle', 'stopped', false, { running: false, kind: 'subagent', parentId: 'sl-run', lastActiveAt: t - 500e3 }),
     conv('sl-month', SLT.month, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 30 * DAY }),
-    conv('sl-weeks', SLT.weeks, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 21 * DAY }),
+    conv('sl-weeks', SLT.weeks, 'idle', 'stopped', false, { running: false, lastActiveAt: t - 21 * DAY, worktree: 'feature-x', processes: 2 }),
   ];
   const slPlans = (t) => {
     for (const id of ['sl-ask', 'sl-askrun']) writePlan(id, { nodes: [{ title: 'Pick the branch', state: 'waiting', waitingOn: 'user', question: 'Main or the hotfix branch?', since: iso(t - 60e3), opened: iso(t - HOUR) }] });
@@ -1423,6 +1423,9 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
     const unreadMark = (t) => sl.evaluate((x) => [...document.querySelectorAll('.sl-row')].some((r) => r.querySelector('.sl-title').textContent === x && !!r.querySelector('.sl-unread svg')), t);
     check(!slFind(rows, SLT.kid) && await unreadMark(SLT.unread) && !await unreadMark(SLT.quiet),
       'a sub-agent is hidden, and only the unread conversation has the envelope', rows.map((r) => [r.title, r.marks]));
+    const weeks = slFind(rows, SLT.weeks) || {};
+    check(/feature-x/.test(weeks.marks || '') && /· 2 processes/.test(weeks.marks || '') && !/processes/.test((slFind(rows, SLT.quiet) || {}).marks || ''),
+      'a conversation in a git worktree has the worktree\'s name on its row, and one open in two processes at once says so there', weeks);
     const archived = slFind(rows, SLT.ocOld, 'archived');
     check(!!archived, 'what the agent had archived is imported as archived, the first time the list sees that agent', rows.filter((r) => r.section === 'archived'));
     const ungrouped = rows.filter((r) => r.section === 'ungrouped').map((r) => r.title);
@@ -1439,7 +1442,7 @@ async function run({ exe, profile, env, playwright, out, check, note, look: look
       .map((r) => [r.querySelector('.sl-title').textContent, r.querySelector('.sl-away').dataset.away]).sort());
     check(sameList(away.map((x) => x.join(':')), [`${SLT.other}:window`, `${SLT.ocTerm}:terminal`].sort()),
       'a row open in another VS Code window ends in a windows icon, and one open in a terminal in a terminal icon; no other row has one', away);
-    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then section bands RECENTLY CLOSED is absent, UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title.' },
+    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then section bands RECENTLY CLOSED is absent, UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title. Quiet for three weeks, if it is in the picture, has a feature-x badge and a red · 2 processes after its title.' },
       sidebarBox());
     await exec('notifications.clearAll');
     await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-row[data-stripe="elsewhere"]')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
