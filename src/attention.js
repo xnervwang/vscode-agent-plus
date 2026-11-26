@@ -24,6 +24,11 @@
  * window whose panel shows the prompt knows more than one that read a machine-wide list, so the most precise of the
  * reasons the windows report is kept.
  *
+ * A window marks `here` on what it writes about a conversation it shows. Where windows report one conversation
+ * differently, a report marked `here` wins over one that is not: a machine-wide list can be half a minute old, and a
+ * wait it still reports after the window that shows the conversation saw it end would make the next wait look like the
+ * same one, which is then not announced.
+ *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
  * in any window. One that window shows anywhere else, in a tab behind others or a side bar, gets no notification
  * either: the user is already in the window where it is answered, and its tab's dot and the count show it.
@@ -64,7 +69,8 @@ const MAX_TITLE = 120;
 /* A window keeps its note that it told the user about a conversation this long: as long as another window may still
    hold a notification of it, kept while no window had the focus. */
 const SETTLED_MS = 24 * 3600 * 1000;
-/* When two windows report one conversation differently, the report that needs the user most wins. */
+/* When two windows report one conversation differently and neither or both mark it `here`, the report that needs the
+   user most wins. */
 const RANK = { waiting: 0, working: 1, background: 2, stopped: 3 };
 const WINDOW = /^[0-9a-z]+-[0-9a-f]{8}\.json$/;
 
@@ -86,22 +92,27 @@ function reading(c) {
 
 /*
  * The running conversations of `lists` that other windows need to hear about: all but those stopped with no reply
- * unseen. `lists` is [{ sourceId, label, conversations }]. Past MAX_ITEMS the ones that need the user are kept.
+ * unseen. `lists` is [{ sourceId, label, conversations }]; `shown(item)` says whether this window shows that
+ * conversation, which marks it `here`. Past MAX_ITEMS the ones that need the user are kept.
  */
 const activeAt = (c) => (Number.isFinite(c.lastReplyAt) && c.lastReplyAt > 0 ? c.lastReplyAt : Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0);
 const unwritten = (activity, unseen) => !activity || (activity === 'stopped' && !unseen);
 
-function itemsOf(lists) {
+function itemsOf(lists, shown = () => false) {
   const out = [];
   for (const { sourceId, label, conversations } of lists || []) {
     for (const c of conversations || []) {
       if (!c || c.running === false || !c.sessionId) continue;
       const { activity, unseen } = reading(c);
       if (unwritten(activity, unseen)) continue;
-      out.push({ sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
+      const it = { sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
         state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true, lastActiveAt: activeAt(c),
         title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '',
-        waitingFor: activity === 'waiting' ? waitReason.reasonOf(c.waitingFor) : null });
+        waitingFor: activity === 'waiting' ? waitReason.reasonOf(c.waitingFor) : null };
+      let here = false;
+      try { here = shown(it) === true; } catch (_) { here = false; }
+      if (here) it.here = true;
+      out.push(it);
     }
   }
   const need = (it) => { const k = kindOf(it); return k === 'waiting' ? 0 : k ? 1 : 2; };
@@ -145,16 +156,18 @@ function readAll(dir, now, kept = null) {
       const steward = typeof raw.steward === 'boolean' ? raw.steward : title.includes(titleMarks.CROWN);
       const it = { key: k, from: new Set([n]), sourceId: raw.sourceId, sessionId: raw.sessionId, source: clip(raw.source, 40) || raw.sourceId,
         title: titleMarks.withMarks(title, { steward }) || raw.sessionId, steward, cwd: typeof raw.cwd === 'string' ? raw.cwd : '', activity,
-        unseen, legacy, lastActiveAt: Number.isFinite(raw.lastActiveAt) ? raw.lastActiveAt : 0,
+        unseen, legacy, here: raw.here === true, lastActiveAt: Number.isFinite(raw.lastActiveAt) ? raw.lastActiveAt : 0,
         waitingFor: activity === 'waiting' ? waitReason.reasonOf(raw.waitingFor) : null };
       const had = merged.get(k);
       if (!had) { merged.set(k, it); continue; }
-      const win = RANK[activity] < RANK[had.activity] ? it : had;
+      const one = it.here !== had.here;
+      const win = one ? (it.here ? it : had) : RANK[activity] < RANK[had.activity] ? it : had;
       win.from = new Set([...had.from, n]);
       win.unseen = had.unseen || unseen;
       win.legacy = had.legacy && legacy;
+      win.here = had.here || it.here;
       win.lastActiveAt = Math.max(had.lastActiveAt, it.lastActiveAt);
-      win.waitingFor = win.activity === 'waiting' ? waitReason.better(had.waitingFor, it.waitingFor) : null;
+      win.waitingFor = win.activity !== 'waiting' ? null : one ? win.waitingFor : waitReason.better(had.waitingFor, it.waitingFor);
       merged.set(k, win);
     }
   }
@@ -235,7 +248,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       }
     }
     if (!canWrite()) return;
-    ownItems = itemsOf(lists);
+    ownItems = itemsOf(lists, here);
     write();
   }
 

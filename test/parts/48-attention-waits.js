@@ -4,7 +4,8 @@
 
 'use strict';
 /*
- * What a waiting conversation waits for (src/wait-reason.js), named in the notices; no notice for a conversation the
+ * What a waiting conversation waits for (src/wait-reason.js), named in the notices; the report of a window that shows a
+ * conversation outranking a machine-wide list that still reports its last wait; no notice for a conversation the
  * focused window shows anywhere; a notice for each conversation, also when they come from different sources; what was
  * kept while no window had the focus, shown once when a window gets it; and announcesWaits(), which a source calls
  * before it leaves out its agent's own notice of a wait.
@@ -72,6 +73,32 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [['"Deploy" is waiting for you to approve Bash.'], [{ kind: 'permission', tool: 'Bash' }]],
       'when two windows report one waiting conversation, the reason that names the tool wins, whichever file is read first');
     for (const w of [a, b, f]) w.att.dispose();
+  }
+
+  /* A window whose list of the whole machine still reports a wait that the window showing the conversation saw end. */
+  {
+    const dir = path.join(tmp('here'), 'attention');
+    const m = make(dir, 'hm'), p = make(dir, 'hp', { here: ['x'] }), f = make(dir, 'hf', { focused: true });
+    const merged = () => [...at.readAll(dir, clock).merged.values()].map((it) => [it.activity, it.here, it.waitingFor]);
+    m.att.publish(lists(waiting('x', 'Deploy', { kind: 'permission' })));
+    p.att.publish(lists(waiting('x', 'Deploy', { kind: 'permission', tool: 'Bash' })));
+    await round(m, p, f);
+    const first = [fresh(f), merged()];
+    p.att.publish(lists(workingConv('x', 'Deploy')));
+    await round(m, p, f);
+    const between = [fresh(f), merged()];
+    p.att.publish(lists(waiting('x', 'Deploy', { kind: 'permission', tool: 'Bash' })));
+    await round(m, p, f);
+    eq([first, between, fresh(f)],
+      [[['"Deploy" is waiting for you to approve Bash.'], [['waiting', true, { kind: 'permission', tool: 'Bash' }]]], [[], [['working', true, null]]],
+        ['"Deploy" is waiting for you to approve Bash.']],
+      'the window that shows the conversation marks it here, and its report wins over the other window\'s, so the next wait is announced');
+    const q = make(dir, 'hq');
+    q.att.publish(lists(workingConv('x', 'Deploy')));
+    p.att.publish([]);
+    await round(m, p, q, f);
+    eq(merged(), [['waiting', false, { kind: 'permission' }]], 'between two reports not marked here, the one that needs the user most still wins');
+    for (const w of [m, p, q, f]) w.att.dispose();
   }
 
   /* Conversations of two sources that start to wait together: a notice for each, with its source's name. */
