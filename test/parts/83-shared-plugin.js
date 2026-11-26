@@ -144,6 +144,35 @@ print(json.dumps([A.scratch_dir({"session_id": s} if s is not None else {}) for 
       /asking the user something/.test(said(stopped))],
     [true, true, agent === 'codex' ? 'block' : 'Stop', true],
     `with ${agent}'s inputs the plan is injected, the reminder speaks, and the Stop hook answers in ${agent}'s shape`);
+    const NOTE = 'write it in the language you have been using with them, even though this note is in English.';
+    const asks = (nodes) => {
+      fs.writeFileSync(plan, JSON.stringify({ nodes }));
+      return /asking the user something/.test(said(say('nudge-work-plan.py', { hook_event_name: 'Stop', transcript_path: transcript, last_assistant_message: 'Should I merge it?' })));
+    };
+    eq([said(stopped).endsWith(NOTE), asks([{ title: 'A', state: 'todo' }, { title: 'Pick', state: 'waiting', waitingOn: 'user', question: 'Main or hotfix?' }]),
+      asks([{ title: 'A', state: 'todo', children: [{ title: 'Pick', state: 'discussing', waitingOn: 'user' }] }]),
+      asks([{ title: 'A', state: 'todo' }, { title: 'Pick', state: 'done', waitingOn: 'user', question: 'Main or hotfix?' }]),
+      asks([{ title: 'A', state: 'waiting', waitingOn: 'build' }])],
+    [true, false, false, true, true],
+    `${agent}: what the Stop hook says ends by asking for the user's language, and a reply ending in a question draws no reminder while a row already waits on the user, at any depth, but does once that row is closed or waits on someone else`);
+
+    /* No plan yet: the one offer of a plan ends the same way. */
+    const bare = tmp(`bare-${agent}`);
+    fs.writeFileSync(path.join(bare, 'config.json'), JSON.stringify({ offerMinToolCalls: 1, offerMinTurns: 1 }));
+    const worked = path.join(bare, 't.jsonl');
+    fs.writeFileSync(worked, ({
+      claude: [{ type: 'user', timestamp: '2026-01-01T00:00:00Z', message: { role: 'user', content: 'merge it' } },
+        { type: 'assistant', timestamp: '2026-01-01T00:00:01Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }] } }],
+      codex: [{ timestamp: '2026-01-01T00:00:00Z', type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage' } } },
+        { timestamp: '2026-01-01T00:00:01Z', type: 'response_item', payload: { type: 'function_call', name: 'shell', arguments: '{"command":["ls"]}' } }],
+      opencode: [{ type: 'user_message', timestamp: '2026-01-01T00:00:00Z', text: 'merge it' },
+        { type: 'tool_call', timestamp: '2026-01-01T00:00:01Z', name: 'bash', input: { command: 'ls' } }],
+    })[agent].map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const r = run([path.join(hooksOf[agent], 'nudge-work-plan.py'), bare],
+      JSON.stringify({ session_id: SID, [fields.turn]: 't1', hook_event_name: 'Stop', transcript_path: worked, last_assistant_message: 'Done.' }));
+    let offer = '';
+    try { offer = said(JSON.parse(r.stdout)); } catch (_) { offer = r.stdout || r.stderr; }
+    eq([/keeping no work plan/.test(offer), offer.endsWith(NOTE)], [true, true], `${agent}: the one offer of a plan ends by asking for the user's language too`);
   }
 
   /* plan_agent.SESSION_ID has to stay narrow enough that no other file in the data directory passes for a plan. */

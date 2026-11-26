@@ -122,9 +122,15 @@ def turn_shape(tail, plan="", began=None):
     return started, tools, changes_made, turns, reached
 
 
+# Whatever the model writes after this hook speaks goes to the user, and a reply that follows an English note tends to
+# come out in English whatever language the conversation is in.
+IN_THEIR_LANGUAGE = ("The user reads anything you write after this note, so write it in the language you have been "
+                     "using with them, even though this note is in English.")
+
+
 def speak(payload, text):
     """Every caller has already made sure the same thing is said at most once (plan_agent.stop_output says how)."""
-    print(json.dumps(stop_output(payload, text)))
+    print(json.dumps(stop_output(payload, text + " " + IN_THEIR_LANGUAGE)))
     return 0
 
 
@@ -264,6 +270,19 @@ def asked_since(nodes, began):
     return False
 
 
+def waits_on_user(nodes):
+    """Whether an open row waits on the user: `waiting` or `discussing` with waitingOn "user", at any depth. These are
+    the rows the Conversations view counts as the user's to decide."""
+    for node in listed(nodes):
+        if not isinstance(node, dict):
+            continue
+        if node.get("waitingOn") == "user" and node.get("state") in ("waiting", "discussing"):
+            return True
+        if waits_on_user(children(node)):
+            return True
+    return False
+
+
 def unrecorded_question(payload, path, tail):
     """Speaks when the last reply asks the user something and the plan has no record of it.
 
@@ -271,9 +290,10 @@ def unrecorded_question(payload, path, tail):
     can still leave one in the reply only.
 
     The reply comes from the Stop event's `last_assistant_message`. A question counts as recorded when a row command or tool
-    stamped its `asked` during the turn; one written straight into the file has no `asked`, so it draws the reminder
-    once. It stays quiet on a Stop that follows one that kept the turn going (stop_hook_active), or it would ask again
-    after its own reminder.
+    stamped its `asked` during the turn, or when a row already waits on the user: the view then shows the conversation
+    waiting for them, and a reply that ends by mentioning a question asked on a row earlier has nothing left to record.
+    A new question asked while an older one is open is not caught. It stays quiet on a Stop that follows one that kept
+    the turn going (stop_hook_active), or it would ask again after its own reminder.
     """
     if payload.get("stop_hook_active"):
         return None
@@ -290,7 +310,8 @@ def unrecorded_question(payload, path, tail):
             plan = json.load(fh)
     except Exception:
         return None
-    if asked_since(plan.get("nodes") if isinstance(plan, dict) else None, began):
+    nodes = plan.get("nodes") if isinstance(plan, dict) else None
+    if asked_since(nodes, began) or waits_on_user(nodes):
         return None
     return ("Your last reply may be asking the user something, but no row got a question this turn. Put each thing "
             "you need from the user on a row of its own: %s Offers to carry on do not count. If it is already on a row, "
