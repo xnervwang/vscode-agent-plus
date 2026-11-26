@@ -8,10 +8,10 @@
  * Plus's session list (its src/page/sessions-page.js): rows and sections are kept per key and reused, and a field is
  * written only when its value differs, so a one-row change rewrites one row.
  *
- * The page lays out, from the top: the New bar (the agent to start with, then New in tab and New in sidebar), the
- * filter chips, the search box when open, ACCOUNT & USAGE, and the model's sections. A row has the stripe at its start
- * (open here, open somewhere else, closed here lately), the agent's logo with the status dot at its top right, the
- * title, its marks, and the time, which the row's buttons take the place of while it is hovered.
+ * From the top, the page has the New bar, the filter chips, the search box when open, ACCOUNT & USAGE, and the
+ * model's sections. A row has the stripe at its start (open here, open somewhere else, closed here lately), the
+ * agent's logo with the status dot at its top right, the title, its marks, and the time, which the row's buttons take
+ * the place of while it is hovered.
  *
  * Collapsed sections, the filter, the agents hidden and the search are saved with setState, so they survive VS Code
  * dropping the page while the view is hidden.
@@ -224,7 +224,7 @@
     r._p.archive.classList.toggle('sl-hidden', ro || !!row.archived);
     r._p.restore.classList.toggle('sl-hidden', ro || !row.archived);
     if (!r._editing) r.draggable = !row.archived && !ro;
-    /* A hover box already up for this row follows what the row now says. */
+    /* An open hover box for this row is updated with it. */
     if (r === hoverRow && !hoverBox.classList.contains('sl-hidden')) hoverBox.textContent = row.hover || row.title;
   }
   /* The title, with the part the search matched marked. */
@@ -666,7 +666,7 @@
     } else if (k !== 'Tab') return;
     e.preventDefault();
   }
-  /* The rows a row's menu acts on: the selection when the row is in it, else the row alone. */
+  /* A row's menu acts on the whole selection when the row is part of it. */
   const keysFor = (r) => (selection.has(r._row.key) ? [...selection] : [r._row.key]);
   function openRowMenu(r, e) {
     if (!model || !r._row || r._editing) return false;
@@ -741,7 +741,7 @@
   }
   const openRow = (r) => { if (r && r._row) send({ kind: 'open', key: r._row.key }); };
 
-  /* ── editing a title or a group's name where it is drawn ── */
+  /* ── renaming in place ── */
   function editText(span, was, done) {
     span.textContent = was;
     span.contentEditable = 'true';
@@ -823,7 +823,7 @@
     if (ui.searchOpen) searchInput.focus();
   }
 
-  /* ── the hover box: where the conversation is, what it is doing, its dates and id ── */
+  /* ── the hover box ── */
   const HOVER_MS = 600;
   let hoverTimer = 0, hoverRow = null;
   function hideHover() {

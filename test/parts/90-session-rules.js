@@ -4,9 +4,7 @@
 
 'use strict';
 /*
- * The session list's rules (src/session-rules.js): the five dots and which wins, the stripe at a row's start, unread,
- * the sections and the order in each, the filters and their counts, archiving and deleting by hand and on their own,
- * and search.
+ * The session list's rules (src/session-rules.js), one section per rule.
  */
 const path = require('path');
 
@@ -32,7 +30,7 @@ module.exports = async ({ eq, root }) => {
   eq(dots, [['dialog', 'blue'], ['dialog with a question too', 'blue'], ['no reason', 'blue'], ['asked, stopped', 'red'],
     ['asked through the plan', 'red'], ['asked, still working', 'redRing'], ['asked, background left', 'redRing'],
     ['working', 'green'], ['background', 'greenRing'], ['stopped', '']],
-  'a dialog is blue and wins; a plan question is red, a ring while a turn or background work runs; then green, a green ring, none');
+  'a dialog waiting is blue and comes first; a plan question is red, or a red ring while a turn or background work runs; then a turn is green, background work alone a green ring, and the rest have no dot');
   eq([R.needsYou(row({ title: 'a', activity: 'waiting' })), R.needsYou(row({ title: 'b', asks: true, activity: 'working' })),
     R.needsYou(row({ title: 'c', activity: 'working' }))], [true, true, false], 'Needs you is blue and both reds');
 
@@ -40,7 +38,7 @@ module.exports = async ({ eq, root }) => {
   eq([R.stripeOf(row({ title: 'a', here: true, elsewhere: [{ label: 'x' }], closedAt: 5 })),
     R.stripeOf(row({ title: 'b', elsewhere: [{ label: 'x' }], closedAt: 5 })), R.stripeOf(row({ title: 'c', closedAt: 5 })),
     R.stripeOf(row({ title: 'd', elsewhere: [] }))],
-  ['here', 'elsewhere', 'closed', ''], 'open here wins over open elsewhere, which wins over closed here lately; none otherwise');
+  ['here', 'elsewhere', 'closed', ''], 'the stripe is for open here first, then open elsewhere, then closed here lately');
 
   /* ── Unread ── */
   eq([R.unread(row({ title: 'a', lastReplyAt: 10, seenAt: 9 })), R.unread(row({ title: 'b', lastReplyAt: 10, seenAt: 10 })),
@@ -70,7 +68,7 @@ module.exports = async ({ eq, root }) => {
     ['ungrouped', ['old pinned', 'newest', 'closed and open again', 'closed early', 'closed late', 'lost group', 'new']],
     ['archived', ['archived']],
   ], 'Recently closed, the groups in order (an empty one only if made here), Ungrouped and Archived; pinned first, then newest first, then by title');
-  eq(R.sections(rows, { groups, recent: 1 })[0].rows.map((r) => r.title), ['closed late'], 'Recently closed keeps the newest as many as set');
+  eq(R.sections(rows, { groups, recent: 1 })[0].rows.map((r) => r.title), ['closed late'], 'Recently closed keeps only the newest, up to the number set');
 
   /* ── Filters and counts ── */
   const mixed = [row({ title: 'a', here: true }), row({ title: 'b', activity: 'working' }), row({ title: 'c', activity: 'background', asks: true }),
@@ -85,13 +83,13 @@ module.exports = async ({ eq, root }) => {
     due({ lastReplyAt: now, seenAt: 0 }), due({ group: 'g1' }), due({ group: 'deleted group' }), due({ pinned: true }), due({ archived: true }),
     R.archiveDue(row(Object.assign({ title: 'off' }, old)), { days: 0, now })],
   [true, false, false, false, false, false, false, false, false, false, true, false, false, false],
-  'inactive for the days set and archived, unless open here or elsewhere, running, waiting, asked, unread, in a group, pinned, or already archived; 0 days is off');
+  'a conversation inactive for the days set is archived, unless it is open, running, waiting, asking, unread, grouped, pinned or archived already; 0 days turns this off');
 
   /* ── Deleting ── */
   const del = (o) => R.deleteBlocker(row(Object.assign({ title: 'x', archived: true }, o)));
   eq([del({}), del({ archived: false }), del({ pinned: true }), del({ here: true }), del({ elsewhere: [{ label: 'a terminal' }] }), del({ activity: 'working' })],
     ['', 'only an archived conversation can be deleted', 'it is pinned', 'it is open in this window', 'it is open in a terminal', 'it is running'],
-    'only an archived conversation that is not pinned, open anywhere or running can be deleted, and the reason is said');
+    'only an archived conversation that is not pinned, open anywhere or running can be deleted, and the list says why not');
   const at = (o) => R.deleteDueAt(row(Object.assign({ title: 'x', archived: true }, o)), { days: 90 });
   eq([at({ archivedAt: now - 100 * DAY, lastActiveAt: now - 200 * DAY }), at({ archivedAt: now - 100 * DAY, lastActiveAt: now - 10 * DAY }),
     at({ archived: false }), at({ pinned: true }), R.deleteDueAt(row({ title: 'off', archived: true, archivedAt: 1 }), { days: 90, on: false })],
@@ -99,7 +97,7 @@ module.exports = async ({ eq, root }) => {
   'deleting on its own counts from the later of when it was first seen archived and its last activity; never for one not archived, pinned, or with it off');
   eq([R.deleteDue(row({ title: 'a', archived: true, archivedAt: now - 91 * DAY, lastActiveAt: now - 91 * DAY }), { days: 90, now }),
     R.deleteDue(row({ title: 'b', archived: true, archivedAt: now - 91 * DAY, lastActiveAt: now - 91 * DAY, here: true }), { days: 90, now })],
-  [true, false], 'one due is deleted only while nothing blocks deleting it');
+  [true, false], 'a conversation that is due is deleted only if nothing blocks it');
 
   /* ── Search ── */
   const s = row({ title: 'Fix the Login', sessionId: '0199aaaa-bbbb-7ccc-8ddd-eeeeffff0000', branch: 'feature/auth' });

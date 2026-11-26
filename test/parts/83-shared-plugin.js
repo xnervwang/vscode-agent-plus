@@ -156,7 +156,7 @@ print(json.dumps([A.scratch_dir({"session_id": s} if s is not None else {}) for 
     [true, false, false, true, true],
     `${agent}: what the Stop hook says ends by asking for the user's language, and a reply ending in a question draws no reminder while a row already waits on the user, at any depth, but does once that row is closed or waits on someone else`);
 
-    /* No plan yet: the one offer of a plan ends the same way. */
+    /* No plan yet: the hook's one offer of a plan also ends by asking for the user's language. */
     const bare = tmp(`bare-${agent}`);
     fs.writeFileSync(path.join(bare, 'config.json'), JSON.stringify({ offerMinToolCalls: 1, offerMinTurns: 1 }));
     const worked = path.join(bare, 't.jsonl');

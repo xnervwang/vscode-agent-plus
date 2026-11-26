@@ -4,9 +4,9 @@
 
 'use strict';
 /*
- * Which steps of the window test a run takes (test/vscode/lib/steps.js): those a regular expression of step names
- * matches, with the steps they name in needs('…'), and how .github/workflows/vscode.yml passes such an expression and a
- * system when it is run by hand.
+ * How test/vscode/lib/steps.js picks the window test steps of a run: those a regular expression of step names matches,
+ * with the steps they name in needs('…'), and how .github/workflows/vscode.yml passes such an expression and a system
+ * when it is run by hand.
  */
 const fs = require('fs');
 const path = require('path');

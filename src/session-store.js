@@ -4,17 +4,17 @@
 
 'use strict';
 /*
- * What the session list keeps for one project, for every source alike: groups, archived, pinned, title colours, the
+ * What the session list keeps for one project, across all agents: groups, archived, pinned, title colours, the
  * newest reply seen, the unread mark, and which sources were imported. One file per project in the shared folder
  * (sharedHome()/session-list/<key>.json), so every window and every editor on this machine with the project open
  * reads and writes the same one.
  *
  * Several windows change it at once, so a window never writes what it read back over the file. Each change is an
  * operation stamped with its time; a write takes the lock folder beside the file, reads the file as it is now, applies
- * the pending operations to it and puts the result in place, then lets go. A field keeps the change made last, and the
- * newest reply seen only ever grows, so two windows changing different conversations, or the same one, both keep
- * their change. A write that finds the lock taken tries again shortly. A lock older than LOCK_STALE_MS was left by a
- * window that died while writing, and is taken over.
+ * the pending operations to it, writes the result and releases the lock. A field keeps the change made last, and the
+ * newest reply seen only ever grows, so two windows changing different conversations, or different fields of the same
+ * one, both keep their change. A write that finds the lock taken tries again shortly. A lock older than LOCK_STALE_MS
+ * was left by a window that died while writing, and is taken over.
  *
  * A conversation is keyed by its source and id. A deleted group leaves a marker so that a window that had not seen
  * the deletion does not bring it back; its conversations read as ungrouped.
@@ -86,7 +86,7 @@ function apply(d, op) {
     case 'deleteGroup': if (d.groups[op.id]) Object.assign(d.groups[op.id], { del: true, at: op.at }); break;
     case 'imported': d.imported[op.sourceId] = op.at; break;
     case 'sweep': d.sweepAt = Math.max(d.sweepAt || 0, op.at); break;
-    /* When the record began, the earliest any window says: a reply before it counts as seen. */
+    /* The earliest start any window reports wins. */
     case 'since': if (op.since > 0 && !(d.since > 0 && d.since <= op.since)) d.since = op.since; break;
     case 'label': d.label = op.label; break;
     default: break;
@@ -104,8 +104,8 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
   let cache = null, cacheMtime = '', pending = [], timer = null, closed = false;
   const listeners = new Set();
 
-  /* A write puts a new file in place, so its inode tells a new version even when the clock's tick has not moved the
-     modification time. */
+  /* A write puts a new file in place, so a changed inode shows a new version even when the clock's tick has not moved
+     the modification time. */
   function read() {
     let m = '';
     try { const st = fs.statSync(file); m = `${st.ino}:${st.size}:${st.mtimeMs}`; } catch (_) { m = 'none'; }
@@ -162,7 +162,6 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
 
   return {
     file,
-    /* What the store has for one conversation. */
     record(sourceId, sessionId) {
       const r = read().s[keyOf(sourceId, sessionId)] || {};
       const v = (f, i = 0, d = null) => (Array.isArray(r[f]) ? r[f][i] : d);

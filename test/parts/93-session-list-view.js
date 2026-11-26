@@ -4,11 +4,7 @@
 
 'use strict';
 /*
- * The session list's view and its place in the window (src/session-list-view.js, src/session-list-host.js): the page it
- * builds, the model it sends only while on screen and only when changed, each agent's logo as a data: URI without
- * script, the badge, every message of the page passed to the list, the settings as read and held to their limits, a
- * plan question making a conversation ask the user, the context key Ctrl+Shift+T goes by, and Ctrl+Shift+T reopening
- * an editor once no closed conversation is left.
+ * The session list's view and its place in the window (src/session-list-view.js, src/session-list-host.js).
  */
 const fs = require('fs');
 const path = require('path');
@@ -18,7 +14,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const V = require(path.join(root, 'src', 'session-list-view.js'));
   const H = require(path.join(root, 'src', 'session-list-host.js'));
 
-  /* A webview view as VS Code gives one. */
+  /* A stand-in for the webview view VS Code passes to the provider. */
   function viewOf(vscode) {
     const sent = [], ev = new fake.EventEmitter(), vis = new fake.EventEmitter();
     let hear = null;
@@ -59,11 +55,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       ['model', true, false, true, [{ id: 'codex', label: 'Codex', create: ['tab'] }], { value: 2, tooltip: '2 conversations need you' }],
       'the page gets the model with each agent\'s logo as a data: URI with its script taken out, and the view\'s badge counts the conversations that need the user');
     changes.fire();
-    eq(view.sent.length, 0, 'the same model again is not sent');
+    eq(view.sent.length, 0, 'an unchanged model is not sent again');
     view.hide();
     model = Object.assign({}, model, { counts: { all: 3, needs: 1 } });
     changes.fire();
-    eq([view.sent.length, view.badge.value], [0, 1], 'nor anything while the view is hidden, though its badge still follows');
+    eq([view.sent.length, view.badge.value], [0, 1], 'nothing is sent while the view is hidden, but its badge keeps up');
     view.show();
     await wait(0);
     eq([view.sent.length, asked.pop()], [1, ['schedule']], 'and once on screen again, it is sent and the list read again');
@@ -123,9 +119,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const m = s.list.model();
     const rows = m.sections.find((x) => x.key === 'ungrouped').rows.map((r) => [r.id, r.dot]).sort();
     eq(rows, [['answered', ''], ['asks', 'red'], ['old', '']],
-      'a plan question asked after the user\'s last message makes the conversation ask the user; one answered since, or in a conversation inactive for weeks, does not');
+      'a plan question newer than the user\'s last message counts as asking the user; one answered since does not, nor one in a conversation inactive for weeks');
     const st = s.list.store();
-    eq([s.list.deletionDue('codex').asks], [null], 'the settings are read: deleting on its own is off');
+    eq([s.list.deletionDue('codex').asks], [null], 'the settings are read: with agentPlus.sessions.deleteArchived off, no deletion is due');
     st.archive([['codex', 'asks']], true);
     st.flush();
     control.state.config['agentPlus.sessions.deleteArchived'] = true;
@@ -148,7 +144,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     qp.accept(qp.items[0]);
     await wait(0);
     eq([first, typed, qp.hidden], [['answered', 'asks', 'old'].sort((a, b) => (a === 'old') - (b === 'old')), [['answered', 'Codex', 'answered']], true],
-      'Find Conversation lists the list\'s conversations, newest first, keeps the ones whose title or id holds what is typed, and closes on a pick');
+      'Find Conversation shows the conversations newest first, narrows them to titles or ids holding what is typed, and closes when one is picked');
     control.state.commands.length = 0;
     await s.commands.reopenClosedConversation();
     eq(control.state.commands.filter((c) => c[0] !== 'setContext'), [['workbench.action.reopenClosedEditor']],

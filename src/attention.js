@@ -24,10 +24,9 @@
  * window whose panel shows the prompt knows more than one that read a machine-wide list, so the most precise of the
  * reasons the windows report is kept.
  *
- * A window marks `here` on what it writes about a conversation it shows. Where windows report one conversation
+ * Each window marks `here` on its reports for conversations it shows. Where windows report one conversation
  * differently, a report marked `here` wins over one that is not: a machine-wide list can be half a minute old, and a
- * wait it still reports after the window that shows the conversation saw it end would make the next wait look like the
- * same one, which is then not announced.
+ * wait it still reports after that window saw the wait end would hide the next one, which then goes unannounced.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
  * in any window. One that window shows anywhere else, in a tab behind others or a side bar, gets no notification
@@ -69,8 +68,7 @@ const MAX_TITLE = 120;
 /* A window keeps its note that it told the user about a conversation this long: as long as another window may still
    hold a notification of it, kept while no window had the focus. */
 const SETTLED_MS = 24 * 3600 * 1000;
-/* When two windows report one conversation differently and neither or both mark it `here`, the report that needs the
-   user most wins. */
+/* With neither or both marked `here`, the report that needs the user most wins. */
 const RANK = { waiting: 0, working: 1, background: 2, stopped: 3 };
 const WINDOW = /^[0-9a-z]+-[0-9a-f]{8}\.json$/;
 

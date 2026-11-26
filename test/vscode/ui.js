@@ -1470,12 +1470,12 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       .map((r) => [r.querySelector('.sl-title').textContent, r.querySelector('.sl-away').dataset.away]).sort());
     check(sameList(away.map((x) => x.join(':')), [`${SLT.other}:window`, `${SLT.ocTerm}:terminal`].sort()),
       'a row open in another VS Code window ends in a windows icon, and one open in a terminal in a terminal icon; no other row has one', away);
-    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then section bands RECENTLY CLOSED is absent, UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title. Quiet for three weeks, if it is in the picture, has a feature-x badge and a red · 2 processes after its title.' },
+    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then the section bands: no RECENTLY CLOSED, and UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title. Quiet for three weeks, if it is in the picture, has a feature-x badge and a red · 2 processes after its title.' },
       sidebarBox());
     await exec('notifications.clearAll');
     await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-row[data-stripe="elsewhere"]')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
     await sleep(300);
-    await look('sessions-elsewhere', { expect: 'A close view of the list. The rows Open in another window and OpenCode in a terminal stand out as open somewhere else at a glance: an outlined stripe at the start of the row, greyed title and logo, and an icon just before the time at the right (two windows for the one in another window, a terminal for the one in a terminal), while the other rows are not greyed and have no such icon. Judge whether that mark is noticeable without being told to look for it.' },
+    await look('sessions-elsewhere', { expect: 'A close view of the list. The rows Open in another window and OpenCode in a terminal stand out as open somewhere else at a glance: an outlined stripe at the start of the row, greyed title and logo, and an icon just before the time at the right (two windows on Open in another window, a terminal on OpenCode in a terminal), while the other rows are not greyed and have no such icon. Judge whether that mark is noticeable without being told to look for it.' },
       sidebarBox());
   });
 
@@ -1570,7 +1570,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slOpen('Archived');
     await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-section[data-key="archived"] .sl-row')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
     await sleep(300);
-    await look('sessions-archived', { expect: 'The ARCHIVED section expanded under Ungrouped, listing Nothing going on (green title, no pin) and Archived long ago with the dark OpenCode logo; hovering an archived row would show an Unarchive button.' }, sidebarBox());
+    await look('sessions-archived', { expect: 'The ARCHIVED section expanded under Ungrouped, listing Nothing going on (green title, no pin) and Archived long ago with the dark OpenCode logo.' }, sidebarBox());
     await slAct(SLT.quiet, 'unarchive', 'archived');
     check(!!await slWait((r) => slFind(r, SLT.quiet, 'ungrouped')), 'Unarchive puts it back in Ungrouped');
   });
@@ -1599,7 +1599,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const gm = await slMenu();
     check(!!gm && ['New Conversation in This Group', 'New Group', 'Rename Group', 'Delete Group'].every((x) => gm.includes(x)), 'a group\'s menu offers a new conversation in it, a new group, renaming and deleting it', gm);
     await slItem('New Conversation in This Group').click();
-    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group\'s right-click menu with its first item, New Conversation in This Group, opened, and a submenu listing Codex, Claude Code and OpenCode, each with its logo. Either the submenu is beside the menu, which shows New Group, Rename Group and Delete Group, without covering the item it belongs to; or, in a side bar too narrow for that, the submenu has taken the menu\'s place under a first line ‹ New Conversation in This Group, with nothing of the menu showing through.' }, sidebarBox());
+    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group\'s right-click menu with its first item, New Conversation in This Group, opened, and a submenu listing Codex, Claude Code and OpenCode, each with its logo. Where there is room, the submenu is beside the menu, which shows New Group, Rename Group and Delete Group, and does not cover the item it belongs to. In a side bar too narrow for that, the submenu takes the menu\'s place under a first line ‹ New Conversation in This Group, and nothing of the menu shows through.' }, sidebarBox());
     const placed = await sl.evaluate(() => {
       const sub = document.querySelector('.sl-ctx-sub'), item = document.querySelector('.sl-ctx:not(.sl-ctx-sub) .sl-ctx-open');
       if (!sub || !item) return null;
@@ -1641,7 +1641,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slItem('Delete...').click();
     const d = await until(dialog, 8000, 200);
     check(!!d && /Delete "Claude Code, stopped" from disk\?/.test(d.text) && /cannot be undone/.test(d.text), 'deleting asks first, naming the conversation and saying it cannot be undone', d);
-    await look('sessions-delete-confirm', { expect: 'A VS Code confirmation dialog: Delete "Claude Code, stopped" from disk?, a line naming it with (Claude Code), the line This cannot be undone., and Delete and Cancel buttons.' },
+    await look('sessions-delete-confirm', { expect: 'A VS Code confirmation dialog: Delete "Claude Code, stopped" from disk?, a line naming it with (Claude Code), the line "This cannot be undone.", and Delete and Cancel buttons.' },
       page.locator('.monaco-dialog-box').first());
     await page.locator('.monaco-dialog-box .dialog-buttons .monaco-button').filter({ hasText: /^Delete$/ }).first().click();
     const gone = await until(async () => (await calls('claude-code')).some((c) => c[0] === 'delete' && sameList(c[1], ['cc-2'])), 8000, 300);
@@ -1685,7 +1685,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await page.keyboard.type('archive');
     const found = await slWait((r) => { const s = r.filter((x) => x.shown && x.section !== 'closed'); return s.length >= 1 && s.every((x) => /archive/i.test(x.title)); });
     check(!!found, 'Search keeps only the conversations whose title matches', found && found.filter((x) => x.shown).map((x) => x.title));
-    await look('sessions-search', { expect: 'A search box under the chips holding "archive", and only the two conversations whose title has it left in the list, each with it highlighted: Review the archive sweep in Ungrouped, and Archived long ago in ARCHIVED.' }, sidebarBox());
+    await look('sessions-search', { expect: 'A search box under the chips holding "archive", and the list narrowed to the two conversations with "archive" in their title, the word highlighted in each: Review the archive sweep in Ungrouped, and Archived long ago in ARCHIVED.' }, sidebarBox());
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await sl.locator('.sl-chip[data-chip="needs"]').click();
@@ -1723,7 +1723,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
     check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32%\s+resets 2h 1\dm/.test(shown) && /This conversation\s+Fix the sessions page filter/i.test(shown),
       'Account & usage shows the agent\'s rows, its limits with when they reset, and the conversation in front', shown);
-    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, below a thin line, a small heading THIS CONVERSATION in capitals, under it Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k, so that the account\'s lines above it are not read as the conversation\'s.' }, sidebarBox());
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, below a thin line, a small heading THIS CONVERSATION in capitals, under it Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k; the account\'s figures above it must not look like the conversation\'s.' }, sidebarBox());
     await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
     check(!!await until(async () => (await src('return src.state.ran;')).includes('installPlugin'), 5000, 200), 'a link runs the command the agent gave');
     await slHead('Account & usage').click();
@@ -1790,7 +1790,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const empty = await until(() => sl.evaluate(() => { const e = [...document.querySelectorAll('.sl-empty')].find((x) => !x.classList.contains('sl-hidden')); const n = document.querySelector('.sl-notice'); return e && n && { empty: e.textContent, note: n.innerText }; }), 10000, 300);
     check(!!empty && empty.empty === 'No conversations yet' && /Codex was not found on this machine\./.test(empty.note) && /Install Codex/.test(empty.note),
       'with no conversation the list says so, and an agent\'s note is shown above it with its button', empty);
-    await look('sessions-empty', { expect: 'The list with no conversations: the New bar, the chips all at 0, a note with the Codex logo saying Codex was not found on this machine. with an Install Codex button, and No conversations yet below.' }, sidebarBox());
+    await look('sessions-empty', { expect: 'The list with no conversations: the New bar, the chips all at 0, a note with the Codex logo saying "Codex was not found on this machine." with an Install Codex button, and No conversations yet below.' }, sidebarBox());
     await src('return src.configure(arg);', { sessionsNotice: null, ran: [] });
     await sl.locator('.sl-note-btn').filter({ hasText: 'Install Codex' }).click().catch(() => {});
     await src('return src.configure(arg);', { sessionsNotice: null });

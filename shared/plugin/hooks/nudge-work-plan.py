@@ -122,8 +122,7 @@ def turn_shape(tail, plan="", began=None):
     return started, tools, changes_made, turns, reached
 
 
-# Whatever the model writes after this hook speaks goes to the user, and a reply that follows an English note tends to
-# come out in English whatever language the conversation is in.
+# A reply that follows an English note tends to come out in English whatever language the conversation is in.
 IN_THEIR_LANGUAGE = ("The user reads anything you write after this note, so write it in the language you have been "
                      "using with them, even though this note is in English.")
 
@@ -271,8 +270,7 @@ def asked_since(nodes, began):
 
 
 def waits_on_user(nodes):
-    """Whether an open row waits on the user: `waiting` or `discussing` with waitingOn "user", at any depth. These are
-    the rows the Conversations view counts as the user's to decide."""
+    """Whether a row waits on the user, as the Conversations view counts it."""
     for node in listed(nodes):
         if not isinstance(node, dict):
             continue
@@ -291,9 +289,9 @@ def unrecorded_question(payload, path, tail):
 
     The reply comes from the Stop event's `last_assistant_message`. A question counts as recorded when a row command or tool
     stamped its `asked` during the turn, or when a row already waits on the user: the view then shows the conversation
-    waiting for them, and a reply that ends by mentioning a question asked on a row earlier has nothing left to record.
-    A new question asked while an older one is open is not caught. It stays quiet on a Stop that follows one that kept
-    the turn going (stop_hook_active), or it would ask again after its own reminder.
+    waiting for them, and a reply often ends by bringing that question up again. A new question asked while an older
+    one is open is not caught. It stays quiet on a Stop that follows one that kept the turn going (stop_hook_active), or
+    it would ask again after its own reminder.
     """
     if payload.get("stop_hook_active"):
         return None

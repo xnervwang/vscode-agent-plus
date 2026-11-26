@@ -75,7 +75,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (const w of [a, b, f]) w.att.dispose();
   }
 
-  /* A window whose list of the whole machine still reports a wait that the window showing the conversation saw end. */
+  /* One window's machine-wide list still reports a wait that has ended in the window showing the conversation. */
   {
     const dir = path.join(tmp('here'), 'attention');
     const m = make(dir, 'hm'), p = make(dir, 'hp', { here: ['x'] }), f = make(dir, 'hf', { focused: true });

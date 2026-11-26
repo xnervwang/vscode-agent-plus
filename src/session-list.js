@@ -5,7 +5,7 @@
 'use strict';
 /*
  * The session list's host side (docs/protocol.md, Session list). It reads every source that lists 'sessions', page by
- * page; works out which conversations this window shows, which one is in front, and which other windows show
+ * page; works out which conversations this window shows and which one is in front, and which ones other windows show
  * (src/session-windows.js); keeps what the user does to them in the project's store (src/session-store.js); and hands
  * the page (src/page/session-list-page.js) a plain model built with the rules in src/session-rules.js.
  *
@@ -64,7 +64,7 @@ const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
 const moment = (v) => { const n = typeof v === 'number' ? v : typeof v === 'string' ? Date.parse(v) : NaN; return Number.isFinite(n) && n > 0 ? n : 0; };
 const lines = (v, max, n) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).slice(0, max).map((x) => x.slice(0, n)) : []);
 
-/* A Session as the protocol has it, with its limits, or null. */
+/* A Session as the protocol has it, its strings and lists cut to the protocol's limits, or null. */
 function sessionOf(raw) {
   const c = sources.conversation(raw);
   if (!c) return null;
@@ -278,7 +278,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         const k = keyOf(e.id, x.sessionId);
         const rec = store.record(e.id, x.sessionId);
         const others = elsewhereByKey.get(k) || [];
-        /* A VS Code window the source names is one whose entry this window cannot see; one it can see is named here. */
+        /* A VS Code window the source names stands for one whose entry this window cannot see, so it is dropped once an
+           entry names the window. */
         const elsewhere = others.map((w) => ({ kind: 'vscode', label: windowLabel(w), detail: [], running: false, known: true }))
           .concat(x.elsewhere.filter((y) => y.kind !== 'vscode' || !others.length));
         let asks = false;
@@ -295,7 +296,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     rows = next;
   }
 
-  /* When the list will delete each conversation, by source; a change is told (onDidChangeSessionDeletionDue). */
+  /* When the list will delete each conversation, by source; onDidChangeSessionDeletionDue fires when that changes. */
   function dueOf(sourceId) {
     const s = settings();
     const out = {};
@@ -312,7 +313,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     }
   }
 
-  /* A source that keeps its own record of what was read hears what the list records (noteSeen). */
+  /* A source that keeps its own record of what was read is told what the list marks as seen (noteSeen). */
   function tellSeen(list, seen) {
     for (const e of entries()) {
       const ids = list.filter((r) => r.sourceId === e.id).map((r) => r.sessionId);
@@ -320,7 +321,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       if (fn) { try { Promise.resolve(fn(ids, !!seen)).catch(() => {}); } catch (_) { /* the source keeps its own record as it is */ } }
     }
   }
-  /* The conversation in front has been seen. */
   /*
    * The conversation in front is seen once it has stayed in front SEEN_AFTER_MS: a tab brought forward for a moment, as
    * a loader does to every restored tab, or passed over on the way to another, is not read. One the user marked unread
@@ -402,7 +402,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   /* ── actions ── */
   function runAction(e, action, ids, args) {
     const fn = sources.get(e.source, 'runSessionAction');
-    /* Opening only reads; every other action waits for the workspace to be trusted. */
+    /* Opening only reads; every other action is refused until the workspace is trusted. */
     if (typeof fn !== 'function' || (action !== 'open' && host.trusted && !host.trusted())) return Promise.resolve(resultsOf(null, ids, 'Agent Plus does nothing in Restricted Mode'));
     const prev = queues.get(e.id) || Promise.resolve();
     const go = prev.then(() => settle(Promise.resolve().then(() => fn.call(e.source, action, ids, args || {})), actionMs, null))
@@ -421,8 +421,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const e = entryOf(r.sourceId);
     if (!e) return 'gone';
     if (r.here) { await sources.call(e.source, 'reveal', [r.sessionId, { title: r.title, cwd: r.cwd }], false); return 'here'; }
-    /* One another window shows is brought forward there. When that window does not answer it is not opened here as well,
-       since two windows would then write the same conversation. */
+    /* A conversation shown in another window is brought forward in that window. If that window does not answer, it is
+       not opened here as well, since two windows would then write the same conversation. */
     const vs = r.elsewhere.find((x) => x.kind === 'vscode');
     if (vs) {
       const got = host.open ? await host.open({ sourceId: r.sourceId, sessionId: r.sessionId, title: r.title, cwd: r.cwd }) : 'nowhere';
@@ -721,7 +721,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return { text, actions: (Array.isArray(acts) ? acts : []).slice(0, 3).map((a, i) => ({ i, label: str(sources.get(a, 'label'), 40) }))
       .filter((a) => a.label) };
   }
-  /* Runs one of the buttons of a source's note. */
   function noticeAction(sourceId, i) {
     const e = entryOf(sourceId);
     const acts = e ? sources.get(rawNotice(e), 'actions') : null;
@@ -732,7 +731,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     Promise.resolve(vscode.commands.executeCommand(command, ...(Array.isArray(args) ? args : []))).catch((err) => say(`session list: ${command}: ${(err && err.message) || err}`));
   }
 
-  /* Runs one of the links of a source's Account & usage part. */
   function accountLink(sourceId, i) {
     const info = accountRaw(entryOf(sourceId));
     const links = sources.get(info, 'links');

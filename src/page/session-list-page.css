@@ -5,8 +5,8 @@
 /* Styles for the session list (src/page/session-list-page.js). Sizes follow Codex Plus's list, which follows Claude
    Code's: 28 px rows with 6 px corners, 26 px section headers, capitals for section labels. Each section header has a
    band of the theme's section header colour with a line above and below, so that the sections can be told apart at a
-   glance. Colours come from VS Code theme variables, except the status dots and the stripes, which keep fixed colours
-   so that the five dots look the same in every theme. */
+   glance. Colours come from VS Code theme variables, except the five status dots, which keep fixed colours so that they
+   look the same in every theme, and the light blue stripe of a row closed lately. */
 html, body { margin: 0; padding: 0; height: 100%; }
 body { background: var(--vscode-sideBar-background); color: var(--vscode-foreground); overflow: hidden; }
 .sl-root {
@@ -112,7 +112,7 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-link:hover { color: var(--vscode-textLink-activeForeground); }
 .sl-acct-sub { margin: 6px 0 0 22px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 14%, transparent); font-size: .8em; opacity: .7; text-transform: uppercase; letter-spacing: .4px; }
 .sl-acct-conv { margin-left: 22px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A row of a name and a value: the value goes under the name, at the right, when the two do not fit on one line. */
+/* A name and its value; when they do not fit on one line, the value wraps under the name, at the right. */
 .sl-kv { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; margin-left: 22px; }
 .sl-kv-k { opacity: .7; white-space: nowrap; }
 .sl-kv-v { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
@@ -168,11 +168,11 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-meta { display: flex; flex: none; align-items: center; gap: 4px; margin-left: auto; }
 .sl-pinned:not(.sl-hidden) + .sl-meta { margin-left: 4px; }
 .sl-time { opacity: .7; font-size: .9em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-/* Where else it is open, at the end of the row so that it is seen at a glance: another VS Code window or a terminal. */
+/* The icon at the end of a row for where else it is open: another VS Code window or a terminal. */
 .sl-away { display: inline-flex; color: var(--vscode-foreground); }
 .sl-away svg.sl-icon { width: 14px; height: 14px; }
-/* The hover buttons take the place of the time and the mark only while the pointer is on the row, so that a title runs
-   up to the time until then, and ends in an ellipsis before the buttons after. */
+/* The hover buttons replace the time and the mark only while the pointer or the arrow keys are on the row, so the
+   title can use that space the rest of the time. */
 .sl-actions { display: none; gap: 1px; }
 .sl-row:hover .sl-time, .sl-row.sl-hl .sl-time, .sl-row:hover .sl-away, .sl-row.sl-hl .sl-away { display: none; }
 .sl-row:hover .sl-actions, .sl-row.sl-hl .sl-actions { display: flex; }

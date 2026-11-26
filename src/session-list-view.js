@@ -4,13 +4,12 @@
 
 'use strict';
 /*
- * The session list's webview view (agentPlus.sessions): it hands the page (src/page/session-list-page.js) the model of
- * src/session-list.js, and hands the list what the page asks for. The page is sent a model only while it is on screen
- * and only when it differs from the last one sent.
+ * The session list's webview view (agentPlus.sessions). It posts the model of src/session-list.js to the page
+ * (src/page/session-list-page.js) and passes the page's requests back to the list. The page is sent a model only while
+ * it is on screen and only when it differs from the last one sent.
  *
  * Each agent's logo is an SVG file in the agent's own extension, outside this extension's folder, which the page may
- * not load from. The view reads it once and sends it as a data: URI, with any script taken out; an SVG drawn as an
- * image runs no script in any case.
+ * not load from. The view reads it once and sends it as a data: URI, with any script taken out.
  *
  * The view's badge counts the conversations that need the user, as Claude Code's own list does.
  */
@@ -38,7 +37,7 @@ function logoUri(file) {
 }
 
 class SessionListView {
-  /* `list` is src/session-list.js's; `extensionUri` this extension's folder. */
+  /* `list` is src/session-list.js's. */
   constructor(vscode, { list, extensionUri, say = () => {} }) {
     this.vscode = vscode;
     this.list = list;
@@ -68,7 +67,7 @@ class SessionListView {
     this.list.schedule();
   }
 
-  /* The model as the page draws it: with each agent's logo, in both forms. */
+  /* The model, with each agent's logo for light and dark themes. */
   pageModel() {
     const m = this.list.model();
     const out = Object.assign({}, m, { logos: {} });
@@ -92,14 +91,13 @@ class SessionListView {
     return true;
   }
 
-  /* Anything else for the page: { type: 'search' }, { type: 'startRenameGroup', groupId } and the like. */
+  /* Messages other than the model, such as { type: 'search' } and { type: 'startRenameGroup', groupId }. */
   tell(msg) {
     if (!this.view) return false;
     Promise.resolve(this.view.webview.postMessage(msg)).catch(() => {});
     return true;
   }
 
-  /* What the page asks for. */
   async receive(msg) {
     const list = this.list;
     const keys = Array.isArray(msg.keys) ? msg.keys.filter((k) => typeof k === 'string').slice(0, 2000) : [];

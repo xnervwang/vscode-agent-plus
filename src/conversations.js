@@ -64,8 +64,7 @@ function entry(c, plan, located) {
     row: q.num, title: q.title, question: q.question, since: q.since, state: q.state, note: q.note, detail: q.detail }));
   let state = c.running ? c.state : 'idle';
   if (questions.length && state !== 'prompt') state = 'needs';
-  /* The dot, as the session list draws it (src/session-rules.js): from what the agent itself is doing, and whether a
-     question was put after the user last wrote. */
+  /* The dot, as the session list draws it (src/session-rules.js). */
   const own = c.running === false ? 'stopped' : ACTIVITIES.includes(c.activity) ? c.activity : activityOfState(c.state);
   const asks = c.lastUserAt > 0 && questions.some((q) => q.since > c.lastUserAt);
   const top = nodes && nodes.find((n) => OPEN_STATES.includes(n.state));

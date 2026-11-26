@@ -3,6 +3,6 @@
 # Copyright (c) 2026, Xnerv Wang
 # All rights reserved.
 
-# Checks the suite and that the package starts once installed before a push (build/pre-push.sh). Turned on in a clone
-# with: git config core.hooksPath .githooks
+# Checks the suite and that the package starts once installed before a push. Turned on in a clone with:
+# git config core.hooksPath .githooks
 exec bash "$(git rev-parse --show-toplevel)/build/pre-push.sh"

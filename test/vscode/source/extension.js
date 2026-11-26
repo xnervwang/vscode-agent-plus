@@ -109,7 +109,7 @@ function activate(context) {
     },
     planNotice: () => state.notice,
     onDidChangePlanNotice: noticeChanged.event,
-    /* The session list. A conversation's session fields are the ones set() gave it. */
+    /* The session list. A conversation's session fields are the ones set() gave it, over sessionDefaults(). */
     listSessions: async ({ cursor, limit }) => {
       const all = [...list.values()].map((c) => Object.assign({ cwd: folder() }, sessionDefaults(c), c));
       const from = cursor ? Number(cursor) : 0;
@@ -170,8 +170,8 @@ function activate(context) {
   const thirdChanged = new vscode.EventEmitter();
   context.subscriptions.push(thirdChanged);
   const otherState = { calls: [], sidebar: [], imported: null }, thirdState = { calls: [], sidebar: [], imported: null };
-  /* A source whose conversations open nowhere: what it is asked to do is recorded, and one opened in the sidebar is shown
-     there. */
+  /* A source with no tabs of its own: what it is asked to do is recorded, and a conversation opened in the sidebar counts
+     as shown there. */
   const sessionsSource = (id, label, logo, m, ev, st, more) => Object.assign({
     protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows'],
     logo: { light: vscode.Uri.file(path.join(__dirname, logo)), dark: vscode.Uri.file(path.join(__dirname, logo)) },

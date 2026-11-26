@@ -4,14 +4,14 @@
 
 'use strict';
 /*
- * The session list's rules, as pure functions over plain values (docs/protocol.md, Session list): the dot of a row,
- * the stripe at its start, whether it is unread, the sections and their order, the filters and their counts, and what
- * may be archived or deleted, by hand or on its own. src/session-list.js gathers the values; the page draws the result.
+ * The session list's rules, as functions over plain values (docs/protocol.md, Session list): how a row is drawn, which
+ * section it goes in, what each filter keeps, and what may be archived or deleted. src/session-list.js gathers the
+ * values; the page draws the result.
  *
- * A row here is { key, sourceId, sessionId, title, lastActiveAt, lastReplyAt, viewedAt, activity, waitingFor, asks,
- * kind, here, elsewhere, pinned, archived, archivedAt, group, seenAt, unreadMark, closedAt }: what the source listed,
- * what this window and the other windows show, and what the store keeps for it. `asks` is whether the conversation's
- * plan asks the user a question put after the user's last message.
+ * A row here is { key, sourceId, sessionId, title, branch, lastActiveAt, lastReplyAt, viewedAt, activity, waitingFor,
+ * asks, kind, agentUnseen, here, elsewhere, pinned, archived, archivedAt, group, seenAt, unreadMark, closedAt }: what
+ * the source listed, what this window and the other windows show, and what the store keeps for it. `asks` is true when
+ * the conversation's plan has a question newer than the user's last message.
  */
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -33,10 +33,8 @@ function dotOf(row) {
 
 const needsYou = (row) => ['blue', 'red', 'redRing'].includes(dotOf(row));
 const runs = (row) => !!row && (row.activity === 'working' || row.activity === 'background');
-/* Running or waiting for the user: what the agent is in the middle of. */
 const busy = (row) => !!row && (runs(row) || row.activity === 'waiting');
 
-/* The stripe at the start of a row: open in this window, open somewhere else, or closed here lately. */
 function stripeOf(row) {
   if (!row) return '';
   if (row.here) return 'here';
@@ -54,7 +52,6 @@ function unread(row) {
   return +row.lastReplyAt > 0 && +row.lastReplyAt > seen;
 }
 
-/* Pinned first, then the rest, each newest first; the title, then the key, for rows that tie. */
 function compare(a, b) {
   if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
   const t = (+b.lastActiveAt || 0) - (+a.lastActiveAt || 0);
@@ -83,7 +80,6 @@ function sections(rows, { groups = [], recent = 10 } = {}) {
   return out;
 }
 
-/* Whether a row passes a filter. Open is open in this window. */
 function passes(row, filter) {
   if (filter === 'open') return !!row.here;
   if (filter === 'running') return runs(row);
@@ -99,8 +95,8 @@ function counts(rows) {
 }
 
 /*
- * Whether the list archives this conversation on its own: inactive for `days` days and none of open here or
- * elsewhere, running or waiting, a plan question, unread, in a group, pinned.
+ * Whether the list archives this conversation on its own: inactive for `days` days, and not open anywhere, running or
+ * waiting, asking a question, unread, in a group or pinned.
  */
 function archiveDue(row, { days, now = Date.now(), groups = null } = {}) {
   if (!(days > 0) || !row || row.archived || row.pinned) return false;
@@ -110,8 +106,7 @@ function archiveDue(row, { days, now = Date.now(), groups = null } = {}) {
   return last > 0 && now - last >= days * DAY_MS;
 }
 
-/* Why a conversation cannot be deleted now, or '' when it can: only an archived one that is not pinned, that nothing
-   has open and in which nothing runs. */
+/* Why a conversation cannot be deleted now, or '' when it can. */
 function deleteBlocker(row) {
   if (!row) return 'it is not in the list';
   if (!row.archived) return 'only an archived conversation can be deleted';

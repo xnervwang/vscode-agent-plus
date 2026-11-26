@@ -4,10 +4,8 @@
 
 'use strict';
 /*
- * The session list's host side (src/session-list.js) with three made-up sources standing in for Claude Code, Codex
- * and OpenCode: reading page by page, the import done once, rows and sections, this window's tabs and the one in
- * front, what was closed here, another window's conversations, every action, deleting with its checks, archiving and
- * deleting on their own in one window at a time, each source's own actions, and when the list will delete what.
+ * The session list's host side (src/session-list.js), with three made-up sources standing in for Claude Code, Codex
+ * and OpenCode.
  */
 const fs = require('fs');
 const path = require('path');
@@ -35,7 +33,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     return { vscode, control, registry, host, opened, entries, shared, folder, asks };
   }
 
-  /* A made-up source: its conversations, what it was asked to do, and what it was told was seen. */
+  /* A made-up source. It records the actions it is asked for and what the list marks as seen. */
   function source(id, list, { features = ['sessions', 'sessionImport', 'sessionSeen', 'shows'], imported = { archived: [], groups: [], pinned: [], colors: {} },
     own = [], caps = null } = {}) {
     const ev = new fake.EventEmitter(), close = new fake.EventEmitter();
@@ -70,7 +68,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const conv = (id, o = {}) => Object.assign({ sessionId: id, title: id, cwd: '/w', running: false, activity: 'stopped', createdAt: now0 - 30 * DAY,
     lastActiveAt: now0 - DAY, lastReplyAt: now0 - DAY }, o);
 
-  /* ── Reading page by page, and the import done once ── */
+  /* ── Reading the sources, and the import ── */
   {
     const t = setup();
     const many = Array.from({ length: 1200 }, (_, i) => conv(`c-${String(i).padStart(4, '0')}`));
@@ -88,14 +86,14 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([g.map((x) => x.name), rec('codex', 'c-0002').group === g[0].id, rec('codex', 'c-0001').archived, rec('codex', 'c-0001').archivedAt,
       rec('codex', 'c-0001').group, rec('codex', 'c-0003').pinned, rec('codex', 'c-0004').color, st.imported('codex') > 0, st.imported('claude-code')],
     [['Plugins'], true, true, now0 - 50 * DAY, null, true, 'green', true, 0],
-    'the import puts groups, archived (with its time, out of its group), pinned and colours in the store, once; a source that answers null is asked again');
+    'the import is done once and puts groups, pins, colours and archived conversations (with when, and out of their group) in the store; a source that answers null is asked again');
     await list.refresh({ relist: true });
     st.flush();
     eq([st.imported('claude-code'), st.groups().length], [0, 1], 'a source that still cannot read its list\'s state is not counted imported');
     codex.sessions.push(conv('c-late', { title: 'Read late' }));
     await list.refresh({ relist: true });
     eq([rec('codex', 'c-late').archived, list.model().sections.find((x) => x.key === 'archived').rows.some((r) => r.title === 'Read late')], [true, true],
-      'one the import named before the source listed it is archived once it is listed');
+      'a conversation the import names as archived before the source lists it is archived once it shows up');
     list.dispose();
   }
 
@@ -121,7 +119,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── A source's say over the conversation in front stops at another tab ── */
+  /* ── Which conversation is in front when a source says another is focused ── */
   {
     const t = setup();
     const codex = source('codex', [conv('a', { title: 'Alpha' }), conv('q', { title: 'Other tab' })]);
@@ -188,13 +186,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(list.model().front, '["codex","b"]', 'with a tab of a source in front, the conversation that source says is focused (its sidebar shown after the tab) is the one in front');
     codex.focused = '';
     await list.refresh();
-    eq(list.model().front, '["codex","a"]', 'and the tab\'s once the source no longer says so');
+    eq(list.model().front, '["codex","a"]', 'and the tab\'s conversation is in front again once the source stops saying so');
     await list.act('markUnread', ['["codex","a"]']);
     clock = now0 + 20000;
     await list.refresh();
     clock = now0 + 30000;
     await list.refresh();
-    eq(byTitle(list.model(), 'Alpha').unread, true, 'one marked unread while in front stays unread while it stays in front');
+    eq(byTitle(list.model(), 'Alpha').unread, true, 'a conversation marked unread while in front stays unread until it leaves the front');
     t.control.setTabs(tabsNow, 1);
     await list.refresh();
     t.control.setTabs(tabsNow, 0);
@@ -233,7 +231,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     oc.closed({ sessionId: 'ses_aaaaaaaaaaaaaaaaaaaaaaaaaa', where: 'sidebar' });
     await list.refresh();
     await list.reopenLast();
-    eq(oc.calls.pop(), ['open', ['ses_aaaaaaaaaaaaaaaaaaaaaaaaaa'], { where: 'sidebar' }], 'a source that tells its closings says where, and the list reopens it there');
+    eq(oc.calls.pop(), ['open', ['ses_aaaaaaaaaaaaaaaaaaaaaaaaaa'], { where: 'sidebar' }], 'a source that reports a closing says where it was shown, and the list reopens it there');
     list.dispose();
   }
 
@@ -249,7 +247,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([row('In a worktree').worktree, row('In a worktree').processes, row('In two processes').processes, /Open in 2 processes at once/.test(row('In two processes').hover),
       row('In one process').processes, /processes at once/.test(row('In one process').hover)],
     ['feature-x', 0, 2, true, 0, false],
-    'a row carries the name of the worktree its conversation is in, and the count of processes it is open in when that is more than one, said in its hover too');
+    'a row carries the name of the worktree its conversation is in, and how many processes have it open when more than one; its hover says so too');
     list.dispose();
   }
 
@@ -269,7 +267,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([row('In window B').stripe, row('In window B').elsewhere, /Open in the VS Code window "proj-b \[SSH: host-b\]"/.test(row('In window B').hover),
       row('Named by the source').hover.includes('a VS Code window'), /Runs in terminal pts\/3\n {2}pid 77/.test(row('In a terminal').hover)],
     ['elsewhere', true, true, false, true],
-    'another window\'s entry marks a row open elsewhere and names the window; the source\'s own guess at a VS Code window is dropped then; a terminal shows with its details');
+    'another window\'s entry marks a row open elsewhere and names that window, replacing the source\'s own guess at a VS Code window; a terminal is shown with its details');
     eq([await list.open('["codex","w"]'), t.opened.map((o) => o.sessionId), await list.open('["codex","z"]'), codex.calls.filter((c) => c[0] === 'open').length],
       ['sent', ['w'], 'elsewhere', 0], 'opening one open in another window brings that window forward; one open in a terminal is not opened here');
     t.host.open = async () => 'nowhere';
@@ -389,7 +387,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose(); list2.dispose();
   }
 
-  /* ── A source's note above the list, and a pass asked for at once ── */
+  /* ── A source's note above the list, and an immediate pass ── */
   {
     const t = setup();
     const ran = [];

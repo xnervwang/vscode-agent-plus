@@ -5,9 +5,7 @@
 'use strict';
 /*
  * What the session list keeps for a project (src/session-store.js), with two stores on one file standing in for two
- * windows: each keeps the other's changes, the change made last wins a field, the newest reply seen only grows, a
- * deleted group stays deleted, archiving moves a conversation out of its group and unpins it unless told to keep the
- * pin, and a lock left by a window that died is taken over.
+ * windows.
  */
 const fs = require('fs');
 const path = require('path');
@@ -30,7 +28,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   clock = 2000; b.setGroup([B], g); b.pin([B], true); b.flush();
   clock = 3000; a.color([A], 'green'); a.color([B], 'not a colour'); a.flush();
   eq([b.record(...A), b.record(...B)].map((r) => [r.group, r.pinned, r.color]), [[g, false, 'green'], [g, true, null]],
-    'each window keeps the other\'s changes, and a name that is not a colour clears the colour');
+    'both windows\' changes are kept, and an unknown colour name clears the colour');
 
   /* The same field from both: the later change wins, whichever is written last. */
   clock = 5000; b.color([A], 'red');
@@ -38,13 +36,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   b.flush(); a.flush();
   eq(a.record(...A).color, 'red', 'the change made last wins, whichever window writes last');
 
-  /* The newest reply seen only grows; marking unread and seeing it again. */
+  /* The newest reply seen only moves forward; an unread mark lasts until the conversation is seen again. */
   a.seen(...A, 900); b.seen(...A, 700); a.flush(); b.flush();
   clock = 6000; a.markUnread([A], true); a.flush();
   const marked = [b.record(...A).seenAt, b.record(...A).unreadMark];
   clock = 7000; b.seen(...A, 950); b.flush();
   eq([marked, [a.record(...A).seenAt, a.record(...A).unreadMark]], [[900, true], [950, false]],
-    'the newest reply seen never goes back; marking unread holds until the conversation is seen again');
+    'the newest reply seen only moves forward; marking unread holds until the conversation is seen again');
 
   /* Archiving. */
   clock = 8000; a.archive([B], true); a.flush();
@@ -61,7 +59,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   /* Groups: rename, order, delete. */
   const g2 = b.newGroup('Second'), g3 = b.newGroup('Third'); b.flush();
   a.moveGroup(g3, g); a.renameGroup(g2, 'Renamed'); a.flush();
-  eq(b.groups().map((x) => x.name), ['Third', 'Plugins work', 'Renamed'], 'groups keep the order the user put them in, and a rename');
+  eq(b.groups().map((x) => x.name), ['Third', 'Plugins work', 'Renamed'], 'groups keep the order the user put them in, and their new names');
   const C = ['opencode', 'ses_c'];
   a.setGroup([C], g); a.flush();
   clock = 13000; b.deleteGroup(g); b.flush();
@@ -86,7 +84,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   const held = [ro.flush(), ro.record('codex', 'ro').pinned, fs.existsSync(path.join(dir, 'readonly0000000a.json'))];
   may = true;
   eq([held, ro.flush(), fs.existsSync(path.join(dir, 'readonly0000000a.json'))], [[false, true, false], true, true],
-    'while it may not write, as in Restricted Mode, a change shows in this window only, and is written once it may');
+    'while writing is not allowed, as in Restricted Mode, a change shows only in this window and is written once it is allowed');
   ro.dispose();
   eq(b.keys().map((k) => k.join('/')).sort(), ['claude-code/s-b', 'codex/t-a', 'opencode/ses_c', 'opencode/ses_x'], 'keys lists every conversation the store has something for');
   a.markImported('codex'); a.swept(); a.flush();

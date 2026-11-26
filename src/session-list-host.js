@@ -4,15 +4,14 @@
 
 'use strict';
 /*
- * The session list put into the window (src/views.js builds it): the list itself (src/session-list.js) with what it
- * needs from this window, its webview view (src/session-list-view.js), the commands of its view title and
- * Ctrl+Shift+T, and the context key that gives Ctrl+Shift+T to the list only when a conversation was what this window
- * closed last.
+ * Sets up the session list in a window, for src/views.js: the list (src/session-list.js) with what it needs from this
+ * window, its webview view (src/session-list-view.js), the commands in its view title and Ctrl+Shift+T, and the
+ * context key that gives Ctrl+Shift+T to the list only when the last thing this window closed was a conversation.
  *
- * A conversation asks the user a question when its plan has a question row put after the user's last message, as for
- * the Conversations view (src/conversations.js activityOf). Plans are read only for conversations active in the last
- * ASKS_DAYS days, since the list may hold thousands, and for those open here or elsewhere or running whatever their age,
- * which the status bar's count covers too.
+ * A conversation counts as asking the user something when a question row in its plan is newer than the user's last
+ * message, as in the Conversations view (src/conversations.js activityOf). Plans are read only for conversations active
+ * in the last ASKS_DAYS days, since the list may hold thousands, plus any that are open or running, however old, as
+ * the status bar's count covers those too.
  */
 const sources = require('./sources');
 const { planQuestions } = require('./folders');
@@ -62,7 +61,6 @@ function startSessionList(host, opts = {}) {
   keep(vscode.window.registerWebviewViewProvider(VIEW_ID, view));
   keep({ dispose: () => view.dispose() });
 
-  /* A tab closed: a conversation's sets the key, anything else's clears it. */
   const groups = vscode.window.tabGroups;
   if (groups && typeof groups.onDidChangeTabs === 'function') {
     keep(groups.onDidChangeTabs((e) => {
@@ -112,8 +110,8 @@ function startSessionList(host, opts = {}) {
       qp.onDidHide(() => qp.dispose());
       qp.show();
     },
-    /* Ctrl+Shift+T while a conversation was closed last: the conversation; with none left to reopen, the editor VS Code
-       would have reopened. */
+    /* Ctrl+Shift+T after a conversation was closed reopens it; when no closed conversation is left, it reopens the
+       editor VS Code would have. */
     reopenClosedConversation: async () => {
       const r = await list.reopenLast();
       if (r !== null) return;

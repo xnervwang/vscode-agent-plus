@@ -4,10 +4,10 @@
 
 'use strict';
 /*
- * What the core tells sources about the session list (docs/protocol.md, What the core tells sources): 'sessionList' among
- * its features, sessionListManages() true while the list archives and deletes on its own in this window and false in
- * Restricted Mode, sessionDeletionDue() saying when each conversation will be deleted, and its event when that changes,
- * here because the user turned deleting on its own off.
+ * What the core tells sources about the session list (docs/protocol.md): 'sessionList' among its features,
+ * sessionListManages() true while the list archives and deletes on its own in this window and false in Restricted Mode,
+ * sessionDeletionDue() saying when each conversation will be deleted, and its event when that changes, here because the
+ * user turned off agentPlus.sessions.deleteArchived.
  */
 const path = require('path');
 const { boot } = require('../boot');

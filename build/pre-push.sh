@@ -3,10 +3,10 @@
 # Copyright (c) 2026, Xnerv Wang
 # All rights reserved.
 
-# What a push of Agent Plus is checked for first (.githooks/pre-push runs it): the suite, the package build/pack.sh
-# makes, and that package installed in a VS Code of its own, where the window test's first two steps need Agent Plus
-# started: "alone" waits for its notice, "first-start" for a source to register with it. A file the package leaves out
-# that the extension loads stops it there, which the suite, run from the repository, cannot see.
+# .githooks/pre-push runs this before a push. It runs the suite, builds the package with build/pack.sh, and installs
+# that package in a separate VS Code, where the window test's first two steps need Agent Plus started: "alone" waits
+# for its notice, "first-start" for a source to register with it. A file the extension loads but the package leaves
+# out stops it there, and the suite cannot see that, as it runs from the repository.
 #
 # Needs what test/vscode/run.js needs: @vscode/test-electron and playwright-core where node finds them (NODE_PATH), and
 # on Linux a display, or xvfb-run. AGENT_PLUS_VSCODE names a VS Code executable to run instead of downloading one; the
@@ -32,7 +32,7 @@ if [ -n "${AGENT_PLUS_VSCODE:-}" ]; then
   if [ -n "$worker" ]; then cp "$worker" "$out/service-worker.js"; trap 'cp "$out/service-worker.js" "$worker"' EXIT; fi
 fi
 if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ]; then
-  # A display number of its own, as another run under xvfb-run -a can take the same one at the same time.
+  # A random display number, as another run under xvfb-run -a can take the same one at the same time.
   run=(xvfb-run -n $((200 + RANDOM % 700)) -s '-screen 0 1600x1000x24' "${run[@]}")
 fi
 if AGENT_PLUS_UI_STEPS='^(alone|first-start)$' "${run[@]}" > "$out/window.log" 2>&1; then
