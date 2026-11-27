@@ -202,7 +202,7 @@
     if (!r._editing) markTitle(r);
     r._p.title.style.color = themeColor(row.color);
     const marks = [];
-    if (row.steward) { const c = el('span', 'sl-crown'); c.appendChild(icon('crown')); c.title = 'A steward: it looks after other conversations'; marks.push(c); }
+    if (row.steward) { const c = el('span', 'sl-crown'); c.appendChild(icon('crown')); c.title = 'A supervisor: it looks after other conversations'; marks.push(c); }
     if (row.unread) { const u = el('span', 'sl-unread'); u.appendChild(icon('mail')); u.title = 'Has a reply you have not read'; marks.push(u); }
     for (const b of row.badges || []) { const x = el('span', b.dim ? 'sl-badge sl-dim' : 'sl-badge', b.text); if (b.tooltip) x.title = b.tooltip; marks.push(x); }
     if (row.worktree) marks.push(el('span', 'sl-badge', row.worktree));

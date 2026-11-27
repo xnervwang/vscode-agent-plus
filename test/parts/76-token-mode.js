@@ -298,7 +298,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const picked = await a.control.state.handlers['agentPlus.chooseTokenMode']();
     eq(shown && shown.items, [
       { label: 'Interface features', description: 'no tokens', detail: 'Adds nothing to the agent\'s context, and unloads the work plan plugin.' },
-      { label: 'Essential features', description: '$(check) current', detail: 'Adds the work plan and time-zone note, plus notes for reply images or a steward.' },
+      { label: 'Essential features', description: '$(check) current', detail: 'Adds the work plan and time-zone note, plus notes for reply images or a supervisor.' },
       { label: 'All features', description: 'default', detail: 'Adds every feature, including the brief, wake-ups and detached-command notices.' },
       { label: 'Custom', description: '', detail: 'Each feature follows its own setting; all are on until you turn one off.' },
     ], 'the list has the four modes, the one in effect ticked in its description, each with a short mark and a line saying what it adds');

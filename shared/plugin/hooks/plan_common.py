@@ -643,9 +643,10 @@ def turn_began(plan, payload):
     return float(began) if isinstance(began, (int, float)) and not isinstance(began, bool) else None
 
 
-# What Claude Code Plus sends a steward conversation. Claude Code puts one of its lines for a message from another session
-# before it, with or without a cross-session-message tag.
-STEWARD_NOTICE = "Steward notice from Claude Code Plus"
+# How a notice Claude Code Plus sends a steward conversation begins. Its builds write either form, and transcripts keep
+# both. Claude Code puts one of its lines for a message from another session before it, with or without a
+# cross-session-message tag.
+STEWARD_NOTICES = ("Supervisor notice from Claude Code Plus", "Steward notice from Claude Code Plus")
 PEER_LEAD = (r"(?:Another Claude session sent a message(?: while you were working)?"
              r"|A peer session sent a message while you were working):")
 PEER_TAG = r"<cross-session-message\b[^>]*>"
@@ -654,8 +655,8 @@ PEER_START = re.compile(r"\s*(?:%s|%s)" % (PEER_LEAD, PEER_TAG))
 
 
 def steward_notice(prompt):
-    """Whether the text a turn began with starts with STEWARD_NOTICE, wrapped or not; quoting one does not count."""
-    return isinstance(prompt, str) and prompt.startswith(STEWARD_NOTICE, PEER_WRAPPER.match(prompt).end())
+    """Whether the text a turn began with starts with one of STEWARD_NOTICES, wrapped or not; quoting one does not count."""
+    return isinstance(prompt, str) and prompt.startswith(STEWARD_NOTICES, PEER_WRAPPER.match(prompt).end())
 
 
 def peer_message(prompt):

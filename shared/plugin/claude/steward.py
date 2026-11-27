@@ -7,7 +7,7 @@
 """UserPromptSubmit hook: for a steward, list the conversations it manages and the state of each; for a managed
 conversation, name the stewards that watch it.
 
-Claude Code Plus's Steward panel keeps who manages whom in stewards.json in this plugin's data directory
+Claude Code Plus's Supervisor panel keeps who manages whom in stewards.json in this plugin's data directory
 (src/stewards.js in the extension).
 
 Each managed conversation gets one line: its state from Claude Code's session records, what its plan has in progress,
@@ -53,8 +53,10 @@ TITLE_CHARS = 80
 STATE_WORDS = {"busy": "working", "shell": "running a command", "waiting": "waiting for the user", "idle": "idle"}
 STOPPED = "not running"
 RELAY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "steward-relay.py")
-SKILL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", "steward", "SKILL.md")
-SKILL_CHANGED = ("The steward skill has changed since your previous turn (it is now version %s): load it again with the "
+# The skill folder's name is the skill's name, and a plugin may ship the skill under either of these.
+SKILLS = [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", name, "SKILL.md")
+          for name in ("supervisor", "steward")]
+SKILL_CHANGED = ("The supervisor skill has changed since your previous turn (it is now version %s): load it again with the "
                  "Skill tool before you act, and follow the new one where the two differ.")
 WORKING_FILE = "working.json"
 OTHERS_HINT = ("The conversations of other agents above take only plain messages: no `--rename`, `--close` or `--resume`. "
@@ -155,12 +157,12 @@ def watched(over, table):
             "unrelated to the work here, or better done by another one), do not start background work for it here: run %s "
             "with a here-document holding the user's words, where it should go (a session id, or a folder for a new "
             "conversation) and why, and say in one sentence what it answered.%s"
-            % ("Stewards" if several else "A steward,", who + (" watch" if several else ", watches"),
+            % ("Supervisors" if several else "A supervisor,", who + (" watch" if several else ", watches"),
                "they" if several else "it", "read" if several else "reads", "speak" if several else "speaks",
-               '`Sent by the steward "<title>" (<session id>) for the user:`', "them" if several else "it",
+               '`Sent by the supervisor "<title>" (<session id>) for the user:`', "them" if several else "it",
                "they" if several else "it", "see" if several else "sees", handoff,
-               (" It goes to the steward whose message started this turn, or else to the one the user last typed to; to "
-                "hand it to another of them, add --to and that steward's session id.") if several else ""))
+               (" It goes to the supervisor whose message started this turn, or else to the one the user last typed to; to "
+                "hand it to another of them, add --to and that supervisor's session id.") if several else ""))
 
 
 def lines_of(ids, names, now, directory, paths=None):
@@ -187,23 +189,25 @@ def lines_of(ids, names, now, directory, paths=None):
 
 
 def skill_version():
-    """The first 8 hex digits of the SHA-1 of the steward skill's file, or '' when it cannot be read."""
-    try:
-        with open(SKILL, "rb") as fh:
-            return hashlib.sha1(fh.read()).hexdigest()[:8]
-    except OSError:
-        return ""
+    """The first 8 hex digits of the SHA-1 of the first of SKILLS that can be read, or '' when none can."""
+    for path in SKILLS:
+        try:
+            with open(path, "rb") as fh:
+                return hashlib.sha1(fh.read()).hexdigest()[:8]
+        except OSError:
+            continue
+    return ""
 
 
 def lead(ids):
     others = [steward_table.label_of(m) for m in ids if steward_table.is_other(m)]
     if not others:
-        return ("You are the steward of %d Claude Code conversation%s the user picked for you in the Steward panel; "
-                "follow the steward skill. %s" % (len(ids), "" if len(ids) == 1 else "s", RELAYED))
+        return ("You are the supervisor of %d Claude Code conversation%s the user picked for you in the Supervisor panel; "
+                "follow the supervisor skill. %s" % (len(ids), "" if len(ids) == 1 else "s", RELAYED))
     counts = ["%d Claude Code" % (len(ids) - len(others))] if len(ids) > len(others) else []
     counts += ["%d %s" % (others.count(label), label) for label in sorted(set(others))]
-    return ("You are the steward of %d conversation%s the user picked for you in the Steward panel (%s); "
-            "follow the steward skill. %s" % (len(ids), "" if len(ids) == 1 else "s", ", ".join(counts), RELAYED))
+    return ("You are the supervisor of %d conversation%s the user picked for you in the Supervisor panel (%s); "
+            "follow the supervisor skill. %s" % (len(ids), "" if len(ids) == 1 else "s", ", ".join(counts), RELAYED))
 
 
 def block(ids, names, now, seen, lines):

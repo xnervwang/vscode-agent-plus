@@ -171,9 +171,10 @@ def stewards_of(table, sid):
     return [s for s in table if manages(table, s, sid)]
 
 
-# The first line that fromLine in src/stewards.js puts on a steward's message.
-FROM = re.compile(r'^Sent by the steward (?:"(.*)" )?\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)'
-                  r' for the user:[ \t]*$')
+# The first line that fromLine in src/stewards.js puts on a steward's message. Builds of Claude Code Plus write either
+# "supervisor" or "steward" there, and transcripts keep lines of both, so both are read, in any case.
+FROM = re.compile(r'^Sent by the (?:supervisor|steward) (?:"(.*)" )?\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)'
+                  r' for the user:[ \t]*$', re.IGNORECASE)
 
 
 def sender_of(text):

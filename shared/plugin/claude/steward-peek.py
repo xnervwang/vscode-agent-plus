@@ -17,7 +17,7 @@ typed into it, also while a turn ran, and not messages from other sessions or no
 against them. Read-only.
 
 For another agent's conversation, whose key is "<source id>:<session id>" (steward_table.py), the state comes from
-Agent Plus's attention files (agent_states.py) and the plan from the path the Steward panel recorded in stewards.json.
+Agent Plus's attention files (agent_states.py) and the plan from the path the Supervisor panel recorded in stewards.json.
 The latest reply and --said come from <session id>.reply.json, which its agent writes beside that plan at the end of
 each turn: { format, at, lastUserAt, said: [{ text, at }], reply }, cut to the limits below already.
 """
@@ -30,7 +30,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from plan_common import OPEN_STATES, children, listed, open_tail  # noqa: E402
+from plan_common import OPEN_STATES, STEWARD_NOTICES, children, listed, open_tail  # noqa: E402
 import plan_agent as A  # noqa: E402
 from proc_alive import alive  # noqa: E402
 import agent_states  # noqa: E402
@@ -41,7 +41,7 @@ MAX_REPLY_CHARS = 6000
 MAX_SAID = 5
 MAX_SAID_CHARS = 2000
 # Text that reaches a conversation as a user message without the user typing it.
-NOT_TYPED = ("<cross-session-message", "<task-notification", "Steward notice from Claude Code Plus", "Handoff from ")
+NOT_TYPED = ("<cross-session-message", "<task-notification") + STEWARD_NOTICES + ("Handoff from ",)
 STATE_WORDS = {"busy": "working", "shell": "running a command", "waiting": "waiting for the user", "idle": "idle"}
 REPLY_SUFFIX = ".reply.json"
 REPLY_FORMAT = 1
@@ -197,7 +197,7 @@ def utc(ms):
 def print_said(found):
     for at, text in found:
         sender = steward_table.sender_of(text)
-        by = " (sent by the steward %s, not typed by the user there)" % (
+        by = " (sent by the supervisor %s, not typed by the user there)" % (
             '"%s" (%s)' % (sender[1], sender[0]) if sender[1] else sender[0]) if sender else ""
         print(("%s UTC" % at if at else "(no time)") + by + ":")
         print("  " + (text if len(text) <= MAX_SAID_CHARS else text[:MAX_SAID_CHARS] + "...").replace("\n", "\n  "))
@@ -216,7 +216,7 @@ def peek_other(key, directory, said_only):
     print("source: " + steward_table.label_of(key))
     print("state: " + agent_states.words(agent_states.read().get(key)))
     print("plan:")
-    for line in plan_lines(plan) if plan else ["(where its plan is was not recorded; the Steward panel records it when the "
+    for line in plan_lines(plan) if plan else ["(where its plan is was not recorded; the Supervisor panel records it when the "
                                                "conversation is ticked)"]:
         print("  " + line)
     print("latest reply:")

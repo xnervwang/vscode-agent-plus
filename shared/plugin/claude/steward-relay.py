@@ -23,7 +23,7 @@
     <a message for it, sent once it is open>
     EOF]
     python3 steward-relay.py --windows [<plugin data directory>]
-    python3 steward-relay.py --handoff [--to <steward session id>] [<plugin data directory>] <<'EOF'
+    python3 steward-relay.py --handoff [--to <supervisor session id>] [<plugin data directory>] <<'EOF'
     <the user's words, where they should go, and why>
     EOF
     python3 steward-relay.py --take <session id, key or exact title> [<plugin data directory>]
@@ -47,7 +47,7 @@ sends it the message and prints its session id, or says that no window has the f
 --resume opens a conversation that no window shows, in an editor tab of the VS Code window whose first folder is the one
 Claude Code keeps the conversation under, since Claude Code finds a window's stored conversations only there, and then
 sends it the message, if one is given. It is not done while a window shows the conversation or another process runs it;
-it says which. A conversation opened with --open or --resume is then ticked for this steward in the Steward panel; the
+it says which. A conversation opened with --open or --resume is then ticked for this steward in the Supervisor panel; the
 printed answer mentions the tick.
 
 --handoff is run from a conversation a steward manages, not from the steward: it gives a steward something the
@@ -55,7 +55,7 @@ conversation thinks belongs elsewhere, as a notice that is not the user's messag
 --to, which must be one of the conversation's stewards. Without --to, it goes to the steward whose message started
 this turn, or else to the one the user last typed to.
 
---take and --drop tick or untick one conversation for this steward in the Steward panel, named by its session id, its
+--take and --drop tick or untick one conversation for this steward in the Supervisor panel, named by its session id, its
 key, or its exact title (in a here-document instead, when it is awkward in a command line). --all turns "All, including
 new ones" on or off, and --new "New conversations". The window that shows the steward makes the change only when the
 latest message before this command in the steward conversation is one the user typed there; otherwise it prints why.
@@ -103,7 +103,7 @@ SAID = {
 }
 SENT_OTHER = "Sent: it reached the conversation as the user's message."
 DRAFTED = "Not sent: the text was left in the conversation's message input as a draft."
-NO_ACTIONS = ("Not done: a steward can only send plain messages to %(label)s conversations; the user renames, closes "
+NO_ACTIONS = ("Not done: a supervisor can only send plain messages to %(label)s conversations; the user renames, closes "
               "or reopens one in %(label)s.")
 
 
@@ -119,14 +119,14 @@ MODIFIERS = ("--confirmed", "--windows", "--anyway")
 SENDS_FILE = "sends.json"
 RECENT_SECONDS = 30 * 60
 RECENT_CHARS = 300
-TICKED = " It is now ticked for you in the Steward panel."
+TICKED = " It is now ticked for you in the Supervisor panel."
 DONE = {
     "--rename": "Renamed.",
     "--close": "Closed: the conversation's tab was closed; it is not deleted and can be opened again from the session list.",
     "--open": "Opened: a new conversation was started and its first message sent.",
 }
-HANDED = ("Handed off to the steward %s: it was told, in a notice that is not the user's message. Say so in one sentence in "
-          "your reply and leave it to the steward.")
+HANDED = ("Handed off to the supervisor %s: it was told, in a notice that is not the user's message. Say so in one sentence in "
+          "your reply and leave it to the supervisor.")
 NOT_HANDED = " Say in your reply where it seems to belong, so the user decides."
 HEAD_BYTES = 64 * 1024
 CWD = re.compile(r'"cwd":"((?:[^"\\]|\\.)*)"')
@@ -233,7 +233,7 @@ def resume_check(data, sid):
         managed = manages(stewards_table(data), os.environ.get("CLAUDE_CODE_SESSION_ID", "").lower(), sid)
         return ['Not done: it is already open in the VS Code window "%s"; a plain send reaches it there%s.'
                 % (showing[0].get("name") or "(untitled)",
-                   "" if managed else " once the user ticks it for this steward in the Steward panel")], ""
+                   "" if managed else " once the user ticks it for this supervisor in the Supervisor panel")], ""
     path = transcript(sid)
     if not path:
         return ["Not done: no conversation with that session id was found under %s." % os.path.join(claude_dir(), "projects")], ""
@@ -252,13 +252,13 @@ def handoff_check(data, me, to=""):
     table = stewards_table(data)
     theirs = steward_table.stewards_of(table, me)
     if not theirs:
-        return "Not done: no steward manages this conversation, so it cannot be handed off." + NOT_HANDED
+        return "Not done: no supervisor manages this conversation, so it cannot be handed off." + NOT_HANDED
     if to and to not in theirs:
-        return ("Not done: %s does not manage this conversation. Its stewards are %s."
+        return ("Not done: %s does not manage this conversation. Its supervisors are %s."
                 % (to, ", ".join(steward_table.name_of(table, s) for s in theirs)))
     if not any(shows(w, s) for w in windows(data) for s in ([to] if to else theirs)):
-        return ("Not done: that steward is not open in a VS Code window." if to else
-                "Not done: no steward of this conversation is open in a VS Code window, so none can be told.") + NOT_HANDED
+        return ("Not done: that supervisor is not open in a VS Code window." if to else
+                "Not done: no supervisor of this conversation is open in a VS Code window, so none can be told.") + NOT_HANDED
     return ""
 
 
@@ -277,7 +277,7 @@ def recent_sends(data, target, me, now):
 
 
 def recent_lines(sends, now):
-    lines = ["Not sent: another steward sent this conversation a message in the last %d minutes:" % (RECENT_SECONDS // 60)]
+    lines = ["Not sent: another supervisor sent this conversation a message in the last %d minutes:" % (RECENT_SECONDS // 60)]
     for e in sends:
         who = '"%s" (%s)' % (e.get("title"), e.get("steward")) if e.get("title") else str(e.get("steward"))
         minutes = int((now * 1000 - e["at"]) // 60000)
@@ -317,7 +317,7 @@ def read_input():
 
 USAGE = ("usage: steward-relay.py [--anyway | --rename | --close [--confirmed] | --open | --resume]"
          " <session id or folder> [<plugin data directory>] < text\n"
-         "       steward-relay.py --handoff [--to <steward session id>] [<plugin data directory>] < text\n"
+         "       steward-relay.py --handoff [--to <supervisor session id>] [<plugin data directory>] < text\n"
          "       steward-relay.py --take | --drop <session id, key or title> [<plugin data directory>]\n"
          "       steward-relay.py --all | --new on|off [<plugin data directory>]")
 
@@ -365,7 +365,7 @@ def main(argv):
         return 2
     other = not opening and not handing and not switching and not naming and steward_table.is_other(steward_table.managed_id(target))
     if other and not steward_table.allowed(target):
-        print("Not done: a steward cannot send to conversations of %s." % steward_table.label_of(target))
+        print("Not done: a supervisor cannot send to conversations of %s." % steward_table.label_of(target))
         return 1
     if other and action:
         print(NO_ACTIONS % {"label": steward_table.label_of(target)})
@@ -374,7 +374,7 @@ def main(argv):
     if not SESSION_NAME.match(steward):
         print("Not done: CLAUDE_CODE_SESSION_ID is not set, so this was not run from a Claude Code conversation."
               if action == "--handoff" else
-              "Not done: CLAUDE_CODE_SESSION_ID is not set, so this was not run from the steward conversation.")
+              "Not done: CLAUDE_CODE_SESSION_ID is not set, so this was not run from the supervisor conversation.")
         return 1
     resuming = action == "--resume"
     text = ""
@@ -453,7 +453,7 @@ def main(argv):
                 print(DONE.get(action, SENT_OTHER if other else SAID["submitted"]) + (TICKED if r.get("ticked") is True else ""))
                 if opening:
                     sid = r.get("sessionId") or ""
-                    print("Session id: %s" % sid if sid else "Its session id was not known yet; it is in the Steward panel.")
+                    print("Session id: %s" % sid if sid else "Its session id was not known yet; it is in the Supervisor panel.")
                 return 0
             if outcome == "drafted" and not action:
                 print(DRAFTED)
@@ -472,11 +472,11 @@ def main(argv):
             for line in window_lines(windows(data)):
                 print("  " + line)
         elif handing:
-            print("Not done: no VS Code window that shows a steward of this conversation took the request." + NOT_HANDED)
+            print("Not done: no VS Code window that shows a supervisor of this conversation took the request." + NOT_HANDED)
         elif action in LIST:
-            print("Not done: no VS Code window that shows this steward conversation took the request.")
+            print("Not done: no VS Code window that shows this supervisor conversation took the request.")
         elif other:
-            print("Not done: no VS Code window that shows this steward conversation took the request.")
+            print("Not done: no VS Code window that shows this supervisor conversation took the request.")
         else:
             print("Not done: no VS Code window that shows that conversation took the request. If no window has it open, "
                   "--resume opens it.")

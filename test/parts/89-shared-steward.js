@@ -5,7 +5,8 @@
 'use strict';
 /*
  * A turn started by a notice Claude Code Plus sends a steward conversation, in the shared Python: the injection marks
- * the turn, and the end-of-turn and no-doing reminders keep quiet for it.
+ * the turn, and the end-of-turn and no-doing reminders keep quiet for it. A notice begins "Supervisor notice" or, from
+ * other builds, "Steward notice".
  */
 const cp = require('child_process');
 const fs = require('fs');
@@ -13,7 +14,8 @@ const path = require('path');
 
 const AGENTS = ['claude', 'codex'];
 const SID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-const NOTICE = 'Steward notice from Claude Code Plus, not a message from the user: "Fix the build" is waiting for you.';
+const NOTICE = 'Supervisor notice from Claude Code Plus, not a message from the user: "Fix the build" is waiting for you.';
+const OLD_NOTICE = 'Steward notice from Claude Code Plus, not a message from the user: "Fix the build" is waiting for you.';
 /* The three lines Claude Code 2.1.322 puts before a message from another session, each with and without the tag. */
 const LEADS = ['Another Claude session sent a message:', 'Another Claude session sent a message while you were working:',
   'A peer session sent a message while you were working:'];
@@ -91,14 +93,15 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const plain = turn(agent, 'plain', 'Fix the build.');
     eq([plain.notice, plain.reminded, /status/i.test(plain.stopped)], [false, 1, true],
       `${agent}: an ordinary turn that works without a doing row is reminded once and asked for its status at the end`);
-    for (const [i, [label, prompt]] of [['on its own', NOTICE], ...DELIVERED].entries()) {
+    for (const [i, [label, prompt]] of [['on its own', NOTICE], ...DELIVERED, ['that begins "Steward notice"', OLD_NOTICE],
+      ['that begins "Steward notice", after lead 1 and the tag', `${LEADS[0]}\n${TAG}\n${OLD_NOTICE}\n</cross-session-message>`]].entries()) {
       const n = turn(agent, `notice-${i}`, prompt);
       eq([n.notice, n.reminded, n.stopped], [true, 0, ''],
-        `${agent}: a turn begun by a steward notice ${label} is marked so, and neither reminder speaks in it`);
+        `${agent}: a turn begun by a supervisor notice ${label} is marked so, and neither reminder speaks in it`);
     }
     for (const [i, [label, prompt]] of [['a message from another session', OTHER_PEER], ['a message that quotes a notice', QUOTED]].entries()) {
       const n = turn(agent, `other-${i}`, prompt);
-      eq([n.notice, n.reminded, /status/i.test(n.stopped)], [false, 1, true], `${agent}: ${label} is not a steward notice`);
+      eq([n.notice, n.reminded, /status/i.test(n.stopped)], [false, 1, true], `${agent}: ${label} is not a supervisor notice`);
     }
     const reading = turn(agent, 'plain-reading', 'What is in the folder?', 'ls');
     eq([reading.reminded, /status/i.test(reading.stopped)], [1, true],

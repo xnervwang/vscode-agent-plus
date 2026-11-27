@@ -26,7 +26,7 @@ const MODES = Object.freeze([
   { id: 'interface', label: 'Interface features', short: 'Interface', note: 'no tokens',
     detail: 'Adds nothing to the agent\'s context, and unloads the work plan plugin.' },
   { id: 'essential', label: 'Essential features', short: 'Essential', note: '',
-    detail: 'Adds the work plan and time-zone note, plus notes for reply images or a steward.' },
+    detail: 'Adds the work plan and time-zone note, plus notes for reply images or a supervisor.' },
   { id: 'all', label: 'All features', short: 'All', note: 'default',
     detail: 'Adds every feature, including the brief, wake-ups and detached-command notices.' },
   { id: CUSTOM, label: 'Custom', short: 'Custom', note: '',
