@@ -1931,6 +1931,21 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await theme(THEMES.dark);
     await showSessions('agentPlus.sessions');
     await sleep(800);
+    /* Three pinned rows whose times read some minutes, 4d and 21d: their pins line up in one column. */
+    await patch('sl-month', { lastActiveAt: Date.now() - 4 * DAY });
+    for (const t of [SLT.month, SLT.weeks]) await slAct(t, 'pin');
+    const pinsAt = async () => sl.evaluate((ts) => ts.map((t) => {
+      const r = [...document.querySelectorAll('.sl-row')].find((x) => x.querySelector('.sl-title').textContent === t);
+      const pin = r && r.querySelector('.sl-pinned');
+      return pin && !pin.classList.contains('sl-hidden') ? [r.querySelector('.sl-time').textContent, Math.round(pin.getBoundingClientRect().right)] : null;
+    }), [SLT.quiet, SLT.month, SLT.weeks]);
+    const column = await until(async () => { const p = await pinsAt(); return p.every(Boolean) && /^\d+m$/.test(p[0][0]) && p[1][0] === '4d' && p[2][0] === '21d' && p; }, 8000, 300) || await pinsAt();
+    await slAway();
+    await sleep(300);
+    await look('sessions-pin-column', { expect: 'The first rows of Ungrouped are three pinned conversations, Quiet for three weeks (21d), Quiet for a month (4d) and Nothing going on (a few minutes, such as 9m), in some order. Their purple pins stand in one column, one above the other, whether the time after the pin is two or three characters wide.' }, sidebarBox());
+    check(column.every(Boolean) && new Set(column.map((x) => x && x[1])).size === 1, 'pinned rows keep their pins in one column whatever the width of the time after them', column);
+    for (const t of [SLT.month, SLT.weeks]) await slAct(t, 'unpin');
+    await patch('sl-month', { lastActiveAt: Date.now() - 30 * DAY });
     await slAct(SLT.unread, 'rename');
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('Review the archive sweep');

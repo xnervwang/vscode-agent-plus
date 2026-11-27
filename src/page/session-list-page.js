@@ -212,8 +212,8 @@
     /* button() sets a title on each, and the browser would draw that tooltip over showTip's box. */
     for (const b of [pin, unpin, rename, archive, restore]) b.removeAttribute('title');
     acts.append(pin, unpin, rename, archive, restore);
-    meta.append(away, time, acts);
-    r.append(stripe, logo, title, marks, pinned, meta);
+    meta.append(away, pinned, time, acts);
+    r.append(stripe, logo, title, marks, meta);
     r._p = { stripe, img, dot, title, marks, pinned, away, time, pin, unpin, rename, archive, restore };
     r._sig = '';
     return r;
