@@ -13,7 +13,12 @@
  * is hovered.
  *
  * Collapsed sections, the filter, the agents hidden and the search are saved with setState, so they survive VS Code
- * dropping the page while the view is hidden.
+ * dropping the page while the view is hidden. Account & usage, Recently closed and Archived start collapsed.
+ *
+ * While the pointer is on the sections, a menu of the list is open, or the arrow keys are on a row, the rows of each
+ * section keep the order they are drawn in, so that a row does not move away from under a click; the model's order is
+ * drawn once none of these holds, as when the pointer moves up to the New bar or out of the view. A row new to a
+ * section still appears where the model puts it.
  */
 (function () {
   'use strict';
@@ -24,7 +29,7 @@
 
   const saved = host.getState() || {};
   const ui = {
-    collapsed: Object.assign({ closed: true, archived: true }, saved.collapsed || {}),
+    collapsed: Object.assign({ account: true, closed: true, archived: true }, saved.collapsed || {}),
     filter: ['all', 'open', 'running', 'needs'].includes(saved.filter) ? saved.filter : 'all',
     hidden: Object.assign({}, saved.hidden || {}),
     search: typeof saved.search === 'string' ? saved.search : '',
@@ -96,6 +101,34 @@
     if (label && label.scrollWidth > label.clientWidth + 1) newBar.classList.add('sl-tight');
   }
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => fitNew()).observe(newBar);
+  /*
+   * The default half's colour under the pointer. Where the theme's button hover colour is hard to tell from the button's
+   * own, as in VS Code's default themes or a theme that gives both the same, it is the button's colour mixed 18% with
+   * black, or with white under dark text, so that the text stays as readable.
+   */
+  const HOVER_MIN_RATIO = 1.3;
+  function fitHover() {
+    const css = getComputedStyle(document.documentElement);
+    const probe = el('span');
+    probe.style.display = 'none';
+    root.appendChild(probe);
+    const rgb = (name) => {
+      if (!css.getPropertyValue(name).trim()) return null;
+      probe.style.color = `var(${name})`;
+      const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(probe).color);
+      return m ? m.slice(1, 4).map(Number) : null;
+    };
+    const bg = rgb('--vscode-button-background'), over = rgb('--vscode-button-hoverBackground'), fg = rgb('--vscode-button-foreground');
+    probe.remove();
+    const lum = (c) => c.map((x) => { const v = x / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    if (bg && (!over || ratio(bg, over) < HOVER_MIN_RATIO)) {
+      root.style.setProperty('--sl-primary-hover', `color-mix(in srgb, var(--vscode-button-background) 82%, ${fg && lum(fg) < 0.4 ? '#ffffff' : '#000000'})`);
+    } else root.style.removeProperty('--sl-primary-hover');
+  }
+  fitHover();
+  new MutationObserver(fitHover).observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
   const chips = el('div', 'sl-chips');
   const CHIPS = [['all', 'All'], ['open', 'Open'], ['running', 'Running'], ['needs', 'Needs you']];
   const chipEls = new Map(CHIPS.map(([k, label]) => {
@@ -193,6 +226,7 @@
     r.dataset.key = row.key;
     r.dataset.dot = row.dot || 'none';
     r.dataset.stripe = row.stripe || 'none';
+    r.dataset.away = row.away || '';
     r._p.stripe.className = `sl-stripe s-${row.stripe || 'none'}`;
     r._p.stripe.title = STRIPE_WORDS[row.stripe] || '';
     setLogo(r._p.img, row.s);
@@ -236,6 +270,19 @@
     t.textContent = '';
     t.append(title.slice(0, at), el('mark', 'sl-mark', title.slice(at, at + q.length)), title.slice(at + q.length));
   }
+  /*
+   * The order to draw `rows` of a section in while rows hold still: the rows drawn already in the order they are drawn
+   * in, the pinned ones first as the model has them, and each new row at its place in the model's order. A sub-agent's
+   * row moves with the row it is under.
+   */
+  function heldOrder(list, rows) {
+    const at = new Map([...list.children].map((r, i) => [r.dataset.key, i]));
+    const blocks = [];
+    for (const row of rows) { if (row.depth && blocks.length) blocks[blocks.length - 1].push(row); else blocks.push([row]); }
+    const out = blocks.filter((b) => at.has(b[0].key)).sort((a, b) => (!!b[0].pinned - !!a[0].pinned) || (at.get(a[0].key) - at.get(b[0].key)));
+    blocks.forEach((b, i) => { if (!at.has(b[0].key)) out.splice(Math.min(i, out.length), 0, b); });
+    return out.flat();
+  }
   function reconcile(list, cache, rows, place) {
     const seen = new Set();
     let i = 0;
@@ -261,11 +308,21 @@
   let shownFront = '';
   let pendingGroupRename = '';
   let lastDetail = '';
+  /* Whether a model was drawn in an order other than its own while the rows held still. */
+  let held = false;
+  const still = () => body.matches(':hover') || !!cm || (!!hl && document.hasFocus() && root.contains(document.activeElement));
+  function letRowsMove() {
+    if (!held || still() || !model) return;
+    held = false;
+    apply(model);
+  }
 
   function apply(next) {
     model = next || { sections: [], counts: {}, sources: [], accounts: [], menu: [], colors: [], logos: {}, empty: true };
     drawTop();
     drawAccounts(model.accounts || []);
+    const hold = still();
+    if (!hold) held = false;
     const keys = new Set();
     let i = 1;
     for (const sec of model.sections || []) {
@@ -277,7 +334,10 @@
       if (!se._p.name.isContentEditable) setText(se._p.name, sec.label);
       se._p.head._ctx = sec.kind === 'group' ? { group: true, made: !!sec.made, first: !!sec.first, last: !!sec.last } : null;
       se._p.head._groupId = sec.groupId || '';
-      reconcile(se._p.list, se._p.rows, sec.rows || [], sec.key);
+      const rows = sec.rows || [];
+      const drawn = hold ? heldOrder(se._p.list, rows) : rows;
+      if (drawn.some((row, j) => row !== rows[j])) held = true;
+      reconcile(se._p.list, se._p.rows, drawn, sec.key);
       const at = body.children[i];
       if (at !== se) body.insertBefore(se, at || null);
       i++;
@@ -515,6 +575,14 @@
     if (at.left - w + 2 >= EDGE) return at.left - w + 2;
     return null;
   }
+  /* How much of the start of its item, at least, a submenu laid over its menu leaves in view. */
+  const SUB_UNCOVERED = 48;
+  /* The left edge of a submenu laid over part of its menu against the window's right edge, so that the start of the
+     item, where its label is, stays in view; null when that leaves less than SUB_UNCOVERED pixels of it. */
+  function subOver(at, w) {
+    const left = Math.max(EDGE, window.innerWidth - EDGE - w);
+    return left - at.left >= SUB_UNCOVERED ? left : null;
+  }
   const fitTop = (y, h) => Math.max(EDGE, Math.min(y, window.innerHeight - h - EDGE));
   /* `ticks`: the menu marks a choice, so each item has a column for its tick. */
   function itemButton(it, ticks) {
@@ -545,7 +613,7 @@
     closeCtx();
     hideHover();
     const { box, buttons } = menuBox(items, false);
-    buttons.forEach((b, i) => b.addEventListener('mouseenter', () => hoverItem(i)));
+    buttons.forEach((b, i) => { b.addEventListener('mouseenter', () => hoverItem(i)); b.addEventListener('mouseleave', (e) => leaveSub(e, i)); });
     box.addEventListener('scroll', () => closeSub(false));
     root.appendChild(box);
     cm = { box, buttons, items, run, rebuild, back: document.activeElement || null, sub: null, subButtons: [], subAt: -1, timer: 0, x, y };
@@ -561,10 +629,21 @@
     stopTimer();
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
+  /* The pointer left a submenu or its item for somewhere that is neither: the submenu closes after SUB_CLOSE_MS, unless
+     the pointer comes back to one of them first. */
+  function leaveSub(e, i) {
+    if (!cm || !cm.sub || cm.subAt !== i || cm.subInPlace) return;
+    const to = e.relatedTarget;
+    if (to && (cm.sub.contains(to) || cm.buttons[i].contains(to))) return;
+    stopTimer();
+    cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
+  }
   /*
-   * Opens item i's submenu beside it. In a list too narrow for that, the submenu takes the menu's place instead, under a
-   * first line naming the item that goes back to the menu; it then opens only on a click or a key, since one opened by
-   * the pointer passing over the item would cover the rest of the menu.
+   * Opens item i's submenu beside it; the pointer opens it by resting on the item, as the keys and a click do. In a list
+   * too narrow for that, the submenu is laid over part of the menu, against the window's right edge, leaving the start
+   * of the item in view. In one too narrow even for that, the submenu takes the menu's place instead, under a first line naming
+   * the item that goes back to the menu; it then opens only on a click or a key, since one opened by the pointer passing
+   * over the item would cover the rest of the menu.
    */
   function openSub(i, focus, byPointer = false) {
     stopTimer();
@@ -574,9 +653,12 @@
       const parent = cm.buttons[i];
       const { box, buttons } = menuBox(cm.items[i].submenu, true);
       box.addEventListener('mouseenter', stopTimer);
+      box.addEventListener('mouseleave', (e) => leaveSub(e, i));
       root.appendChild(box);
       const at = rectOf(parent);
-      const left = subBeside(at, box.offsetWidth);
+      const beside = subBeside(at, box.offsetWidth);
+      const left = beside === null ? subOver(at, box.offsetWidth) : beside;
+      cm.subInPlace = left === null;
       if (left === null) {
         (cm.inPlace || (cm.inPlace = new Set())).add(i);
         if (byPointer) { box.remove(); return; }
@@ -605,7 +687,7 @@
     const parent = cm.buttons[cm.subAt];
     cm.sub.remove();
     cm.box.style.visibility = '';
-    Object.assign(cm, { sub: null, subButtons: [], subAt: -1 });
+    Object.assign(cm, { sub: null, subButtons: [], subAt: -1, subInPlace: false });
     parent.classList.remove('sl-ctx-open');
     parent.setAttribute('aria-expanded', 'false');
     if (focusParent) parent.focus();
@@ -621,6 +703,7 @@
     cm = null;
     if (had && was.back && was.back.isConnected) was.back.focus({ preventScroll: true });
     letGoAim();
+    letRowsMove();
   }
   function pressItem(b) {
     if (!cm) return;
@@ -743,6 +826,7 @@
     if (hl && hl !== r) hl.classList.remove('sl-hl');
     hl = r || null;
     if (hl) { hl.classList.add('sl-hl'); if (scroll) hl.scrollIntoView({ block: 'nearest' }); }
+    else letRowsMove();
   }
   const openRow = (r) => { if (r && r._row) send({ kind: 'open', key: r._row.key }); };
 
@@ -935,6 +1019,10 @@
     else if (!r && hoverRow) hideHover();
   });
   root.addEventListener('mouseleave', hideHover);
+  body.addEventListener('mouseleave', letRowsMove);
+  document.documentElement.addEventListener('mouseleave', letRowsMove);
+  document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) letRowsMove(); });
+  root.addEventListener('focusout', () => setTimeout(letRowsMove, 0));
   root.addEventListener('scroll', () => { hideHover(); closeCtx(); }, { passive: true });
 
   searchInput.addEventListener('input', () => { ui.search = searchInput.value; keep(); filter(); });
@@ -1032,7 +1120,7 @@
   });
   /* VS Code changes the body's theme class when the theme changes; the logos have a light and a dark form. */
   new MutationObserver(() => { if (model) { account._sig = ''; apply(model); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-  window.addEventListener('blur', () => { hideHover(); closeCtx(); highlight(null); });
+  window.addEventListener('blur', () => { hideHover(); closeCtx(); highlight(null); letRowsMove(); });
   window.addEventListener('resize', closeCtx);
   send({ kind: 'ready' });
 }());

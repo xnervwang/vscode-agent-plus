@@ -6,8 +6,14 @@
    Code's: 28 px rows with 6 px corners, 26 px section headers, capitals for section labels. Each section header has a
    band of the theme's section header colour with a line above and below, to set the sections apart at a glance. Colours
    come from VS Code theme variables, except the five status dots, which keep fixed colours so that they look the same
-   in every theme, and the light blue stripe of a row closed lately. */
+   in every theme, and the blue of a conversation open in this window (--sl-here), which is a deeper blue than the
+   dot of a dialog waiting, picked for each kind of theme. The row in front is tinted with it, which sets it apart from
+   the grey section bands. */
 html, body { margin: 0; padding: 0; height: 100%; }
+body { --sl-here: #2563eb; }
+body.vscode-light { --sl-here: #1d4ed8; }
+body.vscode-high-contrast { --sl-here: #3070f0; }
+body.vscode-high-contrast-light { --sl-here: #1e40af; }
 body { background: var(--vscode-sideBar-background); color: var(--vscode-foreground); overflow: hidden; }
 .sl-root {
   display: flex; flex-direction: column; height: 100%; overflow-x: hidden; overflow-y: auto; box-sizing: border-box;
@@ -38,19 +44,20 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-new-half > span { overflow: hidden; text-overflow: ellipsis; }
 .sl-new-half.sl-primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .sl-new-agent:hover, .sl-new-half:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
-.sl-new-half.sl-primary:hover { background: var(--vscode-button-hoverBackground); }
+.sl-new-half.sl-primary:hover { background: var(--sl-primary-hover, var(--vscode-button-hoverBackground)); }
 .sl-new-half:disabled { opacity: .45; cursor: default; }
 .sl-new-agent:focus-visible, .sl-new-half:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 
-/* The filter chips, with their counts. */
+/* The filter chips, with their counts: grey, and the one chosen in the button colour. */
 .sl-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .sl-chip {
   display: flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: .9em;
-  border: 1px solid transparent; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); opacity: .85;
+  border: 1px solid var(--vscode-contrastBorder, transparent); background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  color: var(--vscode-foreground);
 }
 .sl-chip-n { opacity: .7; font-variant-numeric: tabular-nums; }
-.sl-chip:hover { opacity: 1; }
-.sl-chip.sl-on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
+.sl-chip:hover { background: color-mix(in srgb, var(--vscode-foreground) 18%, transparent); }
+.sl-chip.sl-on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-contrastActiveBorder, transparent); }
 .sl-chip:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
 
 .sl-search { position: relative; display: flex; }
@@ -104,13 +111,14 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-open > .sl-accounts { display: flex; flex-direction: column; gap: 10px; padding: 8px 12px 10px; }
 .sl-empty-group.sl-open > .sl-list::after { content: 'Drag conversations here'; padding: 4px 12px; opacity: .55; font-size: .9em; }
 
-/* ACCOUNT & USAGE: one block per agent. */
+/* ACCOUNT & USAGE: one block per agent, with a line between two blocks. */
 .sl-acct { display: flex; flex-direction: column; gap: 3px; }
+.sl-acct + .sl-acct { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 18%, transparent); }
 .sl-acct-head { display: flex; align-items: center; gap: 6px; }
 .sl-acct-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-link { border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); text-decoration: underline; }
 .sl-link:hover { color: var(--vscode-textLink-activeForeground); }
-.sl-acct-sub { margin: 6px 0 0 22px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 14%, transparent); font-size: .8em; opacity: .7; text-transform: uppercase; letter-spacing: .4px; }
+.sl-acct-sub { margin: 8px 0 0 22px; font-size: .8em; opacity: .7; text-transform: uppercase; letter-spacing: .4px; }
 .sl-acct-conv { margin-left: 22px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A name and its value; when they do not fit on one line, the value wraps under the name, at the right. */
 .sl-kv { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; margin-left: 22px; }
@@ -128,19 +136,21 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
   cursor: pointer; min-width: 0; outline: none;
 }
 .sl-row:hover, .sl-row.sl-hl { --sl-row-bg: var(--vscode-list-hoverBackground); background: var(--sl-row-bg); }
-.sl-row.sl-current { --sl-row-bg: var(--vscode-list-inactiveSelectionBackground); background: var(--sl-row-bg); }
+.sl-row.sl-current { --sl-row-bg: color-mix(in srgb, var(--sl-here) 24%, transparent); background: var(--sl-row-bg); }
+.vscode-light .sl-row.sl-current, .vscode-high-contrast-light .sl-row.sl-current { --sl-row-bg: color-mix(in srgb, var(--sl-here) 14%, transparent); }
 .sl-row.sl-current .sl-title { font-weight: 600; }
 .sl-row.sl-selected {
   background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 55%, transparent);
   outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder)); outline-offset: -1px;
 }
-/* The stripe at the start of a row: a solid bar for open here, an outlined one for open somewhere else, a light blue
-   one for closed here lately. */
+/* The stripe at the start of a row: a solid blue bar for open here, an outlined one of the same blue for open somewhere
+   else, and a solid grey one for closed here lately. */
 .sl-stripe { flex: none; width: 4px; height: 16px; border-radius: 2px; box-sizing: border-box; margin-right: 2px; }
-.sl-stripe.s-here { background: color-mix(in srgb, var(--vscode-foreground) 75%, transparent); }
-.sl-stripe.s-elsewhere { border: 1.5px solid color-mix(in srgb, var(--vscode-foreground) 75%, transparent); }
-.sl-stripe.s-closed { background: #7aa7e0; }
-.vscode-light .sl-stripe.s-closed, .vscode-high-contrast-light .sl-stripe.s-closed { background: #4f86cf; }
+.sl-stripe.s-here { background: var(--sl-here); }
+.sl-stripe.s-elsewhere { border: 1.5px solid var(--sl-here); }
+.sl-stripe.s-closed { background: color-mix(in srgb, var(--vscode-foreground) 45%, transparent); }
+/* A row open in a terminal or another program does not open from here: clicking it only says where it is. */
+.sl-row[data-away="terminal"] { cursor: not-allowed; }
 .sl-logo { position: relative; flex: none; width: 16px; height: 16px; }
 .sl-dot { position: absolute; top: -3px; right: -4px; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; }
 .sl-dot.d-none { display: none; }

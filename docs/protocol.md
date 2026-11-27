@@ -370,7 +370,7 @@ A collapsible section at the top of the list, with one part per source that give
 
 ### Open elsewhere
 
-A row is open elsewhere when another VS Code window on this machine shows the conversation, or its `elsewhere` lists a place. For the first, the core reads the window entries each source extension already writes, `<planDir()>/windows/<pid>.json` with the window's `name` and the `sessions` it shows (`shared/host/window-entries.js`), for every source with a `planDir`. A row open elsewhere is drawn dimmed with its dot as it is. Clicking it brings the other VS Code window forward; for a terminal or the desktop app, it opens nothing and the hover says where to close it first.
+A row is open elsewhere when another VS Code window on this machine shows the conversation, or its `elsewhere` lists a place. For the first, the core reads the window entries each source extension already writes, `<planDir()>/windows/<pid>.json` with the window's `name` and the `sessions` it shows (`shared/host/window-entries.js`), for every source with a `planDir`. A row open elsewhere is drawn dimmed with its dot as it is. Clicking it brings the other VS Code window forward; for a terminal or the desktop app, it opens nothing, the pointer over it shows that, and the hover says where to close it first.
 
 ### Activity dots
 
@@ -389,8 +389,9 @@ The list and the core's other views draw one of five dots, or none, worked out f
 
 ### What the core does with them
 
-- **Sections**: Account & usage, Recently closed (this window's, newest first, collapsed at first), the user's groups, Ungrouped, Archived. A conversation is listed once, except that one in Recently closed is also in its own section.
-- **Order**: in each section the pinned conversations first, then the rest, each part by `lastActiveAt`, newest first.
+- **Sections**: Account & usage (collapsed at first), Recently closed (this window's, newest first, collapsed at first), the user's groups, Ungrouped, Archived. A conversation is listed once, except that one in Recently closed is also in its own section.
+- **Order**: in each section the pinned conversations first, then the rest, each part by `lastActiveAt`, newest first. A conversation running a turn or background work sorts by the `lastActiveAt` it had when the list first saw it run, until it stops. While the pointer is on the sections, a menu of the list is open, or the arrow keys are on a row, the rows keep their places, and take the new order once none of these holds; a new row appears at its place.
+- **New conversations**: the New bar starts with the source `claude-code`, else `codex`, else `opencode-plus`, else the first other source with a `create` place, in registration order; an agent picked in its menu holds for the rest of the window. The half of the bar used last, tab or sidebar, is kept.
 - **Archived**: a mark the core keeps; the conversation moves out of its group, can still run and be opened, and stays archived when opened. Unarchiving puts it in Ungrouped. A source's own archive is not read or written after the import.
 - **Archiving on its own**: a conversation inactive for `agentPlus.sessions.archiveAfterDays` days (14 by default) is archived, unless it is open in this window or elsewhere, runs or waits, is unread, is in a group, or is pinned.
 - **Deleting**: only an archived conversation that is not pinned, that no window and no other process has open, and in which nothing runs. With `agentPlus.sessions.deleteArchived` on (the default), one archived for `agentPlus.sessions.deleteAfterDays` days (90 by default) is deleted, counting from the later of when the list first saw it archived and its `lastActiveAt`. Only one window on the machine archives and deletes on its own at a time.
