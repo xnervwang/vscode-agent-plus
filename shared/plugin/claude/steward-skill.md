@@ -151,7 +151,12 @@ To close a conversation, run:
 python3 <this plugin>/hooks/steward-relay.py --close <session id>
 ```
 
-Closing only closes the editor tab, and the conversation can be opened again from the session list. Never delete a conversation.
+Closing only closes the editor tab, and the conversation can be opened again from the session list.
+
+No agent can delete a conversation, a supervisor included. Only the user deletes one, by hand, in the Agent Plus
+session list. This is deliberate, not a feature still to come, so do not look for another way to do it. When the user
+asks you to delete a conversation, tell them to delete it from the session list. A supervisor may be able to archive
+conversations, but not to delete them.
 
 If the script refuses because the conversation is working, waiting for an answer, or running background work, tell the user what it is doing and ask whether to close it anyway. Only if the user says yes, run:
 
