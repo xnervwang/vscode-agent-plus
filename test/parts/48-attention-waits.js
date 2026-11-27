@@ -102,10 +102,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (const w of [m, p, q, f]) w.att.dispose();
   }
 
-  /* As above, but the conversation then stops with its reply read. The window showing it keeps reporting it, which
-     outweighs the other window's machine-wide list still giving the ended wait: that window gets no notice of the
-     ended wait, and the next wait is not hidden. It comes while that window has no focus, so the window keeps the
-     notice and shows it once it has the focus. */
+  /* As above, but the conversation then stops with its reply read. The window showing it keeps reporting it, so the
+     other window gets no notice of the ended wait, and the next wait is not hidden. It comes while that window has no
+     focus, so the window keeps the notice and shows it once it has the focus. */
   {
     const dir = path.join(tmp('here-stopped'), 'attention');
     const m = make(dir, 'sm', { focused: true }), p = make(dir, 'sp', { here: ['y'] });

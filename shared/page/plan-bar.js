@@ -9,11 +9,9 @@
  * (planSummary in docs/protocol.md). Exported as one global, agentPlusPlanBar; under Node it is also a module, for the
  * tests. The source is ASCII and ES5, like the page scripts.
  *
- * Each state of BUBBLES that has open rows gets a bubble with their count. Rows waiting for the user's answer are
- * counted in a solid "N to decide" part instead of their state's bubble, so the numbers add up to the open rows that
- * are not parked. Narrower than COMPACT_BELOW, the bar drops the word Plan and the arrow, and "to decide" shows only
- * its number. Hovering a bubble lists its rows, hovering "to decide" lists the questions, and hovering anywhere else
- * lists the open rows.
+ * Rows waiting for the user's answer are counted in a solid "N to decide" part instead of their state's bubble, so the
+ * numbers add up to the open rows that are not parked. Narrower than COMPACT_BELOW (400 CSS pixels), the bar drops the
+ * word Plan and the arrow at its end, and "to decide" shows only its number.
  */
 var agentPlusPlanBar = (function () {
   'use strict';
@@ -30,9 +28,8 @@ var agentPlusPlanBar = (function () {
   var BUBBLES = ['doing', 'waiting', 'discussing', 'todo'];
   var WORD = { doing: 'doing', waiting: 'waiting', discussing: 'discussing', todo: 'to do', parked: 'parked', done: 'done' };
 
-  /* The colours of the work plan view's state icons (LOOK in src/workplan-view.js), as the page's theme variables. A
-     bubble draws its icon in its state's colour over TINT percent of that colour. Light themes get a higher percentage:
-     their orange and yellow are so close that lighter tints of them look the same. */
+  /* The colours of the work plan view's state icons (LOOK in src/workplan-view.js), as the page's theme variables.
+     Light themes get a higher TINT: their orange and yellow are so close that lighter tints of them look the same. */
   var COLOR = {
     done: 'var(--vscode-charts-green, #89d185)',
     doing: 'var(--vscode-charts-blue, #3794ff)',
@@ -104,11 +101,10 @@ var agentPlusPlanBar = (function () {
   /*
    * What the bar draws for `summary` at `width`, or null for no bar:
    *   { compact, bubbles: [{ state, n }], done, questions, label, lists }
-   * `questions` is the "to decide" text or '', `label` the bar's spoken text, and `lists` the hover list of each part,
-   * under the bubble's state, 'ask' for "to decide" and '' for the rest of the bar, each { now, head, rows: [{ state,
-   * text, depth }], more }. `wasCompact` is the form drawn last, for the hysteresis. A width of 0 has not been measured
-   * yet, and the full bar is drawn for it. A summary without `asking` (from a core older than the bubbles) counts its
-   * asking rows in their states' bubbles too.
+   * `lists` holds the hover list of each part, under the bubble's state, 'ask' for "to decide" and '' for the rest of
+   * the bar, each { now, head, rows: [{ state, text, depth }], more }. `wasCompact` is the form drawn last, for the
+   * hysteresis. A width of 0 has not been measured yet, and the full bar is drawn for it. A summary without `asking`
+   * (from a core older than the bubbles) counts its asking rows in their states' bubbles too.
    */
   function model(summary, width, wasCompact) {
     var s = summary;
@@ -206,7 +202,6 @@ var agentPlusPlanBar = (function () {
     el.setAttribute('tabindex', '0');
     if (o.css) el.style.cssText = o.css;
     el.style.display = 'none';
-    /* `key` is the part under the pointer, named as in the model's `lists`. */
     var shown = null, summary = null, width = 0, compact = false, drawn = '', list = null, timer = 0, hovering = false, key = '';
     var win = doc.defaultView || (typeof window === 'object' ? window : null);
     var call = function (fn) { if (typeof fn === 'function') { try { fn(); } catch (e) { /* the page's own handler */ } } };
@@ -313,8 +308,7 @@ var agentPlusPlanBar = (function () {
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault(); call(o.onOpen);
     });
-    /* A list opens once the pointer has rested HOVER_MS on the bar. When the pointer moves to another part while a list
-       is open, that part's list replaces it at once. */
+    /* When the pointer moves to another part while a list is open, that part's list replaces it at once. */
     el.addEventListener('mouseover', function (ev) {
       var next = keyOf(ev.target);
       if (hovering && next === key && (list || timer)) return;

@@ -18,7 +18,6 @@ const { planQuestions } = require('./folders');
 /* The states a bar counts. `dropped` is not counted, and neither is a state this build does not know (docs/protocol.md,
    Plan files). */
 const COUNTED = ['done', 'doing', 'waiting', 'discussing', 'todo', 'parked'];
-/* The most open rows, and the most questions, the summary lists for the bar's hover. */
 const MAX_OPEN = 30;
 const MAX_TITLE = 200;
 

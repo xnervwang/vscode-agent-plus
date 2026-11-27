@@ -6,18 +6,17 @@
 'use strict';
 /*
  * The time a notification starts with, in brackets, in the reader's time zone: that of the machine the VS Code window
- * is shown on. In a remote window this extension runs on another machine, whose clock can be set to another zone, so
- * the reader's zone has to come from something that runs on the reader's machine, such as a page, through
- * setReaderZone(). The time is HH:MM when it falls on the same day as `now` in the reader's zone, and has the month and
- * day before it otherwise. Until the reader's zone is known the time is in this machine's zone and names it, so that it
- * never reads as a time of the reader's zone.
+ * is shown on. In a remote window this extension runs on another machine, whose clock can be set to another zone. The
+ * time is HH:MM when it falls on the same day as `now` in the reader's zone, and has the month and day before it
+ * otherwise. Until the reader's zone is known, the time is in this machine's zone with the zone's name after it, so
+ * that it is never taken for the reader's time.
  *
  *   stamped(text, at)   text with the time `at` (epoch ms, now if left out) before it: "[14:05] text"
  *   stampOf(at, opts)   the time alone: "14:05", "Nov 25 14:05", "14:05 UTC"; opts.now and opts.zone for a test
  *   info(vscode, text, ...rest), warning(…), error(…)
  *                       vscode.window's show…Message with the current time before `text`; a modal dialog, which is not
  *                       a notification, is shown as given
- *   infoAt(vscode, at, text, ...rest)   the same with the time `at`, for a notification of something seen earlier
+ *   infoAt(vscode, at, text, ...rest)   as info(), with the time `at` instead of now, for something seen earlier
  */
 let readerZone = () => '';
 

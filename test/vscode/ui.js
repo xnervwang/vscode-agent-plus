@@ -281,7 +281,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
      buttons, so notifications are cleared before a click there. */
   const clearToasts = async () => { await exec('notifications.clearAll'); await sleep(300); };
   /* A notification's time (src/notice-time.js): [HH:MM] in the reader's zone, [HH:MM ZONE] before it is known. VS Code
-     runs on this machine, so either way the hour and minute are this machine's, now or a minute ago. */
+     runs on this machine, so the hour and minute are this machine's either way; the check takes this minute or the
+     one before. */
   const STAMP = /^\[(\d\d:\d\d)( [^\]]+)?\] /;
   const hourMinute = (ms) => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
   const stampOf = (text) => { const m = STAMP.exec(text || ''); return m ? { time: m[1], zone: (m[2] || '').trim() } : null; };
@@ -493,7 +494,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     }, 20000, 500);
     const s = stampOf(said || last);
     check(!!said && isNow(s.time) && said.endsWith('] No conversation needs you now.'),
-      'once a page has said the reader\'s zone, a notification starts with the hour and minute there and names no zone', last);
+      'once a page has reported the reader\'s zone, a notification starts with the hour and minute there and names no zone', last);
     await look('notice-time', { toasts: true, expect: 'A notification at the bottom right with the time in square brackets before its text, No conversation needs you now. The time is two-digit hours and minutes, such as [14:05], with nothing else in the brackets, and the text is not cut off.' },
       toastLoc('No conversation needs you now.'));
     await clearToasts();
@@ -646,7 +647,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const st = await entry('conversations');
     check(!!st && /2 conversations need you/.test(st.text) && !st.warning && !st.error,
       'and the status bar entry says 2 conversations need you, in the status bar\'s own colours', st);
-    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you in the bar\'s own colours, with no yellow or red behind it.' },
+    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? (orange question mark, asked 1m ago) and the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you in the bar\'s own colours, with no yellow or red behind it.' },
       pane('agentPlus.conversations'));
   });
 
@@ -1426,8 +1427,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const sidebarBox = () => page.locator('#workbench\\.parts\\.sidebar');
   /*
    * The two activity bar entries, Conversations for the session list and Agent Plus for the Work plan, once both are
-   * drawn: for each, its place among the bar's entries, its box in CSS pixels and the icon file it is masked with. Null
-   * while either is missing or has no size yet.
+   * drawn. Null while either is missing or has no size yet.
    */
   const barEntries = () => page.evaluate(() => {
     const items = [...document.querySelectorAll('.activitybar .action-item')];
@@ -1499,7 +1499,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const bar = await barShown();
     check(!!bar && bar.sessions.index < bar.plan.index && bar.sessions.y + bar.sessions.height <= bar.plan.y + 1
       && /sessions\.svg/.test(bar.sessions.icon) && /sidebar\.svg/.test(bar.plan.icon),
-    'in the activity bar the session list\'s entry (the robot, images/sessions.svg) comes above the Work plan\'s (the page, images/sidebar.svg)', bar);
+    'in the activity bar the session list\'s entry comes above the Work plan\'s, each with its own icon', bar);
     await look('sessions-activity-bar-dark', { expect: `A close view of two entries of the activity bar on the left, in a dark theme: light icons on the dark bar, ${BAR_LOOK}` },
       bar ? barBox(bar) : null);
     const rows = await slWait((r) => [SLT.run, SLT.perm, SLT.ask, SLT.other, SLT.cc, SLT.oc, SLT.ocTerm].every((t) => slFind(r, t, 'ungrouped'))
@@ -1603,11 +1603,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     };
     const plain = (t) => /Open in this window/.test(t) && !/in the sidebar/.test(t);
     const none = await placeSaid({}, plain);
-    check(plain(none || ''), 'a conversation its source shows() without saying where gets the solid stripe, and its hover says Open in this window and no place', none || await slHover());
+    check(plain(none || ''), 'a conversation that shows() finds, with no place given, gets the solid stripe, and its hover says Open in this window and no place', none || await slHover());
     const side = await placeSaid({ 'oc-1': 'sidebar' }, (t) => /Open in this window, in the sidebar/.test(t));
-    check(/Open in this window, in the sidebar/.test(side || ''), 'with shownIn answering sidebar, the hover says Open in this window, in the sidebar', side || await slHover());
+    check(/Open in this window, in the sidebar/.test(side || ''), 'when shownIn answers sidebar, the hover says Open in this window, in the sidebar', side || await slHover());
     const tab = await placeSaid({ 'oc-1': 'tab' }, plain);
-    check(plain(tab || ''), 'and with it answering tab, for a tab sessionForTab could not match, the hover names no sidebar', tab || await slHover());
+    check(plain(tab || ''), 'and when it answers tab, for a tab sessionForTab could not match, the hover does not name the sidebar', tab || await slHover());
     await page.mouse.move(5, 5);
     await src('return src.showIn(arg[0], arg[1], arg[2]);', ['opencode', [], {}]);
     check(!!await slWait((r) => (slFind(r, SLT.oc) || {}).stripe !== 'here'), 'once the source no longer shows it, the row is not open here');
@@ -1623,7 +1623,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const at = Date.now();
     await src('return src.knowTab(arg);', 'sl-run');
     const back = await slWait((r) => (slFind(r, SLT.run) || {}).stripe === 'here', 5000);
-    check(!!back, 'once the source learns the tab\'s conversation and fires onDidFocus, the row is open here again within seconds, not at the next 30-second look', `${Date.now() - at} ms`);
+    check(!!back, 'once the source learns the tab\'s conversation and fires onDidFocus, the row is open here again within seconds rather than at the list\'s next 30-second check', `${Date.now() - at} ms`);
     if (!back) await src('return src.knowTab(arg);', 'sl-run');
   });
 

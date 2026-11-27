@@ -257,9 +257,8 @@ function activate(context) {
     otherState: (which) => (which === 'opencode' ? thirdState : otherState),
     /* sessionForTab answers '' for this conversation's tab until knowTab, and the list is told that something changed. */
     forgetTab(id) { if (!state.unknownTabs.includes(id)) state.unknownTabs.push(id); changed.fire(); return true; },
-    /* Answers the tab's conversation again and fires only onDidFocus, as a source does once it learns it. */
     knowTab(id) { state.unknownTabs = state.unknownTabs.filter((x) => x !== id); focused.fire({ sessionId: id }); return true; },
-    /* Says the tabless source's sidebar shows these conversations, and what its shownIn answers for each. */
+    /* Sets which conversations the tabless source's sidebar shows, and what its shownIn answers for each. */
     showIn(which, ids, place) {
       const [st, ev] = which === 'opencode' ? [thirdState, thirdChanged] : [otherState, otherChanged];
       st.sidebar = ids.slice();

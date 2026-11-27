@@ -304,7 +304,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const placeLine = (title) => byTitle(list.model(), title).hover.split('\n').filter((l) => l.startsWith('Open in this window'));
     eq([placeLine('In the sidebar'), placeLine('Behind a tab'), placeLine('Not said')],
       [['Open in this window, in the sidebar'], ['Open in this window'], ['Open in this window']],
-      'a source that lists shownIn names the place: the hover says in the sidebar only when it answers sidebar');
+      'with shownIn listed, the hover adds in the sidebar only when shownIn answers sidebar');
     const reopened = [];
     for (const x of ['a', 'b', 'c']) {
       codex.sidebar.delete(x);

@@ -211,8 +211,8 @@ function create(host, opts = {}) {
         ...group(t.statusAsking, asking, (c) => `${c.title} · ${t.questions(c.questions.length)}`),
         ...group(t.statusWaits, seen, (it) => `${it.title}${why(it)}`)].join('\n')
       : t.statusTip;
-    /* The entry keeps the status bar's own colours; its words say when conversations need the user. A warning background
-       shouts, and the amber of the plan bar's "to decide" is hard to read on a light or a blue status bar. */
+    /* The entry keeps the status bar's own colours; its text says when conversations need the user. A warning
+       background shouts, and the amber of the plan bar's "to decide" is hard to read on a light or a blue status bar. */
     statusEntry.show();
   };
 

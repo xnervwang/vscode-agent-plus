@@ -29,12 +29,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
 
   to('A');
   await wait(20);
-  eq(said().slice(-1), ['codex A'], 'a tab of a conversation brought forward is said to be in front');
+  eq(said().slice(-1), ['codex A'], 'the line names a conversation whose tab is brought forward');
 
   to('B');
   await control.state.handlers['agentPlus.refreshWorkPlan']();
   await wait(20);
-  eq(said().slice(-1), ['codex B'], 'and so is the next, when a read of the plans moved the work plan view to it before the front was drawn');
+  eq(said().slice(-1), ['codex B'], 'and names the next one, when a read of the plans moved the work plan view to it before the front was drawn');
 
   to('B');
   b.control.fireTabs();

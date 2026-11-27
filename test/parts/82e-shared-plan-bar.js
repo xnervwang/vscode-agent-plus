@@ -132,7 +132,7 @@ module.exports = async ({ eq, root, wait }) => {
       /body\.vscode-light \[' \+ MARK \+ '\],body\.vscode-high-contrast-light \[' \+ MARK \+ '\]\{--apb-tint:' \+ TINT\.light \+ '%\}/.test(css), bar.TINT.light > bar.TINT.dark,
       /\.apb-q\{' \+ pill \+ '[^}]*color:' \+ ASK_TEXT \+ ';background:' \+ ASK \+ '\}/.test(css), /body\.vscode-high-contrast \.apb-q,body\.vscode-high-contrast-light \.apb-q\{color:#fff\}/.test(css)],
     [true, true, true, true, true],
-    'one line of one height; bubbles tinted more in light themes; "to decide" solid with dark words, white ones in the high contrast themes');
+    'one line of one height; bubbles tinted more in light themes; "to decide" a solid fill with dark text, or white text in the high contrast themes');
   }
 
   const doc = stand();

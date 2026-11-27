@@ -4,9 +4,8 @@
 
 'use strict';
 /*
- * The time a notification starts with (src/notice-time.js): HH:MM in the reader's zone, with the month and day when it
- * falls on another day there, and in this machine's zone, with its name, while the reader's is unknown; and the show
- * functions, which put it before a notification's text but leave a modal dialog alone.
+ * The time a notification starts with (src/notice-time.js), and the show functions, which put it before a
+ * notification's text but leave a modal dialog alone.
  */
 const path = require('path');
 
@@ -18,7 +17,7 @@ module.exports = ({ eq, root }) => {
   eq([at('America/Los_Angeles'), at('Asia/Tokyo'), at('Asia/Kolkata'), at('America/Los_Angeles', now - 6 * 3600e3)],
     ['20:05', '13:05', '09:35', '14:05'], 'a time on the same day as now in the reader\'s zone is the hour and minute there');
   eq([at('America/Los_Angeles', now - 24 * 3600e3), at('Asia/Tokyo', now - 14 * 3600e3)], ['Nov 25 20:05', 'Nov 26 23:05'],
-    'one on another day of the reader\'s has the month and day before it');
+    'a time on another day in the reader\'s zone has the month and day before it');
   const here = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' })
     .formatToParts(new Date(now)).reduce((o, p) => Object.assign(o, { [p.type]: p.value }), {});
   const own = `${here.hour}:${here.minute} ${here.timeZoneName}`;
