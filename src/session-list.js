@@ -788,6 +788,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (d) subs.push(d);
     const a = sources.listen(e.source, 'onDidChangeAccountInfo', () => schedule());
     if (a) subs.push(a);
+    /* A source reports a tab's conversation once it knows it, which can be after the tab opened, with onDidFocus: the
+       tabs are looked at again then rather than at the next tab event or tick. */
+    const f = sources.listen(e.source, 'onDidFocus', () => schedule());
+    if (f) subs.push(f);
     if (sources.supports(e.source, 'sessionsNotice')) { const n = sources.listen(e.source, 'onDidChangeSessionsNotice', () => schedule()); if (n) subs.push(n); }
     if (sources.supports(e.source, 'sessionClose')) {
       const c = sources.listen(e.source, 'onDidCloseSession', (ev) => {

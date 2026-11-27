@@ -42,7 +42,9 @@ function activate(context) {
     prefilled: [], prefillOutcome: { outcome: 'drafted' },
     /* The session list's part (docs/protocol.md, Session list): what it was asked to do and told, what it imports, its
        Account & usage part and its note. */
-    calls: [], seen: [], imported: { archived: [], groups: [], pinned: [], colors: {} }, account: null, sessionsNotice: null, made: 0 };
+    calls: [], seen: [], imported: { archived: [], groups: [], pinned: [], colors: {} }, account: null, sessionsNotice: null, made: 0,
+    /* Conversations whose tab sessionForTab answers '' for, as a source does before it knows a tab's conversation. */
+    unknownTabs: [] };
   const closedEv = new vscode.EventEmitter(), accountEv = new vscode.EventEmitter(), sessionsNoticeEv = new vscode.EventEmitter();
   context.subscriptions.push(closedEv, accountEv, sessionsNoticeEv);
 
@@ -54,7 +56,7 @@ function activate(context) {
   const tabSession = (tab) => {
     if (!tab || !(tab.input instanceof vscode.TabInputWebview) || !String(tab.input.viewType).endsWith(VIEW)) return undefined;
     if (tab.label === NEW_TITLE) return '';
-    for (const [id, c] of list) if (c.title === tab.label && panels.has(id)) return id;
+    for (const [id, c] of list) if (c.title === tab.label && panels.has(id)) return state.unknownTabs.includes(id) ? '' : id;
     return undefined;
   };
   const markSeen = (id) => {
@@ -252,6 +254,10 @@ function activate(context) {
       return true;
     },
     otherState: (which) => (which === 'opencode' ? thirdState : otherState),
+    /* sessionForTab answers '' for this conversation's tab until knowTab, and the list is told that something changed. */
+    forgetTab(id) { if (!state.unknownTabs.includes(id)) state.unknownTabs.push(id); changed.fire(); return true; },
+    /* Knows the tab's conversation again and says so the way a source does, with onDidFocus alone. */
+    knowTab(id) { state.unknownTabs = state.unknownTabs.filter((x) => x !== id); focused.fire({ sessionId: id }); return true; },
     /* Says the tabless source's sidebar shows these conversations, and what its shownIn answers for each. */
     showIn(which, ids, place) {
       const [st, ev] = which === 'opencode' ? [thirdState, thirdChanged] : [otherState, otherChanged];

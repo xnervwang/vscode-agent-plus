@@ -36,7 +36,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   /* A made-up source. It records the actions it is asked for and what the list marks as seen. */
   function source(id, list, { features = ['sessions', 'sessionImport', 'sessionSeen', 'shows'], imported = { archived: [], groups: [], pinned: [], colors: {} },
     own = [], caps = null } = {}) {
-    const ev = new fake.EventEmitter(), close = new fake.EventEmitter();
+    const ev = new fake.EventEmitter(), close = new fake.EventEmitter(), focus = new fake.EventEmitter();
     const s = {
       protocol: 1, id, label: id, features, sessions: list, calls: [], seen: [], pages: [], planDirPath: '', sidebar: new Set(), focused: '',
       planDir: () => s.planDirPath,
@@ -48,6 +48,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       },
       onDidChangeSessions: ev.event, changed: () => ev.fire(),
       onDidCloseSession: close.event, closed: (e) => close.fire(e),
+      onDidFocus: focus.event, focus: (x) => focus.fire({ sessionId: x }), tabAnswer: {},
       sessionActions: caps || { open: ['tab', 'sidebar'], create: ['tab'], rename: true, delete: true, own },
       runSessionAction: async (action, ids, args) => {
         s.calls.push([action, ids, args]);
@@ -58,7 +59,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       describeDeletion: async (ids) => ids.map((x) => ({ sessionId: x, what: `the file of ${x}` })),
       importSessions: async () => (typeof imported === 'function' ? imported() : imported),
       noteSeen: (ids, seen) => s.seen.push([ids, seen]),
-      sessionForTab: (tab) => (tab && tab.input && tab.input.source === id ? tab.input.sid : null),
+      sessionForTab: (tab) => (tab && tab.input && tab.input.source === id ? (tab.label in s.tabAnswer ? s.tabAnswer[tab.label] : tab.input.sid) : null),
       shows: (x) => s.sidebar.has(x),
       isFocused: (x) => s.focused === x,
       reveal: async (x) => { s.calls.push(['reveal', [x]]); return true; },
@@ -235,6 +236,29 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     await list.reopenLast();
     eq(oc.calls.pop(), ['open', ['ses_aaaaaaaaaaaaaaaaaaaaaaaaaa'], { where: 'sidebar' }], 'a source that reports a closing says where it was shown, and the list reopens it there');
+    list.dispose();
+  }
+
+  /* ── A tab whose conversation its source learns after the tab opened ── */
+  {
+    const t = setup();
+    const codex = source('codex', [conv('late', { title: 'Learned late' })]);
+    t.entries.push({ id: 'codex', source: codex });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    codex.tabAnswer['Learned late'] = '';
+    t.control.setTabs([{ label: 'Learned late', input: { source: 'codex', sid: 'late' } }], 0);
+    await list.refresh();
+    /* The first look writes the store, which looks again a moment later; this waits that out. */
+    await new Promise((r) => setTimeout(r, 1000));
+    const stripe = () => list.model().sections.flatMap((x) => x.rows).find((r) => r.title === 'Learned late').stripe;
+    const before = stripe();
+    delete codex.tabAnswer['Learned late'];
+    await new Promise((r) => setTimeout(r, 500));
+    const unasked = stripe();
+    codex.focus('late');
+    await new Promise((r) => setTimeout(r, 500));
+    eq([before, unasked, stripe()], ['', '', 'here'],
+      'a tab its source answers with no conversation yet is not open here; once the source knows it and says so with onDidFocus, the list looks at the tabs again and the row is');
     list.dispose();
   }
 

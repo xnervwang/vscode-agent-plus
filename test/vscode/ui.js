@@ -1583,6 +1583,20 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!await slWait((r) => (slFind(r, SLT.oc) || {}).stripe !== 'here'), 'once the source no longer shows it, the row is not open here');
   });
 
+  /* A source can learn a tab's conversation after the tab opened, and reports it with onDidFocus only. */
+  await step('sessions-late-tab', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    check(!!await slWait((r) => (slFind(r, SLT.run) || {}).stripe === 'here'), 'the conversation in its tab is open here');
+    await src('return src.forgetTab(arg);', 'sl-run');
+    check(!!await slWait((r) => (slFind(r, SLT.run) || {}).stripe !== 'here'), 'while its source answers its tab with no conversation yet, the row is not open here');
+    const at = Date.now();
+    await src('return src.knowTab(arg);', 'sl-run');
+    const back = await slWait((r) => (slFind(r, SLT.run) || {}).stripe === 'here', 5000);
+    check(!!back, 'once the source knows the tab\'s conversation and says so with onDidFocus, the row is open here again within seconds, not at the next 30-second look', `${Date.now() - at} ms`);
+    if (!back) await src('return src.knowTab(arg);', 'sl-run');
+  });
+
   await step('sessions-actions', async () => {
     needs('sessions-rows');
     otherWindow(['sl-other']);
