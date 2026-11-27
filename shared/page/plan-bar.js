@@ -9,13 +9,13 @@
  * (planSummary in docs/protocol.md). Exported as one global, agentPlusPlanBar; under Node it is also a module, for the
  * tests. The source is ASCII and ES5, like the page scripts.
  *
- * Rows waiting for the user's answer are counted in a solid "N to decide" part instead of their state's bubble, so the
- * numbers add up to the open rows that are not parked. Narrower than COMPACT_BELOW (400 CSS pixels), the bar drops the
- * word Plan and the arrow at its end, and "to decide" shows only its number.
+ * Rows waiting for the user's answer are counted in a solid "N to decide" part instead of their state's bubble (see
+ * BUBBLES), so the numbers add up to the open rows that are not parked. Narrower than COMPACT_BELOW (400 CSS pixels),
+ * the bar drops the word Plan and the arrow at the bar's end, and "to decide" shows only its number.
  */
 var agentPlusPlanBar = (function () {
   'use strict';
-  /* Below this measured width, in CSS pixels, the bar is compact. Four bubbles and "to decide" still fit below it. */
+  /* In CSS pixels of the bar's measured width; four bubbles and "to decide" still fit below it. */
   var COMPACT_BELOW = 400;
   var HYSTERESIS = 24;
   /* A hover list shows at most this many rows, the same limit as the summary's. */
@@ -39,8 +39,8 @@ var agentPlusPlanBar = (function () {
     parked: 'var(--vscode-descriptionForeground, #8c8c8c)'
   };
   var TINT = { dark: 24, light: 45 };
-  /* "to decide" is filled with the colour of the question mark the work plan view gives a row waiting for the user's
-     answer (src/workplan-view.js), with dark words on it; the high contrast themes make that colour a deep orange or a
+  /* "to decide" is filled with the colour of the work plan view's question mark (src/workplan-view.js), with dark
+     words on it; the high contrast themes make that colour a deep orange or a
      dark blue, where the words are white. Not the status bar's warning colour, which some themes make red. */
   var ASK = 'var(--vscode-charts-orange, #d18616)';
   var ASK_TEXT = '#1f1f1f';
@@ -103,7 +103,7 @@ var agentPlusPlanBar = (function () {
    *   { compact, bubbles: [{ state, n }], done, questions, label, lists }
    * `lists` holds the hover list of each part, under the bubble's state, 'ask' for "to decide" and '' for the rest of
    * the bar, each { now, head, rows: [{ state, text, depth }], more }. `wasCompact` is the form drawn last, for the
-   * hysteresis. A width of 0 has not been measured yet, and the full bar is drawn for it. A summary without `asking`
+   * hysteresis. A summary without `asking`
    * (from a core older than the bubbles) counts its asking rows in their states' bubbles too.
    */
   function model(summary, width, wasCompact) {
@@ -308,7 +308,6 @@ var agentPlusPlanBar = (function () {
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault(); call(o.onOpen);
     });
-    /* When the pointer moves to another part while a list is open, that part's list replaces it at once. */
     el.addEventListener('mouseover', function (ev) {
       var next = keyOf(ev.target);
       if (hovering && next === key && (list || timer)) return;

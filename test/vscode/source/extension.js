@@ -255,7 +255,8 @@ function activate(context) {
       return true;
     },
     otherState: (which) => (which === 'opencode' ? thirdState : otherState),
-    /* sessionForTab answers '' for this conversation's tab until knowTab, and the list is told that something changed. */
+    /* Makes sessionForTab answer '' for this conversation's tab until knowTab(), and fires the change event so the list
+       looks again. */
     forgetTab(id) { if (!state.unknownTabs.includes(id)) state.unknownTabs.push(id); changed.fire(); return true; },
     knowTab(id) { state.unknownTabs = state.unknownTabs.filter((x) => x !== id); focused.fire({ sessionId: id }); return true; },
     /* Sets which conversations the tabless source's sidebar shows, and what its shownIn answers for each. */

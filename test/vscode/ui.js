@@ -1582,8 +1582,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await page.mouse.move(5, 5);
   });
 
-  /* A conversation that only shows() finds can be in a sidebar or in a tab behind another one, which the source's
-     sessionForTab could not match, so the hover names the sidebar only when the source's shownIn says so. */
+  /* What shows() finds may be in a sidebar or in a tab behind another one that sessionForTab could not match, so the
+     hover names the sidebar only when the source's shownIn says so. */
   await step('sessions-place', async () => {
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');

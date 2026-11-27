@@ -99,7 +99,7 @@ module.exports = async ({ eq, root, wait }) => {
       [{ now: '', head: '2 waiting', rows: [{ state: 'waiting', text: '5 Report', depth: 1 }, { state: 'waiting', text: '6 Fonts', depth: 1 }], more: 0 }, ['9 Colours']],
       'hovering a bubble lists the rows of its state, without the ones that wait for the answer');
     eq([l.ask.head, l.ask.rows.map((r) => r.state + ' ' + r.text), l.ask.more], ['3 questions for you', ['question 4 Skip negative amounts?', 'question 7 This month or last?', 'question 8 Names'], 0],
-      'hovering "to decide" lists the questions, or the row\'s title where a row asks none');
+      'hovering "to decide" lists the questions, using the row\'s title for a row that has none');
     eq([bar.model(finished, wide).lists, Object.keys(bar.model(parked, wide).lists)], [{}, ['']], 'a plan with none open has no list; parked rows are in the bar\'s list only');
   }
   {
@@ -178,7 +178,7 @@ module.exports = async ({ eq, root, wait }) => {
   const list = doc.body.childNodes[1];
   eq([list && list.getAttribute(bar.MARK + '-list'), texts().slice(0, 4), list && list.childNodes[3].style.paddingLeft, list.style.left, list.style.top],
     ['1', ['3.2 CLI: budget subcommand', '10 rows not done', '3 CLI', '3.2 CLI: budget subcommand'], '12px', '20px', '468px'],
-    'over the bar it lists the open rows under the current row\'s title, each indented by its depth, just above the bar at its left edge');
+    'the drawn list has the current row\'s title, the count of rows not done and the open rows, a child row indented 12 px, and sits just above the bar at its left edge');
   bubbles()[1].fire('mouseover');
   eq(texts(), ['2 waiting', '5 Report', '6 Fonts'], 'moved onto a bubble while a list shows, the list switches at once to that state\'s rows');
   b.el.find('apb-q').childNodes[1].fire('mouseover');
