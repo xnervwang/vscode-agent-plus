@@ -189,7 +189,6 @@ def lines_of(ids, names, now, directory, paths=None):
 
 
 def skill_version():
-    """The first 8 hex digits of the SHA-1 of the first readable file in SKILLS, or '' when none can be read."""
     for path in SKILLS:
         try:
             with open(path, "rb") as fh:

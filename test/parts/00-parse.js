@@ -53,7 +53,7 @@ module.exports = async ({ ok, bad, eq, root }) => {
      and it shows the name once. */
   eq([pkg.contributes.viewsContainers.activitybar[0].title, pkg.contributes.views.agentPlusSessions.map((v) => v.name), pkg.contributes.viewsContainers.panel[0].title],
     ['Agent Plus - Conversations', ['Agent Plus - Conversations'], 'Conversations'],
-    'the session list\'s container and its one view are both titled Agent Plus - Conversations, so the side bar and the hover show that title once, and the panel\'s container is still Conversations');
+    'the session list\'s container and its one view are both titled Agent Plus - Conversations, and the panel\'s container Conversations');
   /* The package carries extension.js, src/ and images/, and .vscodeignore leaves shared/ out: a module of the extension
      that required a file elsewhere would load in the tests and fail once installed. */
   const walkJs = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkJs(path.join(d, e.name)) : /\.js$/.test(e.name) ? [path.join(d, e.name)] : []));

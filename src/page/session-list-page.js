@@ -17,8 +17,8 @@
  *
  * While the pointer is on the sections, a menu of the list is open, or the arrow keys are on a row, the rows of each
  * section keep the order they are drawn in, so that a row does not move away from under a click; the model's order is
- * drawn once none of these holds, as when the pointer moves up to the New bar or out of the view. A row new to a
- * section still appears where the model puts it, and pinned rows still come first.
+ * drawn once none of these holds. A row new to a section still appears where the model puts it, and pinned rows still
+ * come first.
  */
 (function () {
   'use strict';
@@ -571,7 +571,6 @@
     if (at.left - w + 2 >= EDGE) return at.left - w + 2;
     return null;
   }
-  /* The least width, in pixels, of an item's start that a submenu laid over the menu must leave in view. */
   const SUB_UNCOVERED = 48;
   /* The left edge of a submenu laid over part of its menu against the window's right edge, so that the start of the
      item, where its label is, stays in view; null when that leaves less than SUB_UNCOVERED pixels of it. */
@@ -635,11 +634,11 @@
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
   /*
-   * Opens item i's submenu beside it; the pointer opens it by resting on the item, as the keys and a click do. Where
-   * the list is too narrow for that, the submenu is laid over part of the menu, against the window's right edge,
-   * leaving the start of the item in view. Where even that does not fit, it takes the menu's place, under a first line
-   * naming the item that goes back to the menu; it then opens only on a click or a key, since one opened by the pointer
-   * passing over the item would cover the rest of the menu.
+   * Opens item i's submenu beside it; resting the pointer on the item opens it, as do the keys and a click. Where the
+   * list is too narrow for that, the submenu is laid over part of the menu, leaving the start of the item in view.
+   * Where even that does not fit, it takes the menu's place, under a first line naming the item that goes back to the
+   * menu; it then opens only on a click or a key, since one opened by the pointer passing over the item would cover the
+   * rest of the menu.
    */
   function openSub(i, focus, byPointer = false) {
     stopTimer();

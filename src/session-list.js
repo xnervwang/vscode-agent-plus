@@ -492,8 +492,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (!host.globalMemento) { schedule(0); return; }
     Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
   }
-  /* The agent a new conversation starts in unless one is named: chosenNew if it can start conversations, else the first
-     of NEW_ORDER that can, else the first other source that can. */
+  /* The agent a new conversation starts in unless one is named: chosenNew if it can start conversations, else the one
+     NEW_ORDER gives. */
   function newSourceOf(srcs) {
     const can = srcs.filter((x) => (x.create || []).length);
     if (can.some((x) => x.id === chosenNew)) return chosenNew;
@@ -848,8 +848,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       else if (groupKey.startsWith('group:') && store.groupKnown(groupKey.slice(6))) store.setGroup(pairs, groupKey.slice(6));
       schedule(0);
     },
-    /* The page left Delete... out of an archived row's menu: say why, using the page's reason or else the list's own,
-       and what the list holds for the row now, which may differ from what the page saw. */
+    /* The page left Delete... out of an archived row's menu. What the list holds for the row now may differ from what
+       the page saw. */
     noteNoDelete(items) {
       for (const it of (Array.isArray(items) ? items : []).slice(0, 50)) {
         const r = it && typeof it.key === 'string' ? rows.get(it.key) : null;

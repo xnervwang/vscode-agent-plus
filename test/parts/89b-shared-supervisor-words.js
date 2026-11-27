@@ -19,7 +19,7 @@ const LEAD = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
 
 module.exports = async ({ eq, note, tmp, root }) => {
   const python = ['python3', 'python'].find((p) => cp.spawnSync(p, ['-c', 'import sys; assert sys.version_info >= (3, 7)']).status === 0);
-  if (!python) { note('no Python 3.7 or later here: the supervisor word readers were not run'); return; }
+  if (!python) { note('no Python 3.7 or later here: these checks of the shared Python were not run'); return; }
   const shared = path.join(root, 'shared', 'plugin');
   const layout = (name) => {
     const plugin = tmp(`supervisor-${name}`);

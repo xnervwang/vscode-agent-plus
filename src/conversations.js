@@ -72,8 +72,9 @@ function entry(c, plan, located) {
     sessionId: c.sessionId, cwd: c.cwd, running: c.running, state, questions,
     activity: activityOf(c, questions), unseen: c.unseen === true,
     dot: dotOf({ activity: own, waitingFor: own === 'waiting' ? c.waitingFor || null : null, asks }),
-    /* Whether a question of its plan holds it up, as its dot and the session list's "Needs you" count it: one asked
-       after the user's last message. A source that gives no lastUserAt draws no such dot, so any question does. */
+    /* Whether the conversation waits on a question in its plan, as its dot and the session list's "Needs you" count
+       it: one asked after the user's last message. A source that gives no lastUserAt draws no such dot, so any question
+       counts. */
     asksYou: c.lastUserAt > 0 ? asks : questions.length > 0,
     doing: doingRows(nodes), open: openCount(nodes), unknown: countUnknown(nodes),
     hasPlan: located || plan ? !!(plan && !plan.error) : c.hasPlan === true,

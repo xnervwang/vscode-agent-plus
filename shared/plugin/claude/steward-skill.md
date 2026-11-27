@@ -106,12 +106,11 @@ Each message makes a conversation run a whole turn and read its whole context ag
 
 When the user asks you to check on other conversations after the windows were reloaded, VS Code or the machine was
 restarted, or the computer slept, use your lists from before the event. Send the message only to conversations those
-lists showed were working or running a command or had background work running (background tasks or background
-processes).
+lists showed were working, running a command, or running a task or process in the background.
 
-After a reload, restart, or sleep, a work plan row in progress does not count as work on its own. The user often pauses
-a conversation on purpose with a row still in progress, and a message would start it again. Include the number of
-conversations you left out in the line where you say what you sent and to whom.
+In this case, a work plan row in progress does not count as work on its own. The user often pauses a conversation on
+purpose with a row still in progress, and a message would start it again. Include the number of conversations you left
+out in the line where you say what you sent and to whom.
 
 Pass things on this way whenever you want a conversation to do something, and whenever the message carries an
 approval. To find out how a conversation is doing, read it with steward-peek.py first (below). If that does not answer
@@ -327,11 +326,11 @@ To link the conversation's name for the user, set `source=opencode-plus` and use
 
 ## Notices
 
-Claude Code Plus sends you a line that begins "Supervisor notice from Claude Code Plus, not a message from the user" when
-a conversation you manage starts waiting for the user, has a new question for the user, finishes a turn that your
+Claude Code Plus sends you a line that begins "Supervisor notice from Claude Code Plus, not a message from the user"
+when a conversation you manage starts waiting for the user, has a new question for the user, finishes a turn that your
 message started or that ran while a row of your own plan named that conversation, or has a background session or
-`claude -p` worker of its own that ended without finishing. Earlier versions began the line with "Steward notice"
-instead; treat such a line the same way.
+`claude -p` worker of its own that ended without finishing. Treat notices from older Claude Code Plus builds that begin
+with "Steward notice" the same way as those that begin with "Supervisor notice".
 
 When several supervisors manage that conversation, only one gets the wait or new question: the supervisor the user last
 typed to among those a window shows. A line naming another supervisor means that supervisor got the question. Leave it to

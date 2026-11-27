@@ -282,7 +282,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const lines = said.slice(before);
     eq([row('busy').deletable, row('idle').deletable, lines.length], [false, true, 2], 'only rows the list holds get a line');
     eq(/^session list: Delete\.\.\. left out of the menu of codex busy: it is running; here false, open elsewhere 0, activity working, running true, pinned false, detail true$/.test(lines[0]),
-      true, 'a left-out Delete... is said with the reason the page was given and what the list holds for the row', lines[0]);
+      true, 'the line for a left-out Delete... gives the reason the page sent and what the list holds for the row', lines[0]);
     eq(/: nothing the list holds now; .*activity stopped/.test(lines[1]), true,
       'and a row the page left out with no reason, which the list would now allow, gets "nothing the list holds now" as its reason', lines[1]);
     list.dispose();
@@ -549,7 +549,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     const order = () => list.model().sections.find((x) => x.key === 'ungrouped').rows.map((r) => r.title);
     const set = (id, o) => Object.assign(codex.sessions.find((x) => x.sessionId === id), o);
-    eq(order(), ['Quiet', 'Runs', 'Background'], 'a row that already runs when the list first sees it sorts by its last message then');
+    eq(order(), ['Quiet', 'Runs', 'Background'], 'a row already running when the list first sees it sorts by the last message it had at that moment');
     set('r', { lastActiveAt: now0 - 10e3 });
     set('b', { activity: 'background', running: true });
     await list.refresh({ relist: true });
@@ -607,7 +607,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { where: 'tab' }, 'starting a conversation keeps the half it started in, and not its agent');
     const next = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await next.refresh();
-    eq(next.model().newSource, 'claude-code', 'and the next window starts with Claude Code again');
+    eq(next.model().newSource, 'claude-code', 'a new window starts with Claude Code');
     next.dispose();
     list.dispose();
   }

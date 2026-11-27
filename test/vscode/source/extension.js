@@ -260,7 +260,8 @@ function activate(context) {
       return true;
     },
     otherState: (which) => (which === 'opencode' ? thirdState : otherState),
-    /* Sets fields of the state of the source `which`, such as its Account & usage part, and tells Agent Plus. */
+    /* Sets fields on the state of source `which` (its Account & usage part, say) and fires its account change event, so
+       that Agent Plus reads it again. */
     configureOther(which, fields) {
       const st = which === 'opencode' ? thirdState : otherState;
       Object.assign(st, fields);
