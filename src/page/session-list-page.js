@@ -672,6 +672,12 @@
     const keys = keysFor(r);
     const items = itemsFor(r._row.ctx || {}, keys);
     if (!items.length) return false;
+    /* Delete... left out of an archived row's menu goes to the output channel with the reason this page was given, so
+       that a missing one can be told apart from a stale one afterwards. */
+    if (!items.some((it) => it.name === 'delete')) {
+      const left = keys.map((k) => rowsOf(k)[0]).filter((x) => x && x._row && x._row.archived).map((x) => ({ key: x._row.key, why: x._row.deleteWhy || '' }));
+      if (left.length) send({ kind: 'noDelete', rows: left });
+    }
     const at = rectOf(r);
     const pointer = !!e && typeof e.clientX === 'number' && !!(e.clientX || e.clientY);
     openCtx(pointer ? e.clientX : at.left + 8, pointer ? e.clientY : at.bottom, items, (it, pick) => {

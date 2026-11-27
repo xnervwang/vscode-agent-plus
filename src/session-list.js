@@ -821,6 +821,20 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       else if (groupKey.startsWith('group:') && store.groupKnown(groupKey.slice(6))) store.setGroup(pairs, groupKey.slice(6));
       schedule(0);
     },
+    /* The page left Delete... out of an archived row's menu: the reason it was given, or else the one the list finds now,
+       with what the list holds for the row, which a read since may have changed. */
+    noteNoDelete(items) {
+      for (const it of (Array.isArray(items) ? items : []).slice(0, 50)) {
+        const r = it && typeof it.key === 'string' ? rows.get(it.key) : null;
+        if (!r) continue;
+        const e = entryOf(r.sourceId);
+        const caps = e ? capsOf(e.source) : { delete: false };
+        const given = typeof it.why === 'string' ? it.why.slice(0, 200) : '';
+        const why = given || rules.deleteBlocker(r) || (caps.delete ? 'nothing the list holds now' : 'its agent does not delete conversations');
+        say(`session list: Delete... left out of the menu of ${r.sourceId} ${r.sessionId}: ${why}; here ${r.here}, open elsewhere ${r.elsewhere.length}, `
+          + `activity ${r.activity || 'none'}, running ${r.running === true}, pinned ${!!r.pinned}, detail ${!!r.detail}`);
+      }
+    },
     wantDetail(keys) {
       for (const e of entries()) {
         const ids = keys.map((k) => rows.get(k)).filter((r) => r && r.sourceId === e.id && !r.detail).map((r) => r.sessionId);

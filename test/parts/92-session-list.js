@@ -262,6 +262,31 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
+  /* ── Delete... left out of an archived row's menu, said on the output channel ── */
+  {
+    const t = setup();
+    const said = [];
+    t.host.say = (l) => said.push(l);
+    const codex = source('codex', [conv('busy', { title: 'Still running', activity: 'working', running: true }), conv('idle', { title: 'Idle' })]);
+    t.entries.push({ id: 'codex', source: codex });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    t.control.setTabs([{ label: 'x', input: {} }], 0);
+    await list.refresh();
+    const key = (id) => JSON.stringify(['codex', id]);
+    await list.act('archive', [key('busy'), key('idle')]);
+    await list.refresh();
+    const row = (id) => list.model().sections.flatMap((x) => x.rows).find((r) => r.id === id);
+    const before = said.length;
+    list.noteNoDelete([{ key: key('busy'), why: row('busy').deleteWhy }, { key: key('idle'), why: '' }, { key: 'nothing' }, 'x']);
+    const lines = said.slice(before);
+    eq([row('busy').deletable, row('idle').deletable, lines.length], [false, true, 2], 'only the rows the list holds are said');
+    eq(/^session list: Delete\.\.\. left out of the menu of codex busy: it is running; here false, open elsewhere 0, activity working, running true, pinned false, detail true$/.test(lines[0]),
+      true, 'a left-out Delete... is said with the reason the page was given and what the list holds for the row', lines[0]);
+    eq(/: nothing the list holds now; .*activity stopped/.test(lines[1]), true,
+      'and one the page left out with no reason, which the list would now allow, says so', lines[1]);
+    list.dispose();
+  }
+
   /* ── Where a conversation found by shows() is ── */
   {
     const t = setup();

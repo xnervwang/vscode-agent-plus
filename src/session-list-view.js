@@ -121,6 +121,7 @@ class SessionListView {
       case 'create': return list.create(str(msg.sourceId), str(msg.where));
       case 'newSource': return list.chooseNew(str(msg.sourceId), str(msg.where));
       case 'wantDetail': return list.wantDetail(keys);
+      case 'noDelete': return list.noteNoDelete(Array.isArray(msg.rows) ? msg.rows.slice(0, 50) : []);
       case 'accountLink': return list.accountLink(str(msg.sourceId), Number.isInteger(msg.i) ? msg.i : -1);
       case 'noticeAction': return list.noticeAction(str(msg.sourceId), Number.isInteger(msg.i) ? msg.i : -1);
       case 'trust': return this.vscode.commands.executeCommand('workbench.trust.manage');

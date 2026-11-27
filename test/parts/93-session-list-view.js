@@ -37,7 +37,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     let model = { sections: [], counts: { all: 3, open: 1, running: 1, needs: 2 }, sources: [{ id: 'codex', label: 'Codex', logo: { light: svg, dark: svg }, create: ['tab'] }] };
     const rec = (name) => (...a) => { asked.push([name, ...a]); return name === 'act' && a[0] === 'newGroupFrom' ? { renameGroup: 'g1' } : name === 'groupAct' && a[0] === 'newGroup' ? { renameGroup: 'g2' } : 'done'; };
     const list = { model: () => model, onDidChange: changes.event, schedule: () => asked.push(['schedule']) };
-    for (const n of ['open', 'act', 'groupAct', 'rename', 'renameGroup', 'moveTo', 'create', 'chooseNew', 'wantDetail', 'accountLink', 'noticeAction']) list[n] = rec(n);
+    for (const n of ['open', 'act', 'groupAct', 'rename', 'renameGroup', 'moveTo', 'create', 'chooseNew', 'wantDetail', 'accountLink', 'noticeAction', 'noteNoDelete']) list[n] = rec(n);
     const v = new V.SessionListView(vscode, { list, extensionUri: vscode.Uri.file('/ext') });
     const view = viewOf(vscode);
     v.resolveWebviewView(view);
@@ -80,11 +80,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await say({ kind: 'wantDetail', keys: ['k2'] });
     await say({ kind: 'accountLink', sourceId: 'codex', i: 1 });
     await say({ kind: 'noticeAction', sourceId: 'codex', i: 0 });
+    await say({ kind: 'noDelete', rows: [{ key: 'k1', why: 'it is running' }] });
     await say({ kind: 'select', keys: ['k1'] });
     await say({ kind: 'nothing' });
     eq(asked, [['open', 'k1'], ['act', 'pin', ['k1', 'k2'], undefined], ['act', 'newGroupFrom', ['k1'], undefined], ['groupAct', 'newGroup', '', undefined],
       ['groupAct', 'deleteGroup', 'g1', undefined], ['rename', 'k1', 'New'], ['renameGroup', 'g1', 'Named'], ['moveTo', ['k1'], 'ungrouped'],
-      ['create', 'codex', 'sidebar'], ['chooseNew', 'codex', 'tab'], ['wantDetail', ['k2']], ['accountLink', 'codex', 1], ['noticeAction', 'codex', 0]],
+      ['create', 'codex', 'sidebar'], ['chooseNew', 'codex', 'tab'], ['wantDetail', ['k2']], ['accountLink', 'codex', 1], ['noticeAction', 'codex', 0],
+      ['noteNoDelete', [{ key: 'k1', why: 'it is running' }]]],
     'each message of the page goes to the list, with only strings among the keys');
     eq([view.sent, v.selection], [[{ type: 'startRenameGroup', groupId: 'g1' }, { type: 'startRenameGroup', groupId: 'g2' }], ['k1']],
       'a new group is put up for naming at once, and the selection is kept');
