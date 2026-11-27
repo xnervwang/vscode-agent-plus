@@ -103,8 +103,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   }
 
   /* As above, but the conversation then stops with its reply read. The window showing it keeps reporting it, so the
-     other window gets no notice of the ended wait, and the next wait is not hidden. It comes while that window has no
-     focus, so the window keeps the notice and shows it once it has the focus. */
+     other window gets no notice of the ended wait, and the next wait is not hidden. */
   {
     const dir = path.join(tmp('here-stopped'), 'attention');
     const m = make(dir, 'sm', { focused: true }), p = make(dir, 'sp', { here: ['y'] });

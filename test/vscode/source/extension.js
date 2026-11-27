@@ -174,7 +174,7 @@ function activate(context) {
   context.subscriptions.push(thirdChanged);
   const otherState = { calls: [], sidebar: [], place: {}, imported: null }, thirdState = { calls: [], sidebar: [], place: {}, imported: null };
   /* A source with no tabs of its own: what it is asked to do is recorded, and a conversation opened in the sidebar counts
-     as shown there. shownIn answers what the test put in `place`, nothing by default. */
+     as shown there. shownIn gives the test's `place` entry for each conversation, and nothing when none is set. */
   const sessionsSource = (id, label, logo, m, ev, st, more) => Object.assign({
     protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows', 'shownIn'],
     logo: { light: vscode.Uri.file(path.join(__dirname, logo)), dark: vscode.Uri.file(path.join(__dirname, logo)) },

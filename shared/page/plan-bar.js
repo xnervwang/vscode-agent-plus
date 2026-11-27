@@ -9,9 +9,10 @@
  * (planSummary in docs/protocol.md). Exported as one global, agentPlusPlanBar; under Node it is also a module, for the
  * tests. The source is ASCII and ES5, like the page scripts.
  *
- * Rows waiting for the user's answer are counted in a solid "N to decide" part instead of their state's bubble (see
- * BUBBLES), so the numbers add up to the open rows that are not parked. Narrower than COMPACT_BELOW (400 CSS pixels),
- * the bar drops the word Plan and the arrow at the bar's end, and "to decide" shows only its number.
+ * Each state of BUBBLES that has open rows gets a bubble counting them, except rows waiting for the user's answer:
+ * they are counted in a solid "N to decide" part, so the numbers add up to the open rows that are not parked.
+ * Narrower than COMPACT_BELOW (400 CSS pixels), the bar leaves out the word Plan at its start and the arrow at its
+ * end, and "to decide" shows only its number.
  */
 var agentPlusPlanBar = (function () {
   'use strict';

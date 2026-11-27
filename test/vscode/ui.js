@@ -1587,7 +1587,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   await step('sessions-place', async () => {
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');
-    /* The hover box is filled when the pointer comes onto the row, so each try leaves the row and comes back. */
+    /* The hover box is filled when the pointer enters the row, so each try moves the pointer off the row and back. */
     const placeSaid = async (place, want) => {
       await src('return src.showIn(arg[0], arg[1], arg[2]);', ['opencode', ['oc-1'], place]);
       if (!await slWait((r) => (slFind(r, SLT.oc) || {}).stripe === 'here')) return null;

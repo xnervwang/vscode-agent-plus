@@ -5,9 +5,9 @@
 'use strict';
 /*
  * The output channel's "active conversation:" line, which the feature extensions' window tests read to tell which
- * conversation Agent Plus has in front. A tab change draws the front a moment later (src/views.js drawFocus), and a
- * read of the plans in that moment moves the work plan view to the new conversation first; the line is written
- * either way, once per change.
+ * conversation Agent Plus has in front. After a tab change the new front is drawn a moment later (src/views.js
+ * drawFocus), and a read of the plans in that moment moves the work plan view to the new conversation first; the line
+ * is written either way, once per change.
  */
 const fs = require('fs');
 const path = require('path');
