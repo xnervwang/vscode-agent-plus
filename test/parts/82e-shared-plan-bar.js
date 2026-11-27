@@ -74,7 +74,7 @@ module.exports = async ({ eq, root, wait }) => {
     [false, '', false, '', 'Work plan: 1 row open'],
     [false, '', true, '', 'Work plan: all rows done'],
     [false, 'doing:1 waiting:2 todo:2', false, '1 to decide', 'Work plan: 1 doing, 2 waiting, 2 to do; 1 question waits for your answer'],
-  ], 'a bubble for each of doing, waiting, discussing and todo that has rows, in that order; a row waiting for the answer counts in "to decide" only; parked rows get none; a plan with none open is all done; a summary without `asking` counts its asking rows in their states');
+  ], 'four summaries: a busy plan gets a bubble for each of doing, waiting, discussing and todo in that order, its rows waiting for the answer counted in "to decide" only; a parked one gets none; a finished one is all done; an older one without `asking` counts its asking rows in their states');
   {
     const m = bar.model(busy, wide);
     eq(m.bubbles.reduce((sum, b) => sum + b.n, 0) + busy.questions + busy.counts.parked, busy.total - busy.done,
@@ -124,7 +124,7 @@ module.exports = async ({ eq, root, wait }) => {
     const view = fs.readFileSync(path.join(root, 'src', 'workplan-view.js'), 'utf8');
     const asked = (/ThemeIcon\('question', new vscode\.ThemeColor\('([\w.]+)'\)\)/.exec(view) || [])[1] || '';
     eq(bar.ASK.replace(/^var\(--vscode-([\w-]+).*$/, '$1'), asked.replace('.', '-'),
-      '"to decide" is filled with the colour of the question mark the work plan view gives a row waiting for the user');
+      '"to decide" is filled with the colour the work plan view uses for its question mark');
   }
   {
     const css = (text.match(/var CSS = ([\s\S]*?);\n/) || [])[1] || '';
@@ -153,7 +153,7 @@ module.exports = async ({ eq, root, wait }) => {
   'with a summary it shows Plan, a bubble for each state with rows, tinted with its colour, "to decide", the arrow and a spoken label');
   b.fit(narrow);
   eq([b.el.getAttribute('data-compact'), !!b.el.find('apb-name'), bubbles().length, b.el.find('apb-q').textContent, !!b.el.find('apb-chev')],
-    ['1', false, 4, '3', false], 'narrowed below the threshold it drops Plan and the arrow, keeps the bubbles, and "to decide" keeps only its number');
+    ['1', false, 4, '3', false], 'narrowed below the threshold it drops Plan and the arrow, keeps the bubbles, and "to decide" shows just the number');
   b.fit(bar.COMPACT_BELOW + 4);
   eq(b.el.getAttribute('data-compact'), '1', 'and stays compact just above the threshold');
   b.fit(wide);
@@ -180,9 +180,9 @@ module.exports = async ({ eq, root, wait }) => {
     ['1', ['3.2 CLI: budget subcommand', '10 rows not done', '3 CLI', '3.2 CLI: budget subcommand'], '12px', '20px', '468px'],
     'over the bar it lists the open rows under the current row\'s title, each indented by its depth, just above the bar at its left edge');
   bubbles()[1].fire('mouseover');
-  eq(texts(), ['2 waiting', '5 Report', '6 Fonts'], 'moved onto a bubble while a list shows, the list is at once that state\'s rows');
+  eq(texts(), ['2 waiting', '5 Report', '6 Fonts'], 'moved onto a bubble while a list shows, the list switches at once to that state\'s rows');
   b.el.find('apb-q').childNodes[1].fire('mouseover');
-  eq(texts(), ['3 questions for you', '4 Skip negative amounts?', '7 This month or last?', '8 Names'], 'and onto "to decide", its questions');
+  eq(texts(), ['3 questions for you', '4 Skip negative amounts?', '7 This month or last?', '8 Names'], 'and moved onto "to decide", to the questions');
   b.el.fire('mouseleave');
   eq(doc.body.childNodes.length, 1, 'and it goes when the pointer leaves');
   b.el.fire('mouseover');

@@ -4,9 +4,9 @@
 
 'use strict';
 /*
- * The time a notification starts with (src/notice-time.js): HH:MM in the reader's zone, the month and day too for
- * another day there, this machine's zone named while the reader's is not known, and the show functions that put it
- * before a notification's text and leave a modal dialog as it is.
+ * The time a notification starts with (src/notice-time.js): HH:MM in the reader's zone, with the month and day when it
+ * falls on another day there, and in this machine's zone, with its name, while the reader's is unknown; and the show
+ * functions, which put it before a notification's text but leave a modal dialog alone.
  */
 const path = require('path');
 
@@ -16,7 +16,7 @@ module.exports = ({ eq, root }) => {
   const now = Date.UTC(2026, 10, 27, 4, 5);
   const at = (zone, ms = now) => t.stampOf(ms, { now, zone });
   eq([at('America/Los_Angeles'), at('Asia/Tokyo'), at('Asia/Kolkata'), at('America/Los_Angeles', now - 6 * 3600e3)],
-    ['20:05', '13:05', '09:35', '14:05'], 'a time on the reader\'s day of now is the hour and minute in the reader\'s zone');
+    ['20:05', '13:05', '09:35', '14:05'], 'a time on the same day as now in the reader\'s zone is the hour and minute there');
   eq([at('America/Los_Angeles', now - 24 * 3600e3), at('Asia/Tokyo', now - 14 * 3600e3)], ['Nov 25 20:05', 'Nov 26 23:05'],
     'one on another day of the reader\'s has the month and day before it');
   const here = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' })
@@ -47,5 +47,5 @@ module.exports = ({ eq, root }) => {
   eq([r, calls.map((c) => [c[0], stampRe.test(c[1]), c.slice(2)]), calls[3][1], /^\[[A-Z][a-z]{2} \d{1,2} \d\d:\d\d\] Earlier$/.test(calls[4][1])],
     ['shown', [['showInformationMessage', true, ['Open']], ['showWarningMessage', true, []], ['showErrorMessage', true, ['Retry']],
       ['showInformationMessage', false, [{ modal: true, detail: 'x' }, 'OK']], ['showInformationMessage', false, ['Open']]], 'A dialog', true],
-    'info, warning and error put the time before the text and pass the rest on; a modal dialog is shown as given; infoAt dates one from another day');
+    'info, warning and error put the time before the text and pass the other arguments through, a modal dialog is left as it is, and infoAt gives a time on another day with its date');
 };

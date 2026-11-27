@@ -102,9 +102,10 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (const w of [m, p, q, f]) w.att.dispose();
   }
 
-  /* The same when the conversation then stops with its reply read: the window showing it still reports it, so the
-     other window's machine-wide list, which keeps reporting the ended wait, neither gets a notice of it nor hides the
-     next wait, which that window keeps while it has no focus and shows once it has. */
+  /* As above, but the conversation then stops with its reply read. The window showing it keeps reporting it, which
+     outweighs the other window's machine-wide list still giving the ended wait: that window gets no notice of the
+     ended wait, and the next wait is not hidden. It comes while that window has no focus, so the window keeps the
+     notice and shows it once it has the focus. */
   {
     const dir = path.join(tmp('here-stopped'), 'attention');
     const m = make(dir, 'sm', { focused: true }), p = make(dir, 'sp', { here: ['y'] });
@@ -132,7 +133,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const kept = m.shown.slice(-1).map((n) => n.at);
     eq([first, between, away, fresh(m), kept],
       [['"Choose the config" has a question for you.'], [[], []], [], ['"Choose the config" has a question for you.'], [seenAt]],
-      'a stopped conversation the window showing it still reports outweighs a machine-wide list still reporting its ended wait: no notice of that wait, and the next one is kept and shown once the window has the focus, with the time it was first seen');
+      'the window showing the stopped conversation keeps reporting it, which outweighs the other window\'s machine-wide list that still has the ended wait: no notice of that wait, and the next wait is kept and shown, with the time it was first seen, once the window has the focus');
     for (const w of [m, p]) w.att.dispose();
   }
 

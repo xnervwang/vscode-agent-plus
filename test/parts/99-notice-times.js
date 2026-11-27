@@ -4,8 +4,8 @@
 
 'use strict';
 /*
- * Runs last: every notification the parts before it had this extension show through the stand-in vscode carried the
- * time src/notice-time.js puts before it.
+ * Runs last: every notification the parts before it had this extension show through the stand-in vscode carried its
+ * time (src/notice-time.js).
  */
 const fake = require('../fake-vscode');
 

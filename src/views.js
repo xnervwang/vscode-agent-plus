@@ -84,9 +84,9 @@ function create(host, opts = {}) {
 
   /* ── The work plan of the conversation in front ── */
   const focus = new sources.Focus();
-  /* The front as the output channel last said it. Both the deferred draw (drawFocus) and a read of the plans
-     (refreshPlans) can move the work plan view to a new front, so either one says it, and a front already said is not
-     said again. */
+  /* The front last written to the output channel. Both the deferred draw (drawFocus) and a read of the plans
+     (refreshPlans) can move the work plan view to a new front, so both call sayFront(), which writes a line only when
+     the front has changed. */
   let saidFront = '(none)';
   const sayFront = () => {
     const now = focus.sourceId ? `${focus.sourceId} ${focus.sessionId || '(no session yet)'}` : '(none)';
@@ -223,7 +223,7 @@ function create(host, opts = {}) {
     finished: cfg().get('notifications.finished', true) !== false, waiting: cfg().get('notifications.waiting', true) !== false });
   const paintAttention = (items) => { attentionItems = items || []; paintConversations(); };
   /* A plain message, since a progress notification can have only one button. Its time is when this window first saw
-     the change, which for one kept while no window had the focus is earlier than the notification. */
+     the change: for a notice held back while no window had the focus, earlier than the notification itself. */
   const notify = (text, it) => {
     Promise.resolve(noticeTime.infoAt(vscode, it && it.queuedAt, text, 'Open', 'Dismiss'))
       .then((pick) => (pick === 'Open' ? commands.openAttention(it.sourceId, it.sessionId) : undefined))

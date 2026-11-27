@@ -370,7 +370,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!notice && sameList(notice.buttons, ['Install Claude Code Plus', 'Install Codex Plus']),
       'installed with no extension that uses it, Agent Plus shows one notice with a button to install each extension that would', notice || await toasts());
     const first = stampOf(notice && notice.text);
-    check(!!first && isNow(first.time) && !!first.zone, 'it starts with the time, which names this machine\'s zone, as no page has said the reader\'s yet', notice && notice.text);
+    check(!!first && isNow(first.time) && !!first.zone, 'it starts with the time and names this machine\'s zone, since no page has reported the reader\'s zone yet', notice && notice.text);
     const ours = await page.evaluate(() => [...document.querySelectorAll('.statusbar-item')].filter((e) => e.offsetParent && /^xnervwang\.agent-plus\./.test(e.id)).map((e) => e.id));
     check(!ours.length, 'it shows no status bar entry', ours);
     const bar = await page.evaluate(() => [...document.querySelectorAll('.activitybar .action-item .action-label')].map((a) => a.getAttribute('aria-label') || '')
@@ -480,7 +480,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
 
   await step('notice-time', async () => {
     needs('request-limit');
-    /* The Answer view's page runs where the reader is and says its zone. */
+    /* The Answer view's page runs on the reader's machine and reports its time zone. */
     await exec('agentPlus.answer.focus');
     let last = '';
     const said = await until(async () => {
@@ -494,7 +494,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const s = stampOf(said || last);
     check(!!said && isNow(s.time) && said.endsWith('] No conversation needs you now.'),
       'once a page has said the reader\'s zone, a notification starts with the hour and minute there and names no zone', last);
-    await look('notice-time', { toasts: true, expect: 'A notification at the bottom right reading No conversation needs you now., with the time before it in square brackets as two-digit hours and minutes, such as [14:05], and nothing else in the brackets. The text is not cut off.' },
+    await look('notice-time', { toasts: true, expect: 'A notification at the bottom right with the time in square brackets before its text, No conversation needs you now. The time is two-digit hours and minutes, such as [14:05], with nothing else in the brackets, and the text is not cut off.' },
       toastLoc('No conversation needs you now.'));
     await clearToasts();
   });
@@ -646,7 +646,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const st = await entry('conversations');
     check(!!st && /2 conversations need you/.test(st.text) && !st.warning && !st.error,
       'and the status bar entry says 2 conversations need you, in the status bar\'s own colours', st);
-    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you in the status bar\'s own colours, with no yellow or red behind it.' },
+    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you in the bar\'s own colours, with no yellow or red behind it.' },
       pane('agentPlus.conversations'));
   });
 
@@ -1088,7 +1088,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const NWAIT = 'Waits for permission', NFIN = 'Finished a turn', NENV = 'Envelope only', NQUEUE = 'Followed by a queued message', NFRONT = 'In front';
   let base = [];
   await step('notify-waiting', async () => {
-    /* The request limit's notice comes up on the first start, and request-limit is where it is answered. */
+    /* The request limit's notice comes up on the first start; the request-limit step answers it. */
     needs('request-limit');
     await openNotes();
     await clearToasts();
@@ -1109,7 +1109,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     }
     const t = await toastWith(`"${NWAIT}" is waiting for you.`, 10000);
     check(!!t && sameList(t.buttons, ['Open', 'Dismiss']), 'the focused window shows a notification that it is waiting for you, with Open and Dismiss', t || await toasts());
-    await look('notify-waiting', { toasts: true, expect: 'A notification at the bottom right: "Waits for permission" is waiting for you., with the buttons Open and Dismiss. In the status bar, in its own colours, N conversations need you.' },
+    await look('notify-waiting', { toasts: true, expect: 'A notification at the bottom right with the buttons Open and Dismiss, reading "Waits for permission" is waiting for you. In the status bar, in its own colours, N conversations need you.' },
       toastLoc(`"${NWAIT}" is waiting for you.`));
     await press(`"${NWAIT}" is waiting for you.`, 'Dismiss');
     check(await until(async () => !(await toasts()).some((x) => x.text.includes(NWAIT)), 5000, 200) && (await bell()) === before + 1,
@@ -1182,7 +1182,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await settle();
     check((await bell()) === before, 'and once another tab is in front it is still not counted', { before, now: await bell() });
     check(await noToast(NFRONT, 4000), 'but not announced after the fact');
-    await look('attention-count', { expect: 'The status bar at the bottom right has N conversations need you in the status bar\'s own colours, counting the conversations that wait for you; there is no separate bell entry of Agent Plus, and no notification is on screen.' },
+    await look('attention-count', { expect: 'The status bar at the bottom right has N conversations need you in the bar\'s own colours; there is no separate bell entry of Agent Plus, and no notification is on screen.' },
       page.locator('#workbench\\.parts\\.statusbar'));
   });
 
@@ -1374,7 +1374,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     }, 10000, 300);
     check(!!off, 'with agentPlus.conversationsView off, the Conversations and Answer views go', off);
     check((await bell()) === 1, 'while the status bar entry still counts the conversation waiting', await entry('conversations'));
-    await look('view-settings-off', { expect: 'No Conversations tab in the panel; the status bar has 1 conversation needs you in the status bar\'s own colours and the token mode entry All.' },
+    await look('view-settings-off', { expect: 'No Conversations tab in the panel; the status bar has 1 conversation needs you in the bar\'s own colours and the token mode entry All.' },
       page.locator('#workbench\\.parts\\.statusbar'));
     await setting('agentPlus.conversationsView', true);
     await showConversations();
@@ -1425,9 +1425,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const calls = (which) => src(which === 'codex' ? 'return src.state.calls;' : 'return src.otherState(arg).calls;', which);
   const sidebarBox = () => page.locator('#workbench\\.parts\\.sidebar');
   /*
-   * The activity bar's entries of the session list (titled Conversations) and of the Work plan (titled Agent Plus), once
-   * both are drawn: each one's place among the bar's entries, its box in CSS pixels, and the icon file it is masked with.
-   * Null while either is missing or has no size yet.
+   * The two activity bar entries, Conversations for the session list and Agent Plus for the Work plan, once both are
+   * drawn: for each, its place among the bar's entries, its box in CSS pixels and the icon file it is masked with. Null
+   * while either is missing or has no size yet.
    */
   const barEntries = () => page.evaluate(() => {
     const items = [...document.querySelectorAll('.activitybar .action-item')];
@@ -1447,7 +1447,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     return { x: left, y: top - 8, width: right - left, height: bottom - top + 16 };
   };
   /* What both close views of the two entries should show, after the theme's own words. */
-  const BAR_LOOK = 'on top the robot of the Conversations session list (a speech-bubble head with two square eyes, a small ear on each side and an antenna ending in a ring), and right under it the Work plan of Agent Plus (a page with a folded corner, a tick and a list). The two icons look the same size: the robot\'s head is about as wide as the page and the whole robot about as tall, and the outlines of both are equally thick. The robot\'s entry is the active one, as its list is open, so it is the brighter of the two and may have a marker line at its left edge. Neither icon is cut off, and nothing but a number badge covers either.';
+  const BAR_LOOK = 'on top the robot of the Conversations session list (a speech-bubble head with two square eyes, a small ear on each side and an antenna ending in a ring), and right under it the Work plan of Agent Plus (a page with a folded corner, a tick and a list). The two icons look the same size and line weight: the robot\'s head is about as wide as the page and the whole robot about as tall. The robot\'s entry is the active one, so it is the brighter of the two and may have a marker line at its left edge. Neither icon is cut off, and nothing but a number badge covers either.';
   const DAY = 86400e3;
   /* A stand-in for another VS Code window: an entry in each source's windows/<pid>.json, with this test's own process
      as the window. */
@@ -1499,7 +1499,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const bar = await barShown();
     check(!!bar && bar.sessions.index < bar.plan.index && bar.sessions.y + bar.sessions.height <= bar.plan.y + 1
       && /sessions\.svg/.test(bar.sessions.icon) && /sidebar\.svg/.test(bar.plan.icon),
-    'in the activity bar the session list\'s entry, with the robot of images/sessions.svg, comes above the Work plan\'s, with the document of images/sidebar.svg', bar);
+    'in the activity bar the session list\'s entry (the robot, images/sessions.svg) comes above the Work plan\'s (the page, images/sidebar.svg)', bar);
     await look('sessions-activity-bar-dark', { expect: `A close view of two entries of the activity bar on the left, in a dark theme: light icons on the dark bar, ${BAR_LOOK}` },
       bar ? barBox(bar) : null);
     const rows = await slWait((r) => [SLT.run, SLT.perm, SLT.ask, SLT.other, SLT.cc, SLT.oc, SLT.ocTerm].every((t) => slFind(r, t, 'ungrouped'))
@@ -1619,11 +1619,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await showSessions('agentPlus.sessions');
     check(!!await slWait((r) => (slFind(r, SLT.run) || {}).stripe === 'here'), 'the conversation in its tab is open here');
     await src('return src.forgetTab(arg);', 'sl-run');
-    check(!!await slWait((r) => (slFind(r, SLT.run) || {}).stripe !== 'here'), 'while its source answers its tab with no conversation yet, the row is not open here');
+    check(!!await slWait((r) => (slFind(r, SLT.run) || {}).stripe !== 'here'), 'while its source answers \'\' for its tab, the row is not open here');
     const at = Date.now();
     await src('return src.knowTab(arg);', 'sl-run');
     const back = await slWait((r) => (slFind(r, SLT.run) || {}).stripe === 'here', 5000);
-    check(!!back, 'once the source knows the tab\'s conversation and says so with onDidFocus, the row is open here again within seconds, not at the next 30-second look', `${Date.now() - at} ms`);
+    check(!!back, 'once the source learns the tab\'s conversation and fires onDidFocus, the row is open here again within seconds, not at the next 30-second look', `${Date.now() - at} ms`);
     if (!back) await src('return src.knowTab(arg);', 'sl-run');
   });
 
@@ -1842,11 +1842,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slHead('Account & usage').click();
     await look('sessions-account-closed', { expect: 'The ACCOUNT & USAGE header collapsed to one band with its chevron pointing right, and the sections below it moved up.' }, sidebarBox());
     await slHead('Account & usage').click();
-    /* An agent that is not signed in gives a part of one line and no bars; it is drawn as any other part. */
+    /* An agent not signed in gives a part with one line and no bars, which the list draws like any other part. */
     await src('return src.configure(arg);', { account: { rows: [{ label: 'Account', value: 'Not signed in' }] } });
     const plain = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]');
       return !!a && !a.classList.contains('sl-hidden') && /Account\s+Not signed in/.test(a.innerText) && !a.querySelector('.sl-bar') && a.innerText; }), 10000, 300);
-    check(!!plain, 'a part of one line and no bars, as an agent not signed in gives, is drawn under the agent\'s name with nothing else', plain);
+    check(!!plain, 'an agent not signed in gives a part with one line and no bars, and it is drawn under the agent\'s name with nothing else', plain);
     await look('sessions-account-not-signed-in', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded, with one Codex block: its logo and the name Codex, and under it a single line, Account at the left and Not signed in at the right. No bars, no links and no conversation lines.' }, sidebarBox());
     await src('return src.configure(arg);', { account: null });
     const left = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return !!a && a.classList.contains('sl-hidden'); }), 10000, 300);

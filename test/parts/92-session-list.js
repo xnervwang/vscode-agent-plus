@@ -239,7 +239,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── A tab whose conversation its source learns after the tab opened ── */
+  /* ── A tab whose conversation the source learns late ── */
   {
     const t = setup();
     const codex = source('codex', [conv('late', { title: 'Learned late' })]);
@@ -248,7 +248,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     codex.tabAnswer['Learned late'] = '';
     t.control.setTabs([{ label: 'Learned late', input: { source: 'codex', sid: 'late' } }], 0);
     await list.refresh();
-    /* The first look writes the store, which looks again a moment later; this waits that out. */
+    /* The first look writes the store, and the store's change brings a second look a moment later; this
+       waits for it. */
     await new Promise((r) => setTimeout(r, 1000));
     const stripe = () => list.model().sections.flatMap((x) => x.rows).find((r) => r.title === 'Learned late').stripe;
     const before = stripe();
@@ -258,7 +259,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     codex.focus('late');
     await new Promise((r) => setTimeout(r, 500));
     eq([before, unasked, stripe()], ['', '', 'here'],
-      'a tab its source answers with no conversation yet is not open here; once the source knows it and says so with onDidFocus, the list looks at the tabs again and the row is');
+      'a tab its source answers with no conversation yet is not open here; once the source knows it and says so with onDidFocus, the list looks at the tabs again and the row is open here');
     list.dispose();
   }
 
@@ -287,7 +288,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── Where a conversation found by shows() is ── */
+  /* ── The place of a conversation only shows() finds ── */
   {
     const t = setup();
     const codex = source('codex', [conv('a', { title: 'In the sidebar' }), conv('b', { title: 'Behind a tab' }), conv('c', { title: 'Not said' })],

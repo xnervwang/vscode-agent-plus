@@ -40,6 +40,6 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   b.control.fireTabs();
   await control.state.handlers['agentPlus.refreshWorkPlan']();
   await wait(20);
-  eq(said().filter((x) => x === 'codex B').length, 1, 'a front that did not change is not said again');
+  eq(said().filter((x) => x === 'codex B').length, 1, 'the line is not written again for a front that did not change');
   b.close();
 };
