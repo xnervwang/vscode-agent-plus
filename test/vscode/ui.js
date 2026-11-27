@@ -1991,7 +1991,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       await slClose();
     }
     await menuOn(SLT.quiet);
-    await page.mouse.move(5, 5);
+    /* The menu opens under the pointer, and a pointer moved out of the window leaves the page thinking it is still on
+       one of the items: the next change of layout gives that item a mouseover, which takes the focus from the keys and
+       closes a submenu they opened. The pointer is moved off the menu inside the page first. */
+    await offBoth();
+    await sleep(300);
     /* A key reaches the webview a moment after press() returns, so each press waits for the focus to move before the
        next is read; reading at once can count one item twice and step past the label. */
     const focused = () => sl.evaluate(() => { const a = document.activeElement; return a && a.closest && a.closest('.sl-ctx-item') ? a.textContent.replace('›', '').trim() : ''; });
