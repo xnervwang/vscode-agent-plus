@@ -1127,7 +1127,7 @@
     if (typeof e.dataTransfer.setDragImage === 'function') e.dataTransfer.setDragImage(dragImage, -12, -12);
   });
   root.addEventListener('dragend', () => { dragging = null; dropImage(); for (const h of root.querySelectorAll('.sl-drop')) h.classList.remove('sl-drop'); });
-  /* A group or Ungrouped takes a drop anywhere on it, its header or its rows, and is lit as a whole while one is over it. */
+  /* Dropping on a group's rows works like dropping on its header; the section is lit as one block while a drag is over it. */
   const target = (e) => {
     const s = e.target.closest && e.target.closest('.sl-section');
     const se = s && sectionEls.get(s.dataset.key);

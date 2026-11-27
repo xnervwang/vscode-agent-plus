@@ -2057,14 +2057,14 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const dragged = await slWait((r) => slFind(r, SLT.perm, slGroup), 8000);
     check(!!dragged, 'and so does dragging a row onto the group', dragged && dragged.filter((x) => x.section === slGroup));
     const lit = (key) => sl.evaluate((k) => [...document.querySelectorAll('.sl-section.sl-drop')].map((s) => s.dataset.key).join(',') === k, key);
-    /* Presses on one row and moves onto another without letting go; the caller lets go. */
+    /* Starts a drag on one row and stops over another with the button still down. */
     const dragOnto = async (from, onto) => { await from.hover(); await page.mouse.down(); await onto.hover(); await onto.hover({ position: { x: 60, y: 10 } }); };
     await dragOnto(slRowLoc(SLT.askrun, 'ungrouped'), slRowLoc(SLT.cc, slGroup));
     const litOver = await until(() => lit(slGroup), 3000, 100);
-    await look('sessions-drag-group', { pointer: true, expect: 'A conversation is being dragged over A Claude Code conversation, a row of the PLUGINS group. The whole group, its PLUGINS header and the rows under it, is lit in the drop colour with a thin outline around it; no other section is lit.' }, sidebarBox());
+    await look('sessions-drag-group', { pointer: true, expect: 'A drag is in progress, with the pointer on the row A Claude Code conversation in the PLUGINS group. The PLUGINS header and both of its rows are lit in the drop colour inside a thin outline. No other section is lit.' }, sidebarBox());
     await page.mouse.up();
     const intoRow = await slWait((r) => slFind(r, SLT.askrun, slGroup), 8000);
-    check(!!litOver && !!intoRow, 'dragged over a row of a group, the whole group lights up as over its header, and dropped there the row goes into that group',
+    check(!!litOver && !!intoRow, 'a row dragged onto a row of another group lights up that group as its header would, and on release it joins the group',
       intoRow && intoRow.filter((x) => x.section === slGroup).map((x) => x.title));
     await dragOnto(slRowLoc(SLT.askrun, slGroup), slRowLoc(SLT.run, 'ungrouped'));
     const litBack = await until(() => lit('ungrouped'), 3000, 100);
