@@ -1,0 +1,7 @@
+# Source: vscode-agent-plus shared/plugin/opencode/retitle-skill.txt; sync-shared.js copies it, so edit it there.
+# What OpenCode puts in each {{name}} line of shared/plugin/skills/retitle/SKILL.md: each block runs from its "=== name"
+# line to the blank line before the next one.
+
+=== how
+Call the `set_title` tool with `title`, the new title. The tool knows which conversation it runs in, so it takes no
+id. Where it is not offered, this OpenCode cannot rename the conversation from inside it.

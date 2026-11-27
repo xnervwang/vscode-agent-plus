@@ -34,12 +34,14 @@ module.exports = async ({ ok, bad, eq, note, tmp, root }) => {
 
   {
     const sync = require(path.join(root, 'shared', 'build', 'sync-shared.js'));
-    const template = fs.readFileSync(path.join(shared, 'skills', 'maintain', 'SKILL.md'), 'utf8');
-    for (const agent of AGENTS.filter((a) => fs.existsSync(path.join(shared, a, 'maintain-skill.txt')))) {
-      let out = '', err = '';
-      try { out = sync.render(template, fs.readFileSync(path.join(shared, agent, 'maintain-skill.txt'), 'utf8')); } catch (e) { err = e.message; }
-      eq([err, /^---\nname: maintain\ndescription: .+\n/.test(out), /\{\{[\w-]+\}\}/.test(out)], ['', true, false],
-        `the ${agent} skill is made from the template, every block used and every line filled`);
+    for (const skill of ['maintain', 'retitle']) {
+      const template = fs.readFileSync(path.join(shared, 'skills', skill, 'SKILL.md'), 'utf8');
+      for (const agent of AGENTS.filter((a) => fs.existsSync(path.join(shared, a, `${skill}-skill.txt`)))) {
+        let out = '', err = '';
+        try { out = sync.render(template, fs.readFileSync(path.join(shared, agent, `${skill}-skill.txt`), 'utf8')); } catch (e) { err = e.message; }
+        eq([err, new RegExp(`^---\\nname: ${skill}\\ndescription: .+\\n`).test(out), /\{\{[\w-]+\}\}/.test(out)], ['', true, false],
+          `the ${agent} ${skill} skill is made from the template, every block used and every line filled`);
+      }
     }
   }
 

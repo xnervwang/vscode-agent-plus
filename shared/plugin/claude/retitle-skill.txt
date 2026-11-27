@@ -1,0 +1,16 @@
+# Source: vscode-agent-plus shared/plugin/claude/retitle-skill.txt; sync-shared.js copies it, so edit it there.
+# What Claude Code puts in each {{name}} line of shared/plugin/skills/retitle/SKILL.md: each block runs from its "=== name"
+# line to the blank line before the next one.
+
+=== how
+Run `hooks/retitle.py` in this plugin, two folders above the base directory this skill was loaded from, with the new
+title in a here-document inside the command. Start it with the Python the row command in the injected block uses:
+
+```bash
+python3 <plugin folder>/hooks/retitle.py <<'EOF'
+New title
+EOF
+```
+
+Keep the title in the command itself. The window checks the request against this command in the conversation's
+transcript, so a title written to a file first and redirected in is not renamed.

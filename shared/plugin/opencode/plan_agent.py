@@ -50,6 +50,10 @@ EXAMPLE_SESSION_ID = "ses_df3c28ab2ffe0TYFbXAnoBpqy6"
 
 # The field of a hook's input that names the turn: the id of the user message that began it.
 TURN_FIELD = "turn_id"
+
+# OpenCode names no conversation in a shell command's environment; its conversations rename themselves with the
+# plugin's set_title tool, which knows the session it runs in (retitle.py says so when run there).
+SELF_ENV = ""
 NO_GROUPING = "OpenCode keeps its sessions in a database, so there is no transcript path to group by"
 
 TOOLS = os.environ.get("OPENCODE_AGENT_PLUS_PLAN_TOOLS", "tools") != "shell"

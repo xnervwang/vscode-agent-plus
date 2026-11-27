@@ -674,3 +674,88 @@ def peer_turn(plan, payload):
     """Whether this event's turn was begun by a message from another session, as the injection marked it."""
     turn = this_turn(plan, payload)
     return bool(turn and turn.get("peer") is True)
+
+
+"""A conversation asking for a title of its own: request_retitle, and retitle.py around it.
+
+The agents give the model no way to rename its own conversation, and a model writing the title into the agent's own
+records is the kind of change the hosts do not take on trust. So the request goes to the VS Code extension hosting the
+conversation, which checks that the conversation itself asked and renames it the agent's own way. docs/protocol.md,
+"Retitle requests", is the format: the request in <data directory>/retitle/<key>.json, the answer in
+<key>.result.json beside it.
+"""
+RETITLE_DIR = "retitle"
+RETITLE_KEY = re.compile(r"^[0-9a-z]{12,40}$")
+# The title goes into the request as given; the host cleans it and shortens it. This only keeps a runaway string out.
+RETITLE_MAX_CHARS = 500
+# How long a request waits for a window to answer, and how much longer once a window has taken it: the hosts check the
+# conversation's own record of the call, which the agent writes a moment after the call starts.
+RETITLE_WAIT = 15.0
+RETITLE_CLAIMED_WAIT = 10.0
+RETITLE_POLL = 0.2
+
+
+def _retitle_answer(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    got = got if isinstance(got, dict) else {}
+    return {"outcome": str(got.get("outcome") or "failed"), "reason": str(got.get("reason") or ""),
+            "title": str(got.get("title") or "")}
+
+
+def request_retitle(session_id, title, directory=None, via="command", wait=RETITLE_WAIT, claimed_wait=RETITLE_CLAIMED_WAIT):
+    """Asks the extension to rename the conversation `session_id` to `title`, and waits for its answer.
+
+    Returns {"outcome", "reason", "title"}. The outcome is the host's ("done", "refused" or "failed", with the title it
+    set), or "untaken" when no window took the request in `wait` seconds, which then withdraws it, or "unclear" when a
+    window took it and gave no answer in `claimed_wait` more.
+    """
+    def refused(why):
+        return {"outcome": "refused", "reason": why, "title": ""}
+    if not isinstance(session_id, str) or not SESSION_NAME.match(session_id):
+        return refused("%r is not a %s conversation id" % (session_id, A.AGENT))
+    text = title if isinstance(title, str) else ""
+    if not text.strip():
+        return refused("the title is empty")
+    if len(text) > RETITLE_MAX_CHARS:
+        return refused("the title is longer than %d characters" % RETITLE_MAX_CHARS)
+    folder = os.path.join(directory or data_dir(), RETITLE_DIR)
+    key = "%x%s" % (int(time.time() * 1000), os.urandom(6).hex())
+    request = os.path.join(folder, key + ".json")
+    answer = os.path.join(folder, key + ".result.json")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        write_atomic(request, json.dumps({"format": 1, "key": key, "agent": A.AGENT, "sessionId": session_id, "title": text,
+                                          "at": int(time.time() * 1000), "via": via}, ensure_ascii=False))
+    except OSError as e:
+        return {"outcome": "failed", "reason": "the request could not be written (%s)" % e, "title": ""}
+    end = time.time() + wait
+    while time.time() < end:
+        got = _retitle_answer(answer)
+        if got:
+            return got
+        time.sleep(RETITLE_POLL)
+    withdrawn = os.path.join(folder, key + ".withdrawn")
+    try:
+        os.rename(request, withdrawn)
+    except OSError:
+        end = time.time() + claimed_wait
+        while time.time() < end:
+            got = _retitle_answer(answer)
+            if got:
+                return got
+            time.sleep(RETITLE_POLL)
+        return {"outcome": "unclear", "title": "",
+                "reason": "a VS Code window took the request but gave no answer within %d seconds" % int(wait + claimed_wait)}
+    try:
+        os.remove(withdrawn)
+    except OSError:
+        pass
+    return {"outcome": "untaken", "title": "", "reason": "no VS Code window took the request within %d seconds" % int(wait)}

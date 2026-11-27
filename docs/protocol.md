@@ -179,6 +179,20 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Writing | Nothing is asked of how a plan file is written. A file read halfway through a write does not parse, and the core shows the plan that last parsed while that file was written in the past 2 seconds; after that the row says it could not be read |
 | Reading again | A file whose modification time and size, and those of its `closed/` file, are all unchanged is not parsed again. `Agent Plus: Refresh` parses every plan afresh |
 
+## Retitle requests
+
+A conversation asks for a new title of its own through the work plan plugin: `retitle.py` (the title on standard input, the conversation from the agent's environment), or a tool that calls `plan_common.request_retitle`. The extension hosting the conversation does the renaming. The files are in `retitle/` in the agent's plan folder.
+
+| Item | Rule |
+| --- | --- |
+| Request | `retitle/<key>.json`, written to a temporary name and renamed into place: `{ "format": 1, "key", "agent", "sessionId", "title", "at", "via" }`. `key` is 12 to 40 of `0-9a-z`; `agent` is `Claude Code`, `Codex` or `OpenCode`; `title` is the string the conversation gave, uncleaned; `at` is epoch milliseconds; `via` is `command` or `tool`. The requester refuses an empty title or one over 500 characters without writing anything |
+| Claiming | A window takes a request by renaming `<key>.json` to `<key>.claimed`; the one whose rename succeeds handles it, and any other finds it gone. A window showing the conversation claims at once; one that does not waits 2 seconds and claims only if the request is still there |
+| Checking | The window confirms that the conversation itself asked, by its own record of the command or tool call with the same title, and refuses a request it cannot confirm |
+| Cleaning | Runs of white space become one space, the ends are trimmed, marks the extensions draw (crown, envelope) are removed, and the title is cut to 80 characters. A title empty after cleaning is refused |
+| Answer | `retitle/<key>.result.json`, written to a temporary name and renamed into place: `{ "format": 1, "key", "outcome", "reason", "title", "at" }`, `outcome` being `done`, `refused` or `failed` and `title` the title set. The window then removes `<key>.claimed` |
+| Waiting | The requester reads the answer every 200 ms for 15 seconds and removes it once read. With none by then it renames `<key>.json` to `<key>.withdrawn` and removes it: if that works no window took it (`untaken`); if not, a window has it, and the requester waits 10 seconds more before calling it `unclear` |
+| Leftovers | A window removes files in `retitle/` older than 10 minutes |
+
 ## The conversation in front
 
 - Every change of editor tabs offers the active tab to each source's `sessionForTab`.

@@ -1,0 +1,8 @@
+# Source: vscode-agent-plus shared/plugin/codex/retitle-skill.txt; sync-shared.js copies it, so edit it there.
+# What Codex puts in each {{name}} line of shared/plugin/skills/retitle/SKILL.md: each block runs from its "=== name"
+# line to the blank line before the next one.
+
+=== how
+Call the work plan server's `set_title` tool with `plan`, this thread's plan file (the path the injected block gives),
+and `title`, the new title. A shell command cannot write where the request goes without asking the user, so use the
+tool rather than a command.

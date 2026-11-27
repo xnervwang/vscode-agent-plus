@@ -30,6 +30,9 @@ EXAMPLE_SESSION_ID = "5e000000-0000-0000-0000-000000000000"
 
 # The field of a hook's input that names the turn: one id from a prompt until the next.
 TURN_FIELD = "prompt_id"
+
+# The variable Claude Code puts in a shell command's environment naming the conversation that runs it (retitle.py).
+SELF_ENV = "CLAUDE_CODE_SESSION_ID"
 NO_GROUPING = ("the project part there is the starting directory with every character other than a letter or digit "
                "replaced, and that substitution cannot be reversed")
 
