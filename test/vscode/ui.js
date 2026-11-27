@@ -2245,6 +2245,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await until(() => sl.evaluate(() => /Codex/.test(document.querySelector('.sl-new-agent').title)), 5000, 200);
     await sl.locator('.sl-new-half[data-where="tab"]').click();
     check(!!await frontIs('New conversation 1'), 'and Codex, then New in tab, a Codex conversation in a tab');
+    check(!!await until(() => sl.evaluate(() => /Claude Code/.test(document.querySelector('.sl-new-agent').title)), 8000, 200),
+      'once that conversation has started, the New bar starts with Claude Code again', await sl.evaluate(() => document.querySelector('.sl-new-agent').title));
   });
 
   await step('sessions-rules', async () => {

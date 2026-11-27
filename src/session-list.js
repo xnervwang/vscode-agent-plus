@@ -157,7 +157,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const queues = new Map();
   /* key -> the lastActiveAt of a running row when the list first saw it run. */
   const runFrom = new Map();
-  /* The agent picked in the New bar's menu in this window; it is not kept past the window. */
+  /* The agent picked in the New bar's menu, for the next conversation started in this window; starting one clears it. */
   let chosenNew = '';
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
@@ -476,6 +476,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const res = await runAction(e, 'create', [], { where: at });
     const made = res.find((x) => x.outcome === 'done');
     if (!made) { warn(`No new conversation: ${(res[0] && res[0].reason) || 'the agent did not start one'}`); return 'failed'; }
+    chosenNew = '';
     if (groupId) {
       if (made.sessionId) store.setGroup([[sourceId, made.sessionId]], groupId);
       else pendingGroup = { sourceId, groupId, at: now() };
@@ -484,16 +485,17 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return 'done';
   }
 
-  /* The agent picked in the New bar's menu, for this window, and the half of the bar picked last, without starting a
-     conversation. */
+  /* The agent picked in the New bar's menu, for the next conversation started, and the half of the bar picked last,
+     without starting a conversation. */
   function chooseNew(sourceId, where) {
     if (!entryOf(sourceId)) return;
     chosenNew = sourceId;
     if (!host.globalMemento) { schedule(0); return; }
     Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
   }
-  /* The agent a new conversation starts in unless one is named: the one picked in this window, or else the first of
-     NEW_ORDER that can start conversations, or else the first other source that can. */
+  /* The agent a new conversation starts in unless one is named: the one picked in the New bar's menu since the last
+     conversation started, or else the first of NEW_ORDER that can start conversations, or else the first other source
+     that can. */
   function newSourceOf(srcs) {
     const can = srcs.filter((x) => (x.create || []).length);
     if (can.some((x) => x.id === chosenNew)) return chosenNew;

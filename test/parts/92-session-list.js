@@ -596,11 +596,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.chooseNew('codex', 'tab');
     await list.refresh();
     eq([list.model().newSource, list.model().newWhere, t.host.globalMemento.get(L.LAST_NEW_KEY)], ['codex', 'tab', { where: 'tab' }],
-      'an agent picked in the New bar\'s menu is the one for the rest of this window; only the half is kept');
+      'an agent picked in the New bar\'s menu is the one for the next new conversation; only the half is kept');
     const made = await list.groupAct('newGroup');
     await list.groupAct('newInGroup', made.renameGroup);
     eq([codex.calls.filter((c) => c[0] === 'create').length, claude.calls.filter((c) => c[0] === 'create').length], [1, 0],
       'New Conversation in This Group with no agent named starts one in the agent picked');
+    await list.refresh();
+    eq(list.model().newSource, 'claude-code', 'once that conversation has started, the New bar starts with Claude Code again');
     await list.create('claude-code', 'sidebar');
     eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { where: 'tab' }, 'starting a conversation keeps the half it started in, and not its agent');
     const next = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
