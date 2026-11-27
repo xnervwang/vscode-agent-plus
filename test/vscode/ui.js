@@ -1992,11 +1992,15 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     }
     await menuOn(SLT.quiet);
     await page.mouse.move(5, 5);
+    /* A key reaches the webview a moment after press() returns, so each press waits for the focus to move before the
+       next is read; reading at once can count one item twice and step past the label. */
+    const focused = () => sl.evaluate(() => { const a = document.activeElement; return a && a.closest && a.closest('.sl-ctx-item') ? a.textContent.replace('›', '').trim() : ''; });
     const focusOn = async (label) => {
       for (let i = 0; i < 20; i++) {
-        const at = await sl.evaluate(() => { const a = document.activeElement; return a && a.closest && a.closest('.sl-ctx-item') ? a.textContent.replace('›', '').trim() : ''; });
+        const at = await focused();
         if (at === label) return true;
         await page.keyboard.press('ArrowDown');
+        await until(async () => (await focused()) !== at || null, 2000, 50);
       }
       return false;
     };
