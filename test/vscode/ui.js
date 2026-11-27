@@ -1059,6 +1059,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const NWAIT = 'Waits for permission', NFIN = 'Finished a turn', NENV = 'Envelope only', NQUEUE = 'Followed by a queued message', NFRONT = 'In front';
   let base = [];
   await step('notify-waiting', async () => {
+    /* The request limit's notice comes up on the first start, and request-limit is where it is answered. */
+    needs('request-limit');
     await openNotes();
     await clearToasts();
     base = [conv('n-wait', NWAIT, 'working', 'working'), conv('n-fin', NFIN, 'working', 'working'), conv('n-env', NENV, 'idle', 'stopped'),
