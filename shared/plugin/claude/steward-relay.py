@@ -68,10 +68,10 @@ latest message before the command is one the user typed in the steward conversat
 notice, or a handoff does not count. The window does not act on a subagent's call. It archives only conversations this
 steward manages. It skips any conversation that is working, waiting for the user, or running background work. It also
 skips one run by another process if the window cannot see its state. Archiving requires an Agent Plus version with the
-archive interface and affects only the session lists of projects open in VS Code windows on this machine. A conversation
-that none of those lists shows is not archived. As with Archive on a row, the conversation leaves its group and is
-unpinned. It can still be opened and run, and the user can unarchive it from the list. The script prints one line per
-conversation: "Archived: ..." or "Not archived: ...: <reason>". It exits 0 only if all were archived.
+archive interface and affects only the session lists of projects open in VS Code windows on this machine. As with
+Archive on a row, the conversation leaves its group and is unpinned. It can still be opened and run, and the user can
+unarchive it from the list. The script prints one line per conversation: "Archived: ..." or "Not archived: ...:
+<reason>". It exits 0 only if all were archived.
 
 A key "<source id>:<session id>" (steward_table.py) names another agent's conversation, which takes only a plain
 message. The request goes to Agent Plus through the window that shows the steward, and Agent Plus sends the message as
