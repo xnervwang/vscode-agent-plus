@@ -124,7 +124,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await round(m, p);
     const seenAt = clock;
     const away = fresh(m);
-    /* Less than a minute, after which a window that wrote nothing since counts as gone. */
+    /* Under a minute: a window that has written nothing for a minute counts as gone. */
     clock += 30000;
     m.focused = true;
     await round(m, p);
