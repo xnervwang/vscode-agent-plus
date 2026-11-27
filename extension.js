@@ -35,6 +35,9 @@ function activate(context) {
   try {
     const host = require('./src/host');
     const views = require('./src/views');
+    /* The zone a page reported in an earlier session, for a notification shown before the views start; they hand over
+       the fuller answer once they do. */
+    require('./src/notice-time').setReaderZone(() => (context.globalState && context.globalState.get(views.ZONE_KEY, '')) || '');
     const limit = require('./src/request-limit');
     const tokenChoice = require('./src/token-choice');
     const agentPlus = host.start(context, log, { views: views.create, limit: limit.create, tokenMode: tokenChoice.create });

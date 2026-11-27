@@ -29,6 +29,7 @@ const os = require('os');
 const path = require('path');
 const webviewLimit = require('./webview-limit');
 const { sharedHome, privateDir } = require('./files');
+const noticeTime = require('./notice-time');
 
 const SETTING = 'webviewRequestLimit';
 const ASKED_KEY = 'agentPlus.webviewLimitAsked';
@@ -185,7 +186,7 @@ function create(host, opts = {}) {
      32 -> 1000000 to someone whose restore failed sends them the wrong way. */
   const stuck = async (failed, from, to) => {
     if (failed[0].why === 'locked') {
-      vscode.window.showWarningMessage('Agent Plus: another window is changing VS Code\'s request limit. Try again in a minute.');
+      noticeTime.warning(vscode, 'Agent Plus: another window is changing VS Code\'s request limit. Try again in a minute.');
       return;
     }
     const how = webviewLimit.byHand(failed[0].install, process.platform, from, to);
@@ -194,7 +195,7 @@ function create(host, opts = {}) {
     /* The desktop app can retry an editor's save of a file on the client with the reader's password; the web one cannot. */
     const web = vscode.UIKind && vscode.env.uiKind === vscode.UIKind.Web;
     const editable = denied && !web && typeof vscode.workspace.openTextDocument === 'function';
-    const pick = await vscode.window.showWarningMessage(`Agent Plus: could not change VS Code's request limit (${why}). To change it yourself: ${how}`,
+    const pick = await noticeTime.warning(vscode, `Agent Plus: could not change VS Code's request limit (${why}). To change it yourself: ${how}`,
       ...(editable ? [EDIT_BUTTON, COPY_BUTTON] : [COPY_BUTTON]));
     if (pick === COPY_BUTTON) await vscode.env.clipboard.writeText(how);
     else if (pick === EDIT_BUTTON) await editInEditor(failed[0].install, from, to);
@@ -206,7 +207,7 @@ function create(host, opts = {}) {
       const was = `${webviewLimit.NAME}=${from},`;
       const at = text.indexOf(was);
       if (at < 0 || text.indexOf(was, at + 1) >= 0) {
-        vscode.window.showWarningMessage(`Agent Plus: the file no longer names the request limit ${from} once, so nothing was changed.`);
+        noticeTime.warning(vscode, `Agent Plus: the file no longer names the request limit ${from} once, so nothing was changed.`);
         return;
       }
       const range = new vscode.Range(doc.positionAt(at), doc.positionAt(at + was.length));
@@ -216,10 +217,10 @@ function create(host, opts = {}) {
       const editor = await vscode.window.showTextDocument(doc, { preview: false });
       if (editor && typeof editor.revealRange === 'function') editor.revealRange(range);
       say(`webview request limit: ${install.root} ${from} -> ${to} made in an editor, left for the reader to save`);
-      vscode.window.showInformationMessage(`Agent Plus: the request limit reads ${to} in the editor; save the file, choose Retry as Root `
+      noticeTime.info(vscode, `Agent Plus: the request limit reads ${to} in the editor; save the file, choose Retry as Root `
         + '(or Retry as Admin) when VS Code offers it, enter your password, then quit and reopen VS Code.');
     } catch (e) {
-      vscode.window.showWarningMessage(`Agent Plus: could not open the file to change the request limit (${(e && e.message) || e}).`);
+      noticeTime.warning(vscode, `Agent Plus: could not open the file to change the request limit (${(e && e.message) || e}).`);
     }
   };
   /* A failed replacement can leave the file missing, and nothing else puts it back until the next start, so that is
@@ -260,7 +261,7 @@ function create(host, opts = {}) {
       }
       await context.globalState.update(ASKED_KEY, asked);
       const always = 'Raise it, now and after updates', once = 'Raise it this time', no = 'Leave it';
-      const pick = await vscode.window.showInformationMessage(
+      const pick = await noticeTime.info(vscode, 
         'Agent Plus: VS Code lets webview tabs, Claude Code\'s and Codex\'s among them, have 32 requests in flight at once '
         + 'across all windows, and a tab can stay blank waiting for one. Raise the limit to 1000000 in VS Code\'s own files?'
         + (linux ? ' VS Code added the limit for Linux, where too many open files can crash a window.' : ''),
@@ -276,7 +277,7 @@ function create(host, opts = {}) {
     if (!again.length) { say('webview request limit: nothing left at ' + webviewLimit.OLD); return; }
     const { failed, done } = await change(at, again, webviewLimit.OLD, webviewLimit.NEW, mine);
     if (done) {
-      vscode.window.showInformationMessage('Agent Plus: VS Code\'s request limit is now 1000000. Quit and reopen VS Code for this to apply.');
+      noticeTime.info(vscode, 'Agent Plus: VS Code\'s request limit is now 1000000. Quit and reopen VS Code for this to apply.');
     }
     if (failed.length) await recover(at, failed, webviewLimit.OLD, webviewLimit.NEW);
   };
@@ -295,7 +296,7 @@ function create(host, opts = {}) {
   }));
   const putBackOnce = async (mine) => {
     if (!host.trusted()) {
-      vscode.window.showInformationMessage('Agent Plus: in Restricted Mode VS Code\'s files are left alone. Trust the workspace first.');
+      noticeTime.info(vscode, 'Agent Plus: in Restricted Mode VS Code\'s files are left alone. Trust the workspace first.');
       return;
     }
     if (!vscode.workspace.fs || !vscode.env.appRoot) return;
@@ -307,19 +308,19 @@ function create(host, opts = {}) {
     if (!high.length) {
       /* Three different answers, where saying "already 32" for all of them would be a claim about a file nobody read. */
       if (!installs.length) {
-        vscode.window.showWarningMessage('Agent Plus: the VS Code installation this window belongs to could not be found on '
+        noticeTime.warning(vscode, 'Agent Plus: the VS Code installation this window belongs to could not be found on '
           + 'the client, so its request limit was left alone. It will not be raised again.');
       } else if (installs.every((i) => i.limit === webviewLimit.OLD)) {
-        vscode.window.showInformationMessage('Agent Plus: VS Code\'s request limit is already 32.');
+        noticeTime.info(vscode, 'Agent Plus: VS Code\'s request limit is already 32.');
       } else {
-        vscode.window.showWarningMessage(`Agent Plus: VS Code's request limit is not ${webviewLimit.NEW} (${tell(installs)}), `
+        noticeTime.warning(vscode, `Agent Plus: VS Code's request limit is not ${webviewLimit.NEW} (${tell(installs)}), `
           + 'so it was left alone. It will not be raised again.');
       }
       return;
     }
     const { failed, done } = await change(at, high, webviewLimit.NEW, webviewLimit.OLD, mine);
     if (done) {
-      vscode.window.showInformationMessage('Agent Plus: VS Code\'s request limit is back to 32 and will stay there. Quit and reopen VS Code for this to apply.');
+      noticeTime.info(vscode, 'Agent Plus: VS Code\'s request limit is back to 32 and will stay there. Quit and reopen VS Code for this to apply.');
     }
     if (failed.length) await recover(at, failed, webviewLimit.NEW, webviewLimit.OLD);
   };

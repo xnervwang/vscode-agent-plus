@@ -30,6 +30,7 @@ const waitReason = require('./wait-reason');
 const windowOpen = require('./window-open');
 const planSummary = require('./plan-summary');
 const { startSessionList } = require('./session-list-host');
+const noticeTime = require('./notice-time');
 
 const CONFIG = 'agentPlus';
 const REFRESH_MS = 30000;
@@ -172,6 +173,7 @@ function create(host, opts = {}) {
     for (const s of registry.all()) { const z = sources.timeZoneOf(s); if (z) return z; }
     return '';
   };
+  noticeTime.setReaderZone(readerZone);
 
   /* ── Conversations ── */
   const conversationsTree = keep(new ConversationsProvider());
@@ -220,9 +222,10 @@ function create(host, opts = {}) {
   const notifySettings = () => ({ enabled: cfg().get('notifications.enabled', true) !== false,
     finished: cfg().get('notifications.finished', true) !== false, waiting: cfg().get('notifications.waiting', true) !== false });
   const paintAttention = (items) => { attentionItems = items || []; paintConversations(); };
-  /* A plain message, since a progress notification can have only one button. */
+  /* A plain message, since a progress notification can have only one button. Its time is when this window first saw
+     the change, which for one kept while no window had the focus is earlier than the notification. */
   const notify = (text, it) => {
-    Promise.resolve(vscode.window.showInformationMessage(text, 'Open', 'Dismiss'))
+    Promise.resolve(noticeTime.infoAt(vscode, it && it.queuedAt, text, 'Open', 'Dismiss'))
       .then((pick) => (pick === 'Open' ? commands.openAttention(it.sourceId, it.sessionId) : undefined))
       .catch((e) => say('attention: ' + ((e && e.message) || e)));
   };
@@ -272,9 +275,9 @@ function create(host, opts = {}) {
     if (r !== 'nowhere') return r;
     const text = `"${row.title || target.sessionId}" is not open in any VS Code window on this machine.`;
     const openHere = sources.optional(source, 'openHere');
-    if (!openHere) { vscode.window.showInformationMessage(text); return r; }
+    if (!openHere) { noticeTime.info(vscode, text); return r; }
     const go = 'Open it here';
-    Promise.resolve(vscode.window.showInformationMessage(text, go))
+    Promise.resolve(noticeTime.info(vscode, text, go))
       .then((pick) => (pick === go ? openHere(target.sessionId, row) : undefined))
       .catch((e) => say('open: ' + ((e && e.message) || e)));
     return r;
@@ -876,7 +879,7 @@ function create(host, opts = {}) {
     refreshWorkPlan: () => { plans.clear(); workplan.signature = ''; refreshPlans(); refreshConversations(true); },
     openWorkPlanFile: async (element) => {
       const file = (element && element.plan && element.plan.file) || (workplan.shown() && workplan.shown().file);
-      if (!file) { vscode.window.showInformationMessage('Agent Plus: the conversation in front is not keeping a work plan.'); return; }
+      if (!file) { noticeTime.info(vscode, 'Agent Plus: the conversation in front is not keeping a work plan.'); return; }
       await vscode.window.showTextDocument(vscode.Uri.file(file));
     },
     /* Modal, because the description is the thing being read. It shows the whole description, which is bounded where it
@@ -905,8 +908,8 @@ function create(host, opts = {}) {
       if (r.outcome === 'drafted') return;
       let copied = true;
       try { await vscode.env.clipboard.writeText(text); } catch (_) { copied = false; }
-      if (!copied) { vscode.window.showInformationMessage(t.prefillLost(r.outcome === 'uncertain' ? '' : r.reason || t.prefillNone, text)); return; }
-      vscode.window.showInformationMessage(r.outcome === 'uncertain' ? t.prefillUnsure : t.prefillCopied(r.reason || t.prefillNone));
+      if (!copied) { noticeTime.info(vscode, t.prefillLost(r.outcome === 'uncertain' ? '' : r.reason || t.prefillNone, text)); return; }
+      noticeTime.info(vscode, r.outcome === 'uncertain' ? t.prefillUnsure : t.prefillCopied(r.reason || t.prefillNone));
     },
     answerQuestion: async (q) => {
       if (!q) return;
@@ -960,7 +963,7 @@ function create(host, opts = {}) {
       const c = conversationOf(t.sourceId, t.sessionId);
       const row = sources.get(target, 'row');
       const q = c && ((typeof row === 'string' && c.questions.find((x) => x.row === row)) || c.questions[0]);
-      if (!q) { vscode.window.showInformationMessage('Agent Plus: no question in that conversation\'s plan is waiting for your answer.'); return; }
+      if (!q) { noticeTime.info(vscode, 'Agent Plus: no question in that conversation\'s plan is waiting for your answer.'); return; }
       if (!listedNow(t.sourceId, t.sessionId)) {
         asideQuestions.set(questionKey(t.sourceId, t.sessionId, q.row), { sourceId: t.sourceId, sessionId: t.sessionId, row: q.row });
         while (asideQuestions.size > 50) asideQuestions.delete(asideQuestions.keys().next().value);
@@ -969,7 +972,7 @@ function create(host, opts = {}) {
     },
     showAttention: async () => {
       const items = needs.items();
-      if (!items.length) { vscode.window.showInformationMessage('No conversation needs you now.'); return; }
+      if (!items.length) { noticeTime.info(vscode, 'No conversation needs you now.'); return; }
       const several = registry.size > 1;
       const pick = await vscode.window.showQuickPick(items.map((it) => ({ label: it.title,
         description: `${it.kind === 'waiting' ? waitReason.description(it.waitingFor) : 'finished'}${several ? ' · ' + it.source : ''}`,

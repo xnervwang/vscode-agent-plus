@@ -25,6 +25,7 @@ const { createStore, projectOf, keyOf, COLORS } = require('./session-store');
 const { elsewhere: otherWindows, windowLabel } = require('./session-windows');
 const { sharedHome } = require('./files');
 const { withoutMarks } = require('./title-marks');
+const noticeTime = require('./notice-time');
 /* How long ago, as Claude Code's own session list writes it: now, then whole minutes, hours, days, months of 30 days
    and years. The same rule as agentPlusKit.age in shared/page/kit.js, which the package does not carry. */
 function age(ms, now) {
@@ -418,8 +419,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   }
 
   const entryOf = (sourceId) => entries().find((e) => e.id === sourceId) || null;
-  const tell = (text) => { try { vscode.window.showInformationMessage(text); } catch (_) { /* nothing to show it in */ } };
-  const warn = (text) => { try { vscode.window.showWarningMessage(text); } catch (_) { /* nothing to show it in */ } };
+  const tell = (text) => { try { noticeTime.info(vscode, text); } catch (_) { /* nothing to show it in */ } };
+  const warn = (text) => { try { noticeTime.warning(vscode, text); } catch (_) { /* nothing to show it in */ } };
 
   async function openRow(key, where) {
     const r = rows.get(key);

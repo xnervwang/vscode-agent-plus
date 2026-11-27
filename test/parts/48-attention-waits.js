@@ -32,7 +32,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const w = { focused, here, shown: [], painted: [] };
     w.att = at.createAttention({ dir, windowId: `${name}-00000000`, now: () => clock, focused: () => w.focused,
       shownHere: (it) => w.here.includes(it.sessionId), settings: () => settings, warmupMs: 0, batchMs: 10, several: () => several,
-      show: (text, item) => { w.shown.push({ text, id: item.sessionId }); },
+      show: (text, item) => { w.shown.push({ text, id: item.sessionId, at: item.queuedAt }); },
       paint: (items) => { w.painted = items.map((it) => `${it.sessionId}:${it.kind}`).sort(); } });
     return w;
   };
@@ -123,12 +123,16 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     m.focused = false;
     p.att.publish(ask());
     await round(m, p);
+    const seenAt = clock;
     const away = fresh(m);
+    /* Less than a minute, after which a window that wrote nothing since counts as gone. */
+    clock += 30000;
     m.focused = true;
     await round(m, p);
-    eq([first, between, away, fresh(m)],
-      [['"Choose the config" has a question for you.'], [[], []], [], ['"Choose the config" has a question for you.']],
-      'a stopped conversation the window showing it still reports outweighs a machine-wide list still reporting its ended wait: no notice of that wait, and the next one is kept and shown once the window has the focus');
+    const kept = m.shown.slice(-1).map((n) => n.at);
+    eq([first, between, away, fresh(m), kept],
+      [['"Choose the config" has a question for you.'], [[], []], [], ['"Choose the config" has a question for you.'], [seenAt]],
+      'a stopped conversation the window showing it still reports outweighs a machine-wide list still reporting its ended wait: no notice of that wait, and the next one is kept and shown once the window has the focus, with the time it was first seen');
     for (const w of [m, p]) w.att.dispose();
   }
 

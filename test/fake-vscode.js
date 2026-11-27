@@ -71,6 +71,9 @@ class WorkspaceEdit {
  * the message and the buttons. Unmatched notifications are dismissed. Set `state.onQuickPick(qp)` to answer a quick pick
  * when it is shown, with qp.accept(item) or qp.hide(). inspect() gives a key in `state.config` as its user setting.
  */
+const STAMP = /^\[([^\]]+)\] /;
+const unstamped = [];
+
 function create({ version = '1.145.0', trusted = true } = {}) {
   const tabsChanged = new EventEmitter();
   const themeChanged = new EventEmitter();
@@ -92,9 +95,16 @@ function create({ version = '1.145.0', trusted = true } = {}) {
     getText: () => state.documents[uri.path],
     positionAt: (offset) => offset,
   });
-  const answer = (kind) => async (message, ...rest) => {
+  /* A notification's text is recorded without the time src/notice-time.js puts before it, which is kept as `stamp`; one
+     shown without that time is also listed in `unstamped`, which test/parts/99-notice-times.js reads after every part. A
+     modal dialog is not a notification and carries none. */
+  const answer = (kind) => async (raw, ...rest) => {
     const buttons = rest.filter((b) => typeof b === 'string');
-    state.said.push({ kind, message, buttons });
+    const modal = rest.some((x) => !!x && typeof x === 'object' && x.modal === true);
+    const m = typeof raw === 'string' ? STAMP.exec(raw) : null;
+    const message = m ? raw.slice(m[0].length) : raw;
+    if (!m && !modal) unstamped.push(String(raw));
+    state.said.push({ kind, message, buttons, stamp: m ? m[1] : '' });
     for (const [match, pick] of state.answers) {
       if (String(message).includes(match)) return typeof pick === 'function' ? pick(message, buttons) : pick;
     }
@@ -271,4 +281,4 @@ function fresh(root) {
   }
 }
 
-module.exports = { create, install, memento, fresh, EventEmitter, Disposable, Uri };
+module.exports = { create, install, memento, fresh, EventEmitter, Disposable, Uri, unstamped };

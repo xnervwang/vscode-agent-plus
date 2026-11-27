@@ -317,7 +317,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       const cur = union && union.get(k);
       if (!cur || cur.kind !== m.kind || s[m.kind] === false) continue;
       if (toldElsewhere.get(k) >= m.queuedAt - batchMs) continue;
-      due.push(cur);
+      due.push(Object.assign({}, cur, { queuedAt: m.queuedAt }));
     }
     tell(due);
   }

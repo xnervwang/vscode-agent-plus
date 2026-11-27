@@ -280,6 +280,12 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   /* A notification stays on screen while the pointer is over it, over the status bar's right end and the Answer view's
      buttons, so notifications are cleared before a click there. */
   const clearToasts = async () => { await exec('notifications.clearAll'); await sleep(300); };
+  /* A notification's time (src/notice-time.js): [HH:MM] in the reader's zone, [HH:MM ZONE] before it is known. VS Code
+     runs on this machine, so either way the hour and minute are this machine's, now or a minute ago. */
+  const STAMP = /^\[(\d\d:\d\d)( [^\]]+)?\] /;
+  const hourMinute = (ms) => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+  const stampOf = (text) => { const m = STAMP.exec(text || ''); return m ? { time: m[1], zone: (m[2] || '').trim() } : null; };
+  const isNow = (time) => [Date.now(), Date.now() - 60000].map(hourMinute).includes(time);
 
   const pickRows = () => until(async () => {
     const rows = await page.evaluate(() => {
@@ -363,6 +369,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const notice = await toastWith(ALONE, 30000);
     check(!!notice && sameList(notice.buttons, ['Install Claude Code Plus', 'Install Codex Plus']),
       'installed with no extension that uses it, Agent Plus shows one notice with a button to install each extension that would', notice || await toasts());
+    const first = stampOf(notice && notice.text);
+    check(!!first && isNow(first.time) && !!first.zone, 'it starts with the time, which names this machine\'s zone, as no page has said the reader\'s yet', notice && notice.text);
     const ours = await page.evaluate(() => [...document.querySelectorAll('.statusbar-item')].filter((e) => e.offsetParent && /^xnervwang\.agent-plus\./.test(e.id)).map((e) => e.id));
     check(!ours.length, 'it shows no status bar entry', ours);
     const bar = await page.evaluate(() => [...document.querySelectorAll('.activitybar .action-item .action-label')].map((a) => a.getAttribute('aria-label') || '')
@@ -469,6 +477,27 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     }
     return wrong;
   };
+
+  await step('notice-time', async () => {
+    needs('request-limit');
+    /* The Answer view's page runs where the reader is and says its zone. */
+    await exec('agentPlus.answer.focus');
+    let last = '';
+    const said = await until(async () => {
+      await clearToasts();
+      await exec('agentPlus.showAttention');
+      const t = await toastWith('No conversation needs you now.', 5000);
+      last = t ? t.text : '';
+      const s = stampOf(last);
+      return s && !s.zone && last;
+    }, 20000, 500);
+    const s = stampOf(said || last);
+    check(!!said && isNow(s.time) && said.endsWith('] No conversation needs you now.'),
+      'once a page has said the reader\'s zone, a notification starts with the hour and minute there and names no zone', last);
+    await look('notice-time', { toasts: true, expect: 'A notification at the bottom right reading No conversation needs you now., with the time before it in square brackets as two-digit hours and minutes, such as [14:05], and nothing else in the brackets. The text is not cut off.' },
+      toastLoc('No conversation needs you now.'));
+    await clearToasts();
+  });
 
   await step('conversation-dots', async () => {
     await openNotes();

@@ -13,6 +13,7 @@
 const tokenMode = require('./token-mode');
 const { claimAsk } = require('./request-limit');
 const { KNOWN } = require('./dependents');
+const noticeTime = require('./notice-time');
 
 /* 'new' from a first install until the notice is shown, then 'asked'; 'migrated' once an earlier install's settings
    have been looked at. */
@@ -140,7 +141,7 @@ function create(host, opts = {}) {
     start = 'asked';
     await memento.update(START_KEY, 'asked');
     if (!mine) { say('token mode: another window of this client is asking for the mode'); return ''; }
-    const pick = await vscode.window.showInformationMessage(ASK_TEXT, CHOOSE, MORE);
+    const pick = await noticeTime.info(vscode, ASK_TEXT, CHOOSE, MORE);
     const mode = pick === CHOOSE ? await pickMode() : '';
     if (mode) await cfg().update(tokenMode.NAME, mode, vscode.ConfigurationTarget.Global);
     if (mode === tokenMode.CUSTOM) await openSwitches();

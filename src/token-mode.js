@@ -13,6 +13,7 @@
  * No mode writes a feature's own setting. In Custom each feature follows it; in the other modes the table decides, and
  * the setting keeps its value for when the mode is Custom again.
  */
+const noticeTime = require('./notice-time');
 const SECTION = 'agentPlus';
 const NAME = 'tokenMode';
 const SETTING = `${SECTION}.${NAME}`;
@@ -109,7 +110,7 @@ function warnOutsideCustom(vscode, keys, { who = '', log = () => {} } = {}) {
       if (told.has(key) || !e.affectsConfiguration(key)) continue;
       told.add(key);
       const text = `${who ? `${who}: ` : ''}the token mode is ${labelOf(mode)}, so ${key} has no effect until the mode is Custom.`;
-      Promise.resolve(vscode.window.showInformationMessage(text, SWITCH_BUTTON)).then((pick) => {
+      Promise.resolve(noticeTime.info(vscode, text, SWITCH_BUTTON)).then((pick) => {
         if (pick !== SWITCH_BUTTON) return undefined;
         return vscode.workspace.getConfiguration(SECTION).update(NAME, CUSTOM, vscode.ConfigurationTarget.Global);
       }).catch((err) => log(`switching the token mode to Custom: ${(err && err.message) || err}`));

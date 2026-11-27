@@ -17,6 +17,7 @@ const sources = require('./sources');
 const dependents = require('./dependents');
 const compat = require('./compat');
 const PACKAGE = require('../package.json');
+const noticeTime = require('./notice-time');
 
 const FAMILY = 'agent-plus';
 /*
@@ -269,16 +270,16 @@ function start(context, log, opts = {}) {
          installed, which in a remote window is not the client, and deactivate runs after the extension host has
          dropped its connection to the client. This notice is the moment someone is about to uninstall. */
       const raised = limit && typeof limit.raised === 'function' ? await limit.raised().catch(() => false) : false;
-      if (!raised) { vscode.window.showInformationMessage(text); return; }
+      if (!raised) { noticeTime.info(vscode, text); return; }
       const put = 'Put Back the Request Limit';
-      const pick = await vscode.window.showInformationMessage(text + ' VS Code\'s webview request limit is still 1000000, and '
+      const pick = await noticeTime.info(vscode, text + ' VS Code\'s webview request limit is still 1000000, and '
         + 'uninstalling does not put it back: put it back first.', put);
       if (pick === put) await limit.putBack();
       return;
     }
     const buttons = dependents.KNOWN.map((k) => `Install ${k.name}`);
     const used = dependents.nameList(dependents.KNOWN.map((k) => k.name));
-    const pick = await vscode.window.showInformationMessage(`Agent Plus is used by ${used}, `
+    const pick = await noticeTime.info(vscode, `Agent Plus is used by ${used}, `
       + 'which install it themselves. On its own it does nothing.', ...buttons);
     const chosen = dependents.KNOWN[buttons.indexOf(pick)];
     if (chosen) await vscode.commands.executeCommand('workbench.extensions.installExtension', chosen.id);

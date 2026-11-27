@@ -15,6 +15,7 @@
  */
 const sources = require('./sources');
 const gallery = require('./gallery');
+const noticeTime = require('./notice-time');
 
 const OFFERED_KEY = 'agentPlus.updateOffered';
 const KEEP = 50;
@@ -78,7 +79,7 @@ async function update({ vscode, who, ext, core, installed, fetch, say = () => {}
   if (why) {
     say(`update ${w.target.id}: ${why}`);
     try { await vscode.commands.executeCommand('extension.open', w.target.id); } catch (_) { /* the message still says why */ }
-    vscode.window.showInformationMessage(`${w.target.name} cannot be updated from here: ${why}. Its page is open in the Extensions view.`);
+    noticeTime.info(vscode, `${w.target.name} cannot be updated from here: ${why}. Its page is open in the Extensions view.`);
     return 'page';
   }
   try {
@@ -90,7 +91,7 @@ async function update({ vscode, who, ext, core, installed, fetch, say = () => {}
   }
   say(`updated ${w.target.id} to ${found.version}`);
   const reload = 'Reload Window';
-  Promise.resolve(vscode.window.showInformationMessage(`${w.target.name} ${found.version} is installed. Reload the window to use it.`, reload))
+  Promise.resolve(noticeTime.info(vscode, `${w.target.name} ${found.version} is installed. Reload the window to use it.`, reload))
     .then((pick) => (pick === reload ? vscode.commands.executeCommand('workbench.action.reloadWindow') : undefined)).catch(() => {});
   return 'installed';
 }
@@ -106,7 +107,7 @@ async function offer({ vscode, memento, who, ext, core, fetch, say = () => {} })
   if (memento) await memento.update(OFFERED_KEY, told.concat([key]).slice(-KEEP));
   const w = wording(who, ext, core);
   say(w.message);
-  const pick = await vscode.window.showWarningMessage(w.message, w.button);
+  const pick = await noticeTime.warning(vscode, w.message, w.button);
   if (pick !== w.button) return 'dismissed';
   const installed = who === 'core' ? core.version : ext.version;
   return update({ vscode, who, ext, core, installed, fetch, say });
