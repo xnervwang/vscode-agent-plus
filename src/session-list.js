@@ -135,7 +135,7 @@ function resultsOf(answer, ids, why) {
  * shared(name) }. `asksOf` says whether the conversation's plan asks the user a question put after their last
  * message; `open` brings another window's conversation forward (src/window-open.js).
  */
-function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = ACTION_MS, relistMs = RELIST_MS, since = 0 } = {}) {
+function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = ACTION_MS, relistMs = RELIST_MS, since = 0, pid = process.pid } = {}) {
   const { vscode, registry, say = () => {} } = host;
   const shared = host.shared || ((name) => path.join(sharedHome(), name));
   const folders = () => (vscode.workspace.workspaceFolders || []).map((f) => { try { return fs.realpathSync(f.uri.fsPath); } catch (_) { return f.uri.fsPath; } });
@@ -379,6 +379,89 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (!fresh.length) return;
     store.setGroup([[fresh[0].sourceId, fresh[0].sessionId]], pendingGroup.groupId);
     pendingGroup = null;
+  }
+
+  /* ── another window writing this project's record ── */
+  /* archive() from another window, or any other process, writes this project's record; the list reads it again at once
+     rather than at its next refresh. */
+  let storeWatch = null;
+  function watchStore() {
+    if (storeWatch) { try { storeWatch.close(); } catch (_) { /* gone */ } storeWatch = null; }
+    if (closed) return;
+    try {
+      const dir = shared('session-list');
+      fs.mkdirSync(dir, { recursive: true });
+      const w = fs.watch(dir, (_ev, name) => { if (!name || String(name) === `${project.key}.json`) schedule(30); });
+      w.on('error', () => { try { w.close(); } catch (_) { /* gone */ } if (storeWatch === w) storeWatch = null; });
+      storeWatch = w;
+    } catch (e) { say(`session list: watching the record of ${project.label} failed: ${(e && e.message) || e}`); }
+  }
+  watchStore();
+
+  /* ── which projects the open windows list, for archive() ── */
+  /* Each window writes the project its list is for and the keys of the rows it shows to
+     shared('session-list')/windows/<pid>.json, when they change and every SHOWN_EVERY_MS; an entry older than
+     SHOWN_STALE_MS, or whose process is gone, is a window that closed. */
+  const SHOWN_EVERY_MS = 30000, SHOWN_STALE_MS = 120000;
+  const shownFile = () => path.join(shared('session-list'), 'windows', `${pid}.json`);
+  let shownSig = '', shownAt = 0;
+  function publishShown(force) {
+    if (closed) return;
+    const keys = [...rows.keys()].sort();
+    const sig = JSON.stringify([project.key, keys]);
+    if (!force && sig === shownSig && now() - shownAt < SHOWN_EVERY_MS) return;
+    const file = shownFile();
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const tmp = `${file}.${pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify({ format: 1, at: now(), project: project.key, label: project.label, keys: keys.map((k) => JSON.parse(k)) }));
+      fs.renameSync(tmp, file);
+      shownSig = sig;
+      shownAt = now();
+    } catch (e) { say(`session list: writing ${file} failed: ${(e && e.message) || e}`); }
+  }
+  const shownTimer = setInterval(() => publishShown(true), SHOWN_EVERY_MS);
+  if (shownTimer.unref) shownTimer.unref();
+  /* project key -> Set of row keys, for the windows other than this one. */
+  function shownElsewhere() {
+    const out = new Map();
+    const dir = path.dirname(shownFile());
+    let names = [];
+    try { names = fs.readdirSync(dir).filter((n) => /^\d+\.json$/.test(n)); } catch (_) { return out; }
+    for (const n of names) {
+      const other = Number(n.slice(0, -5));
+      if (other === pid) continue;
+      let d = null;
+      try { d = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); } catch (_) { continue; }
+      if (!d || d.format !== 1 || typeof d.project !== 'string' || !Array.isArray(d.keys) || !(now() - d.at < SHOWN_STALE_MS)) continue;
+      try { process.kill(other, 0); } catch (e) { if (e.code !== 'EPERM') continue; }
+      if (!out.has(d.project)) out.set(d.project, new Set());
+      for (const k of d.keys) if (Array.isArray(k) && k.length === 2) out.get(d.project).add(keyOf(k[0], k[1]));
+    }
+    return out;
+  }
+  /* Archives conversations of `sourceId` as Archive on a row does, in the record of every project whose list shows them
+     in an open window on this machine, this window's own included. */
+  async function archiveFor(sourceId, ids) {
+    const ro = !!(host.trusted && !host.trusted());
+    const others = ro ? new Map() : shownElsewhere();
+    const out = [];
+    const touched = new Map();
+    for (const id of ids) {
+      if (ro) { out.push({ sessionId: id, outcome: 'refused', reason: 'this window is in Restricted Mode' }); continue; }
+      const k = keyOf(sourceId, id);
+      const projects = new Set(rows.has(k) ? [project.key] : []);
+      for (const [pk, keys] of others) if (keys.has(k)) projects.add(pk);
+      if (!projects.size) { out.push({ sessionId: id, outcome: 'notListed', reason: 'no session list in an open window shows it' }); continue; }
+      for (const pk of projects) {
+        if (!touched.has(pk)) touched.set(pk, pk === project.key ? store : createStore({ dir: shared('session-list'), key: pk, now, log: say }));
+        touched.get(pk).archive([[sourceId, id]], true);
+      }
+      out.push({ sessionId: id, outcome: 'archived', reason: '' });
+    }
+    for (const [pk, st] of touched) { st.flush(); if (pk !== project.key) st.dispose(); }
+    if (touched.size) schedule(0);
+    return out;
   }
 
   /* ── automatic archiving and deleting ── */
@@ -795,6 +878,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       noteClosed(was, look);
       elsewhereByKey = otherWindows(entries().map((e) => ({ sourceId: e.id, planDir: sources.planDirOf(e.source) })), { now: now() });
       build();
+      publishShown(false);
       tellDue();
       markSeen();
       placeNew();
@@ -884,12 +968,23 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       project = next;
       store = createStore({ dir: shared('session-list'), key: project.key, label: project.label, now, log: say, writable: () => !host.trusted || host.trusted() });
       subs.push(store.onDidChange(() => schedule(30)));
+      watchStore();
       for (const st of lists.values()) st.dirty = true;
       schedule(0);
     },
     store: () => store,
     project: () => project,
-    dispose() { closed = true; if (timer) clearTimeout(timer); if (seenTimer) clearTimeout(seenTimer); for (const d of subs) { try { d.dispose(); } catch (_) { /* gone */ } } store.dispose(); },
+    archiveFor,
+    dispose() {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      if (seenTimer) clearTimeout(seenTimer);
+      clearInterval(shownTimer);
+      if (storeWatch) { try { storeWatch.close(); } catch (_) { /* gone */ } storeWatch = null; }
+      try { fs.unlinkSync(shownFile()); } catch (_) { /* never written */ }
+      for (const d of subs) { try { d.dispose(); } catch (_) { /* gone */ } }
+      store.dispose();
+    },
   };
 }
 

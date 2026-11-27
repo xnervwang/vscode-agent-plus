@@ -15,6 +15,9 @@ const path = require('path');
 const vscode = require('vscode');
 const sources = require('./sources');
 const sessionWindows = require('./session-windows');
+
+/* archive() takes at most this many conversations at a time. */
+const ARCHIVE_MAX = 50;
 const dependents = require('./dependents');
 const compat = require('./compat');
 const PACKAGE = require('../package.json');
@@ -391,7 +394,7 @@ function start(context, log, opts = {}) {
     version: core.version,
     protocol: core.protocol,
     accepts: core.accepts.slice(),
-    features: sources.FEATURES.concat('sessionList'),
+    features: sources.FEATURES.concat('sessionList', 'archive'),
     registerSource(source) {
       let r;
       try { r = register(source); } catch (e) { r = { accepted: false, code: sources.REFUSED.failed, reason: String((e && e.message) || e), registration: null }; }
@@ -431,6 +434,19 @@ function start(context, log, opts = {}) {
     },
     /* With 'sessionList': vscode.Event<{ sourceId }>. */
     onDidChangeSessionDeletionDue: listenDeletionDue,
+    /* With 'archive': archives conversations of `sourceId` as Archive on a row does, in the session list's record of every
+       project whose list shows them in an open window on this machine (docs/protocol.md). Resolves to a frozen array of
+       frozen { sessionId, outcome, reason }, `outcome` being 'archived', 'refused' or 'notListed'. */
+    async archive(arg) {
+      const sourceId = arg && typeof arg.sourceId === 'string' ? arg.sourceId.trim() : '';
+      const ids = [...new Set((arg && Array.isArray(arg.sessionIds) ? arg.sessionIds : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()))].slice(0, ARCHIVE_MAX);
+      const all = (outcome, reason) => Object.freeze(ids.map((sessionId) => Object.freeze({ sessionId, outcome, reason })));
+      if (!sourceId) return all('refused', 'no source was named');
+      if (closing || !views || !views.sessionList || typeof views.sessionList.archiveFor !== 'function') return all('refused', 'this window has no session list');
+      try {
+        return Object.freeze((await views.sessionList.archiveFor(sourceId, ids)).map((r) => Object.freeze({ sessionId: r.sessionId, outcome: r.outcome, reason: r.reason })));
+      } catch (e) { return all('refused', String((e && e.message) || e)); }
+    },
   });
 
   /* ── Commands ── */

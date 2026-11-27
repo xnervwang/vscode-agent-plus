@@ -629,4 +629,35 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     ['user', '', 8, 'other', 80, 200, ['goal', 'c'], 3, ['a', 'b'], ['x'], true], 'a session is held to the protocol: kinds, places, lengths and counts');
   eq(L.capsOf({ sessionActions: () => ({ open: ['tab', 'window'], rename: 1, own: [{ id: 'g', title: 'Go' }, { id: '' }] }) }),
     { open: ['tab'], create: [], rename: false, delete: false, own: [{ id: 'g', title: 'Go' }] }, 'sessionActions is taken as given, with no actions added');
+
+  /* ── archive(): the record of every project whose list in an open window shows the conversation ── */
+  {
+    const S = require(path.join(root, 'src', 'session-store.js'));
+    const shared = tmp('arch-shared');
+    const ta = setup({ folder: tmp('arch-a'), shared }), tb = setup({ folder: tmp('arch-b'), shared });
+    const ca = source('codex', [conv('both'), conv('a-only')]), cb = source('codex', [conv('both'), conv('b-only')]);
+    ta.entries.push({ id: 'codex', source: ca });
+    tb.entries.push({ id: 'codex', source: cb });
+    const la = L.createSessionList(ta.host, { now, since: now0 - 300 * DAY });
+    /* Another window: the test runner's parent stands in for its process, which has to be alive. */
+    const lb = L.createSessionList(tb.host, { now, since: now0 - 300 * DAY, pid: process.ppid });
+    await la.refresh();
+    await lb.refresh();
+    la.store().pin([['codex', 'both']], true);
+    la.store().flush();
+    const got = await la.archiveFor('codex', ['both', 'b-only', 'nowhere']);
+    const recB = (id) => S.createStore({ dir: path.join(shared, 'session-list'), key: lb.project().key }).record('codex', id);
+    const recA = (id) => S.createStore({ dir: path.join(shared, 'session-list'), key: la.project().key }).record('codex', id);
+    eq(got.map((r) => [r.sessionId, r.outcome]), [['both', 'archived'], ['b-only', 'archived'], ['nowhere', 'notListed']],
+      'archive() takes each conversation some open window lists, and says which none lists');
+    eq([recA('both').archived, recA('both').pinned, recB('both').archived, recB('b-only').archived, recA('b-only').archived, recB('a-only').archived],
+      [true, false, true, true, false, false], "it is archived, and unpinned, in each project whose list shows it, and nowhere else");
+    const shownB = await wait(0).then(async () => { for (let i = 0; i < 100; i++) { const r = lb.rows().find((x) => x.sessionId === 'b-only'); if (r && r.archived) return true; await wait(20); } return false; });
+    eq(shownB, true, "the other window's list reads its record again at once and shows the conversation archived");
+    ta.control.state.trusted = false;
+    eq((await la.archiveFor('codex', ['a-only'])).map((r) => r.outcome), ['refused'], 'in Restricted Mode nothing is archived');
+    lb.dispose();
+    eq(fs.existsSync(path.join(shared, 'session-list', 'windows', `${process.ppid}.json`)), false, "a closed window's entry is removed");
+    la.dispose();
+  }
 };
