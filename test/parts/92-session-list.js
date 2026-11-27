@@ -539,6 +539,77 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
+  /* ── The order of rows that run ── */
+  {
+    const t = setup();
+    const codex = source('codex', [conv('q', { title: 'Quiet', lastActiveAt: now0 - 300e3 }),
+      conv('r', { title: 'Runs', lastActiveAt: now0 - 600e3, activity: 'working', running: true }), conv('b', { title: 'Background', lastActiveAt: now0 - 900e3 })]);
+    t.entries.push({ id: 'codex', source: codex });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    await list.refresh();
+    const order = () => list.model().sections.find((x) => x.key === 'ungrouped').rows.map((r) => r.title);
+    const set = (id, o) => Object.assign(codex.sessions.find((x) => x.sessionId === id), o);
+    eq(order(), ['Quiet', 'Runs', 'Background'], 'a row that already runs when the list first sees it sorts by its last message then');
+    set('r', { lastActiveAt: now0 - 10e3 });
+    set('b', { activity: 'background', running: true });
+    await list.refresh({ relist: true });
+    set('b', { lastActiveAt: now0 - 240e3 });
+    await list.refresh({ relist: true });
+    eq(order(), ['Quiet', 'Runs', 'Background'], 'while a turn or background work runs, its newer messages do not move the row');
+    set('r', { activity: 'stopped', running: false });
+    await list.refresh({ relist: true });
+    eq(order(), ['Runs', 'Quiet', 'Background'], 'once its turn stops, the row moves to the place of its last message, and one still running stays put');
+    set('q', { activity: 'working', running: true, lastActiveAt: now0 - 1e3 });
+    await list.refresh({ relist: true });
+    eq(order(), ['Quiet', 'Runs', 'Background'], 'a row that starts running is placed by the message it started with');
+    eq(list.model().sections.find((x) => x.key === 'ungrouped').rows.find((r) => r.title === 'Background').time, '4m',
+      'and the time on a row is still that of its last message');
+    list.dispose();
+  }
+
+  /* ── The agent a new conversation starts in ── */
+  {
+    const firstOf = async (ids, noCreate = []) => {
+      const t = setup();
+      for (const id of ids) {
+        t.entries.push({ id, source: source(id, [conv(`${id}-1`)], noCreate.includes(id) ? { caps: { open: ['tab'], create: [], rename: false, delete: false, own: [] } } : {}) });
+      }
+      const l = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+      await l.refresh();
+      const got = l.model().newSource;
+      l.dispose();
+      return got;
+    };
+    eq([await firstOf(['other', 'opencode-plus', 'codex', 'claude-code']), await firstOf(['other', 'opencode-plus', 'codex']), await firstOf(['other', 'opencode-plus']),
+      await firstOf(['zeta', 'other']), await firstOf(['codex', 'claude-code'], ['claude-code'])],
+    ['claude-code', 'codex', 'opencode-plus', 'zeta', 'codex'],
+    'a new conversation starts in Claude Code, else Codex, else OpenCode, else the first other agent registered; an agent that cannot start conversations is passed over');
+
+    const t = setup();
+    const claude = source('claude-code', [conv('c-1')]), codex = source('codex', [conv('x-1')]);
+    t.entries.push({ id: 'codex', source: codex }, { id: 'claude-code', source: claude });
+    await t.host.globalMemento.update(L.LAST_NEW_KEY, { sourceId: 'codex', where: 'sidebar' });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    await list.refresh();
+    eq([list.model().newSource, list.model().newWhere], ['claude-code', 'sidebar'],
+      'whichever agent was used last, the New bar starts with Claude Code, in the half picked last');
+    list.chooseNew('codex', 'tab');
+    await list.refresh();
+    eq([list.model().newSource, list.model().newWhere, t.host.globalMemento.get(L.LAST_NEW_KEY)], ['codex', 'tab', { where: 'tab' }],
+      'an agent picked in the New bar\'s menu is the one for the rest of this window; only the half is kept');
+    const made = await list.groupAct('newGroup');
+    await list.groupAct('newInGroup', made.renameGroup);
+    eq([codex.calls.filter((c) => c[0] === 'create').length, claude.calls.filter((c) => c[0] === 'create').length], [1, 0],
+      'New Conversation in This Group with no agent named starts one in the agent picked');
+    await list.create('claude-code', 'sidebar');
+    eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { where: 'tab' }, 'starting a conversation keeps the half it started in, and not its agent');
+    const next = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    await next.refresh();
+    eq(next.model().newSource, 'claude-code', 'and the next window starts with Claude Code again');
+    next.dispose();
+    list.dispose();
+  }
+
   /* ── A source's sessions and actions, cut to the protocol's limits ── */
   const s = L.sessionOf({ sessionId: 'x', title: 'T', kind: 'nope', parentId: 'x', elsewhere: Array.from({ length: 12 }, () => ({ kind: 'weird', label: 'L'.repeat(200), detail: ['d'.repeat(500)] })),
     badges: [{ text: 'goal' }, { text: '' }, { text: 'c' }, { text: 'd' }], processes: 3, hover: ['a', 5, '', 'b'], actions: ['x', 3] });

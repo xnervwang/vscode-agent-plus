@@ -13,6 +13,9 @@
  * front, imports what each source's own list had the first time the list runs for a project, and archives and deletes
  * on its own once an hour in one window of the project at a time.
  *
+ * A row that runs a turn or background work sorts by the lastActiveAt it had when the list first saw it run, so that
+ * the messages of a run do not move it while it runs; once it stops it sorts by its lastActiveAt again.
+ *
  * A source's list is read again when the source fires onDidChangeSessions, and every RELIST_MS besides. A source
  * whose list could not be read keeps its previous list, and the list says so above its rows; nothing of a source
  * whose list is not complete is archived or deleted on its own.
@@ -45,7 +48,11 @@ const SWEEP_EVERY_MS = 3600e3;
 const SWEEP_LOCK_STALE_MS = 15 * 60e3;
 const CLOSED_KEY = 'agentPlus.sessions.closed';
 const CLOSED_KEEP = 50;
+/* { where }: the half of the New bar picked last, 'tab' or 'sidebar'. */
 const LAST_NEW_KEY = 'agentPlus.sessions.lastNew';
+/* The agent the New bar starts with: the first of these whose source is registered, then any other source in the
+   registry's order. The ids are those Claude Code Plus, Codex Plus and OpenCode Agent Plus register. */
+const NEW_ORDER = ['claude-code', 'codex', 'opencode-plus'];
 const KINDS = ['user', 'background', 'subagent', 'empty'];
 /* The theme colour of each title colour, as Claude Code Plus and Codex Plus draw them: VS Code has no chart colour for
    pink or cyan. */
@@ -148,6 +155,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   let pendingGroup = null;
   let elsewhereByKey = new Map();
   const queues = new Map();
+  /* key -> the lastActiveAt of a running row when the list first saw it run. */
+  const runFrom = new Map();
+  /* The agent picked in the New bar's menu in this window; it is not kept past the window. */
+  let chosenNew = '';
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
   const entries = () => (registry.entries || []).filter((e) => sources.supports(e.source, 'sessions'));
@@ -294,12 +305,16 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
            count reads it. */
         const near = look.here.has(k) || elsewhere.length > 0 || rules.busy(x);
         try { asks = !!(host.asksOf && host.asksOf(e.id, x, { near })); } catch (_) { asks = false; }
+        const running = rules.runs(x);
+        if (running && !runFrom.has(k)) runFrom.set(k, +x.lastActiveAt || 0);
         next.set(k, Object.assign({}, x, { key: k, sourceId: e.id, asks, here: look.here.has(k), elsewhere: look.here.has(k) ? [] : elsewhere,
+          sortAt: running ? runFrom.get(k) : +x.lastActiveAt || 0,
           group: rec.group, archived: rec.archived, archivedAt: rec.archivedAt, pinned: rec.pinned, color: rec.color,
           seenAt: Math.max(rec.seenAt, store.since()), unreadMark: rec.unreadMark, closedAt: look.here.has(k) ? 0 : closedAt.get(k) || 0,
           hidden: s.hideBackground && x.kind !== 'user' }));
       }
     }
+    for (const k of [...runFrom.keys()]) if (!next.has(k) || !rules.runs(next.get(k))) runFrom.delete(k);
     rows = next;
   }
 
@@ -457,7 +472,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const caps = capsOf(e.source);
     const at = caps.create.includes(where) ? where : caps.create[0];
     if (!at) return 'nowhere';
-    if (host.globalMemento) Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { sourceId, where: at })).catch(() => {});
+    if (host.globalMemento) Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: at })).catch(() => {});
     const res = await runAction(e, 'create', [], { where: at });
     const made = res.find((x) => x.outcome === 'done');
     if (!made) { warn(`No new conversation: ${(res[0] && res[0].reason) || 'the agent did not start one'}`); return 'failed'; }
@@ -469,10 +484,22 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return 'done';
   }
 
-  /* The agent and the half of the New bar picked last, without starting a conversation. */
+  /* The agent picked in the New bar's menu, for this window, and the half of the bar picked last, without starting a
+     conversation. */
   function chooseNew(sourceId, where) {
-    if (!entryOf(sourceId) || !host.globalMemento) return;
-    Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { sourceId, where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => {});
+    if (!entryOf(sourceId)) return;
+    chosenNew = sourceId;
+    if (!host.globalMemento) { schedule(0); return; }
+    Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
+  }
+  /* The agent a new conversation starts in unless one is named: the one picked in this window, or else the first of
+     NEW_ORDER that can start conversations, or else the first other source that can. */
+  function newSourceOf(srcs) {
+    const can = srcs.filter((x) => (x.create || []).length);
+    if (can.some((x) => x.id === chosenNew)) return chosenNew;
+    const rank = (x) => { const i = NEW_ORDER.indexOf(x.id); return i < 0 ? NEW_ORDER.length : i; };
+    const first = can.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])[0];
+    return first ? first[0].id : (srcs[0] || {}).id || '';
   }
 
   async function rename(key, title) {
@@ -568,7 +595,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       case 'deleteGroup': store.deleteGroup(groupId); break;
       case 'newInGroup': {
         const last = (host.globalMemento && host.globalMemento.get(LAST_NEW_KEY)) || {};
-        return create(pick || last.sourceId, last.where, groupId);
+        return create(pick || newSourceOf(entries().map((e) => ({ id: e.id, create: capsOf(e.source).create }))), last.where, groupId);
       }
       default: return 'nothing';
     }
@@ -683,7 +710,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const last = (host.globalMemento && host.globalMemento.get(LAST_NEW_KEY)) || {};
     return {
       sections, counts: rules.counts(visible), groups: groups.map((g) => ({ id: g.id, name: g.name })), sources: srcs, accounts,
-      newSource: srcs.some((x) => x.id === last.sourceId) ? last.sourceId : (srcs[0] || {}).id || '', newWhere: last.where === 'sidebar' ? 'sidebar' : 'tab',
+      newSource: newSourceOf(srcs), newWhere: last.where === 'sidebar' ? 'sidebar' : 'tab',
       problems: entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), text: (lists.get(e.id) || {}).problem || '' })).filter((p) => p.text),
       notices: entries().map((e) => { const n = noticeOf(e); return n ? Object.assign({ id: e.id, label: sources.labelOf(e.source) }, n) : null; }).filter(Boolean),
       front: look.front, restricted: !!(host.trusted && !host.trusted()), menu: menuItems(),
@@ -864,4 +891,5 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   };
 }
 
-module.exports = { createSessionList, sessionOf, capsOf, resultsOf, PAGE, MAX_SESSIONS, PAGE_MS, ACTION_MS, RELIST_MS, SWEEP_EVERY_MS, CLOSED_KEY, LAST_NEW_KEY };
+module.exports = { createSessionList, sessionOf, capsOf, resultsOf, PAGE, MAX_SESSIONS, PAGE_MS, ACTION_MS, RELIST_MS, SWEEP_EVERY_MS, CLOSED_KEY, LAST_NEW_KEY,
+  NEW_ORDER };

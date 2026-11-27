@@ -11,7 +11,8 @@
  * A row here is { key, sourceId, sessionId, title, branch, lastActiveAt, lastReplyAt, viewedAt, activity, waitingFor,
  * asks, kind, agentUnseen, here, elsewhere, pinned, archived, archivedAt, group, seenAt, unreadMark, closedAt }: what
  * the source listed, what this window and the other windows show, and what the store keeps for it. `asks` is true when
- * the conversation's plan has a question newer than the user's last message.
+ * the conversation's plan has a question newer than the user's last message. `sortAt`, when given, is the time the row
+ * sorts by in place of `lastActiveAt` (src/session-list.js sets it for a row that runs).
  */
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -53,9 +54,11 @@ function unread(row) {
   return +row.lastReplyAt > 0 && +row.lastReplyAt > seen;
 }
 
+const sortTime = (r) => +(r.sortAt !== undefined ? r.sortAt : r.lastActiveAt) || 0;
+
 function compare(a, b) {
   if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-  const t = (+b.lastActiveAt || 0) - (+a.lastActiveAt || 0);
+  const t = sortTime(b) - sortTime(a);
   if (t) return t;
   return String(a.title || '').localeCompare(String(b.title || '')) || String(a.key).localeCompare(String(b.key));
 }

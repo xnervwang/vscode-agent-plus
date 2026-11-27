@@ -69,6 +69,9 @@ module.exports = async ({ eq, root }) => {
     ['archived', ['archived']],
   ], 'Recently closed, the groups in order (an empty one only if made here), Ungrouped and Archived; pinned first, then newest first, then by title');
   eq(R.sections(rows, { groups, recent: 1 })[0].rows.map((r) => r.title), ['closed late'], 'Recently closed keeps only the newest, up to the number set');
+  eq(R.sections([row({ title: 'ran first', lastActiveAt: now - 10e3, sortAt: now - 600e3 }), row({ title: 'quiet', lastActiveAt: now - 300e3 }),
+    row({ title: 'ran later', lastActiveAt: now - 20e3, sortAt: now - 120e3 })], { groups: [] }).find((s) => s.key === 'ungrouped').rows.map((r) => r.title),
+  ['ran later', 'quiet', 'ran first'], 'a row with a sortAt sorts by it in place of its lastActiveAt');
 
   /* ── Filters and counts ── */
   const mixed = [row({ title: 'a', here: true }), row({ title: 'b', activity: 'working' }), row({ title: 'c', activity: 'background', asks: true }),
