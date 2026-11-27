@@ -217,12 +217,11 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   const activeSeen = new Map();
 
   const isFocused = () => { try { return focused() === true; } catch (_) { return false; } };
-  /* key -> when this window stopped showing that conversation. Until a list of its source asked for after then is
-     published, what the windows report for it can be the state from before, such as a wait the user answered just
-     before closing its tab, so it is neither told nor counted; HOLD_MS bounds the wait. */
+  /* key -> when this window stopped showing that conversation. The lists held at that moment can still show a wait the
+     user answered just before closing its tab, so the conversation is left out of notices and of the count until its
+     source answers a request made after the close. */
   const leftAt = new Map();
   let shownBefore = new Set();
-  /* sourceId -> when the list in the last publish was asked for. */
   const askedAt = new Map();
   const held = (k) => leftAt.has(k);
 

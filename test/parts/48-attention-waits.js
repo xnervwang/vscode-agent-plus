@@ -102,8 +102,6 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (const w of [m, p, q, f]) w.att.dispose();
   }
 
-  /* A wait answered just before its tab closes: the list the window holds can still say it waits. Until a list asked
-     for after the tab went is published, the window neither tells nor counts it; a wait that list still shows is told. */
   {
     const dir = path.join(tmp('left'), 'attention');
     const w = make(dir, 'lw', { focused: true, here: ['x'] });
@@ -132,7 +130,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     w.att.publish(listed(clock, asks()));
     await round(w);
     eq([stale, answered, held, fresh(w), w.painted], [[[], []], [[], []], [], ['"Deploy" is waiting for you to approve Bash.'], ['x:waiting']],
-      'a conversation whose tab just closed is neither told nor counted on a list asked for before then, and a wait a later list still shows is told');
+      'after a tab closes, a wait from a list requested before the close is neither announced nor counted, and one that a newer list still shows is announced');
     w.att.dispose();
   }
 

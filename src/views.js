@@ -298,8 +298,6 @@ function create(host, opts = {}) {
   keep(sessionList);
 
   let attentionLists = [];
-  /* Each source's list for the attention file, with when it was asked for: the window's own list where the source has
-     no listAllConversations() or it does not answer in time. */
   const listAll = async (entry, fallback) => {
     const kept = { list: fallback, askedAt: (entry.list && entry.list.lastAskedAt) || 0 };
     if (typeof sources.get(entry.source, 'listAllConversations') !== 'function') return kept;
