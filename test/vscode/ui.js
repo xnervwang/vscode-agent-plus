@@ -1617,8 +1617,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       return h ? h.innerText.trim() : '';
     }), 6000, 200)) || '';
     check(/^Agent Plus - Conversations/.test(said), 'and the hover of its activity bar entry says Agent Plus - Conversations', said);
-    await look('sessions-title-hover', { pointer: true, expect: 'The pointer on the robot entry of the activity bar, and beside it a hover saying Agent Plus - Conversations (a number of conversations needing you may follow it). The side bar at the right is titled AGENT PLUS - CONVERSATIONS or Agent Plus - Conversations at its top, once.' },
-      page.locator('#workbench\\.parts\\.activitybar'));
+    const barBox = await page.locator('#workbench\\.parts\\.activitybar').boundingBox().catch(() => null);
+    await look('sessions-title-hover', { pointer: true, expect: 'The activity bar at the left with the pointer on its robot entry, and to the right of that entry a hover saying Agent Plus - Conversations (a number of conversations needing you may follow it), over the side bar.' },
+      barBox ? { x: barBox.x, y: barBox.y, width: barBox.width + 360, height: barBox.height } : null);
     await page.mouse.move(5, 5);
     await look('sessions-title-dark', { expect: 'The top line of the side bar in a dark theme: the title Agent Plus - Conversations (in capitals or not, as the theme draws it) once, with nothing such as ": Conversations" after it, then the search, filter and more buttons at the right.' },
       page.locator('[id="workbench.parts.sidebar"] .composite.title'));
@@ -1641,10 +1642,10 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
         const row = (t) => [...document.querySelectorAll('.sl-section[data-key="ungrouped"] .sl-row')].find((r) => r.querySelector('.sl-title').textContent === t);
         const st = (e) => (e ? getComputedStyle(e) : null);
         const here = document.querySelector('.sl-section[data-key="ungrouped"] .sl-stripe.s-here'), away = row(other) && row(other).querySelector('.sl-stripe');
-        const dot = document.querySelector('.sl-dot.d-blue'), title = row(other) && row(other).querySelector('.sl-title');
+        const dot = document.querySelector('.sl-dot.d-blue'), title = row(term) && row(term).querySelector('.sl-title');
         return { here: here && st(here).backgroundColor, away: away && st(away).borderTopColor, awayFill: away && st(away).backgroundColor, awayWidth: away && st(away).borderTopWidth,
           dot: dot && st(dot).backgroundColor, body: st(document.body).backgroundColor, cursorTerm: row(term) && st(row(term)).cursor,
-          cursorWindow: row(other) && st(row(other)).cursor, otherColor: title && title.style.color, otherOpacity: title && st(title).opacity };
+          cursorWindow: row(other) && st(row(other)).cursor, termColor: title && title.style.color, termOpacity: title && st(title).opacity };
       }, [SLT.other, SLT.ocTerm]);
       const cur = await pixelOf(sl.locator('.sl-section[data-key="ungrouped"] .sl-row.sl-current').first(), 0.6, 3);
       const head = await pixelOf(sl.locator('.sl-section[data-key="ungrouped"] > .sl-head'), 0.6, 0.5);
@@ -1666,17 +1667,17 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       return h ? { x: h.x, y: h.y - 4, width: h.width, height: h.height + 12 * 29 + 8 } : sidebarBox();
     };
     /* A title colour on a row open somewhere else stays, dimmed with the row. */
-    await slRowLoc(SLT.other).click({ button: 'right' });
+    await slRowLoc(SLT.ocTerm).click({ button: 'right' });
     await slMenu();
     await slItem('Text Color').hover({ position: { x: 10, y: 8 } });
     await slItem('Purple', true).click();
-    await slWait((r) => /charts-purple/.test((slFind(r, SLT.other) || {}).color || ''));
+    await slWait((r) => /charts-purple/.test((slFind(r, SLT.ocTerm) || {}).color || ''));
     let d = await drawn();
     judge('dark', d);
     check(d.css.cursorTerm === 'not-allowed' && d.css.cursorWindow === 'pointer',
       'the pointer over a row open in a terminal shows that it cannot be opened from here; over one open in another VS Code window it is the usual hand', d.css);
-    check(/charts-purple/.test(d.css.otherColor || '') && Number(d.css.otherOpacity) === 0.45, 'a row open somewhere else keeps its title colour, faded with the rest of the row', d.css);
-    await look('sessions-stripes-dark', { expect: 'A close view of the UNGROUPED band and the rows under it, in a dark theme. The band is grey. The first row under it, Fix the sessions page filter, is the conversation in front: its background is tinted a dark blue that is plainly not the grey of the band, and it has a solid deep blue stripe at its start, a deeper blue than the blue dot at the top right of the logo of Waits for a permission. OpenCode in a terminal and Open in another window have a hollow stripe outlined in that same deep blue and dimmed titles; the title of Open in another window is purple, only fainter. An OpenCode conversation may have a solid grey stripe (closed here lately). No other row has a stripe.' },
+    check(/charts-purple/.test(d.css.termColor || '') && Number(d.css.termOpacity) === 0.45, 'a row open somewhere else keeps its title colour, faded with the rest of the row', d.css);
+    await look('sessions-stripes-dark', { expect: 'A close view of the UNGROUPED band and the rows under it, in a dark theme. The band is grey. The first row under it, Fix the sessions page filter, is the conversation in front: its background is tinted a dark blue that is plainly not the grey of the band, and it has a solid deep blue stripe at its start, a deeper blue than the blue dot at the top right of the logo of Waits for a permission. OpenCode in a terminal and Open in another window (at the bottom, possibly cut off by the edge of the view) have a hollow stripe outlined in that same deep blue and dimmed titles; the title of OpenCode in a terminal is purple, only fainter. An OpenCode conversation may have a solid grey stripe (closed here lately). No other row has a stripe.' },
       await box());
     await slRowLoc(SLT.ocTerm).click();
     const told = await toastWith('Close it there first', 12000);
@@ -1685,8 +1686,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slTheme(THEMES.light);
     d = await drawn();
     judge('light', d);
-    check(Number(d.css.otherOpacity) === 0.6, 'in a light theme the faded title is a little less faded, as fading shows more on a light background', d.css);
-    await look('sessions-stripes-light', { expect: 'The same close view in a light theme: a light grey UNGROUPED band, then Fix the sessions page filter with a pale blue background that is plainly not the grey of the band, and a solid deep blue stripe, deeper than the blue dot of Waits for a permission. OpenCode in a terminal and Open in another window have hollow stripes outlined in that blue and faded titles; Open in another window\'s title is a faded purple.' },
+    check(Number(d.css.termOpacity) === 0.6, 'in a light theme the faded title is a little less faded, as fading shows more on a light background', d.css);
+    await look('sessions-stripes-light', { expect: 'The same close view in a light theme: a light grey UNGROUPED band, then Fix the sessions page filter with a pale blue background that is plainly not the grey of the band, and a solid deep blue stripe, deeper than the blue dot of Waits for a permission. OpenCode in a terminal and Open in another window have hollow stripes outlined in that blue and faded titles; OpenCode in a terminal\'s title is a faded purple.' },
       await box());
     await slTheme(THEMES.hcDark);
     judge('hcDark', await drawn(), { tint: false });
@@ -1697,11 +1698,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await look('sessions-stripes-hc-light', { expect: 'The same close view in the light high contrast theme, on white: a solid dark blue stripe on Fix the sessions page filter, easy to see, hollow stripes of the same blue on OpenCode in a terminal and Open in another window.' },
       await box());
     await slTheme(THEMES.dark);
-    await slRowLoc(SLT.other).click({ button: 'right' });
+    await slRowLoc(SLT.ocTerm).click({ button: 'right' });
     await slMenu();
     await slItem('Text Color').hover({ position: { x: 10, y: 8 } });
     await slItem('Default', true).click();
-    await slWait((r) => !(slFind(r, SLT.other) || {}).color);
+    await slWait((r) => !(slFind(r, SLT.ocTerm) || {}).color);
   });
 
   /* Rows that run keep their places while they run, and no row moves while the pointer is on the list or the arrow keys
@@ -1736,7 +1737,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const fresh = await slWait((r) => slFind(r, FRESH, 'ungrouped'));
     const withNew = fresh && fresh.filter((r) => r.section === 'ungrouped').map((r) => r.title);
     check(!!withNew && withNew[0] === FRESH && sameList(withNew.filter((t) => t !== FRESH), held), 'and a new conversation still appears, at the top, with the other rows where they were', withNew);
-    await look('sessions-order-held', { pointer: true, expect: 'The list with the pointer resting on the row Nothing going on, which is highlighted with its buttons in place of its time (a hover box may show beside it). A conversation started just now is the first row of UNGROUPED and Asked a question, still working the second; further down, in its old place near the end of the list if it is in view, Quiet for three weeks says now at its right though it has not moved up.' },
+    await look('sessions-order-held', { pointer: true, expect: 'The list, scrolled so that the row the pointer rests on is in view: that row, Nothing going on, is highlighted with its buttons in place of its time (a hover box may show beside it). Near the end of UNGROUPED, Quiet for three weeks says now at its right, yet it is still in its old place under Claude Code, stopped, rather than at the top. The first rows of UNGROUPED may be scrolled out of view.' },
       sidebarBox());
     await slAway();
     const after = await until(async () => { const o = await order(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
