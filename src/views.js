@@ -186,18 +186,19 @@ function create(host, opts = {}) {
   /* The conversations in any window that wait for the user or stopped with a reply the user has not read, as
      paintAttention below last set them. */
   let attentionItems = [];
-  /* One entry counts the conversations held up by the user: running ones in the Conversations view with a question in
-     their plan, and those in any window waiting for the user to approve something or answer, each counted once; a
-     stopped one with an unread reply is not, as its notification covers it. It counts conversations, not questions:
-     the plan bar a feature extension draws counts the questions of one. With the Conversations view turned off it
-     shows only the waiting ones, and a click opens their list rather than the hidden view. */
+  /* One entry counts the conversations held up by the user: running ones in the Conversations view whose plan has a
+     question that holds them up (src/conversations.js asksYou), and those in any window waiting for the user to approve
+     something or answer, each counted once; a stopped one with an unread reply is not, as its notification covers it.
+     It counts conversations, not questions: the plan bar a feature extension draws counts the questions of one. With
+     the Conversations view turned off it shows only the waiting ones, and a click opens their list rather than the
+     hidden view. */
   const paintConversations = () => {
     const t = conversationsText.textFor(conversationsTree.lang);
     const asks = conversationsTree.data.asks;
     conversationsView.title = t.view;
     conversationsView.badge = asks ? { value: asks, tooltip: t.badge(asks) } : undefined;
     const listed = conversationsOn();
-    const running = conversationsTree.data.running, asking = listed ? running.filter((c) => c.questions.length) : [];
+    const running = conversationsTree.data.running, asking = listed ? running.filter((c) => c.asksYou) : [];
     const seen = attentionItems.filter((it) => it.kind === 'waiting');
     const count = new Set([...asking, ...seen].map((c) => `${c.sourceId}\n${c.sessionId}`)).size;
     if (!active || (!listed && !count)) { statusEntry.hide(); return; }

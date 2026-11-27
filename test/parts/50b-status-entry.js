@@ -6,8 +6,9 @@
 /*
  * The Conversations entry in the status bar (src/views.js): the number of conversations that need the user, the list of
  * them in its tooltip, or the number running when none does. It counts, each once, the
- * running conversations with a question in their plan and those the attention watcher (src/attention.js) finds waiting
- * for the user; one that stopped with an unread reply is left out.
+ * running conversations with a question in their plan that holds them up (src/conversations.js asksYou; these sources
+ * give no lastUserAt, so any question does) and those the attention watcher (src/attention.js) finds waiting for the
+ * user; one that stopped with an unread reply is left out.
  */
 const fs = require('fs');
 const path = require('path');

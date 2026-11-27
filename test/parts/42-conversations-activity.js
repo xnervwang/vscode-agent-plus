@@ -51,6 +51,10 @@ module.exports = async ({ eq, tmp, root }) => {
   eq(of('noUser'), ['working', false, 'needs'], 'with no lastUserAt the activity is the source\'s, question or not');
   eq([of('since'), of('undated'), of('plain')], [['waiting', false, 'needs'], ['stopped', false, 'needs'], ['background', false, 'idle']],
     'a question with no asked time is dated by its row\'s since, and one with neither is not taken to be new');
+  const asks = (id) => (all.find((x) => x.sessionId === id) || {}).asksYou;
+  eq(['later', 'earlier', 'noUser', 'since', 'undated', 'busy', 'plain'].map(asks), [true, false, true, true, false, true, false],
+    'a question holds the conversation up, for the status bar\'s count, when it was put after the last user message, also while a turn runs, '
+      + 'and any question does where the source gives no lastUserAt');
   eq(of('busy'), ['working', true, 'needs'], 'a new question makes the conversation wait only once the running turn ends, since the user sees the question in the reply that ends that turn');
   eq(of('stopped'), ['waiting', false, 'needs'], 'a conversation no longer running still waits on a question it put after the user last wrote');
   const drop = C({ sessionId: 'x', state: 'working', activity: 'working', running: false });
