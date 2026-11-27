@@ -14,6 +14,7 @@
 const path = require('path');
 const vscode = require('vscode');
 const sources = require('./sources');
+const sessionWindows = require('./session-windows');
 const dependents = require('./dependents');
 const compat = require('./compat');
 const PACKAGE = require('../package.json');
@@ -192,6 +193,17 @@ function start(context, log, opts = {}) {
     }
     return null;
   };
+  /* Which conversations some VS Code window on this machine shows, from the window entries of the sources registered
+     here (src/session-windows.js), this window's own included; read again at most every OPEN_MS. */
+  const OPEN_MS = 2000;
+  let shown = { at: 0, keys: new Map() };
+  const shownAnywhere = (sourceId, sessionId) => {
+    if (Date.now() - shown.at >= OPEN_MS) {
+      const dirs = registry.list().map((e) => ({ sourceId: e.id, planDir: sources.planDirOf(e.source) }));
+      shown = { at: Date.now(), keys: sessionWindows.elsewhere(dirs, { self: -1 }) };
+    }
+    return shown.keys.has(JSON.stringify([String(sourceId), String(sessionId)]));
+  };
   const stewardsOf = (a, b) => {
     const q = stewardQuery(a, b), out = [], seen = new Set();
     for (const entry of q ? registry.list() : []) {
@@ -199,7 +211,7 @@ function start(context, log, opts = {}) {
         const key = sources.keyPart(s.sourceId) + '/' + sources.keyPart(s.sessionId);
         if (seen.has(key) || out.length >= sources.MAX_STEWARDS) continue;
         seen.add(key);
-        out.push(s);
+        out.push(Object.freeze({ ...s, open: shownAnywhere(s.sourceId, s.sessionId) }));
       }
       if (out.length >= sources.MAX_STEWARDS) break;
     }
