@@ -17,7 +17,7 @@
     "steps": ["envelope-themes"], "looks": ["envelope-light", "envelope-high-contrast-light", "envelope-dark"], "settings": [], "commands": [], "views": [] },
   { "id": "envelope-narrow", "what": "A long title cut short in a narrow Conversations view, with the envelope after it still whole at the row's end",
     "steps": ["narrow-panel"], "looks": ["narrow-panel"], "settings": [], "commands": [], "views": [] },
-  { "id": "question-rows", "what": "A plan question waiting on the user under its conversation's row, with how long ago it was asked; one asked after the user's last message turns the conversation red, an older one does not; the view's badge counts the questions and the status bar entry the conversations that have one, on a red background",
+  { "id": "question-rows", "what": "A plan question waiting on the user under its conversation's row, with how long ago it was asked; one asked after the user's last message turns the conversation red, an older one does not; the view's badge counts the questions and the status bar entry the conversations with a question asked after the user's last message",
     "steps": ["question-rows"], "looks": ["question-rows"], "settings": [], "commands": [], "views": [] },
   { "id": "answer-view", "what": "The Answer view beside Conversations: a click on a question shows it with its row and a box to answer in; Send hands the answer to the window showing the conversation and says whether it was sent, left in the conversation's input box, or not received",
     "steps": ["answer-sent", "answer-drafted", "answer-not-received"], "looks": ["answer-question", "answer-sent", "answer-drafted", "answer-not-received"],

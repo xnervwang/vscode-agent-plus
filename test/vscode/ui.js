@@ -645,9 +645,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     });
     check(tab === '2', 'the Conversations tab\'s badge counts the two questions', tab);
     const st = await entry('conversations');
-    check(!!st && /2 conversations need you/.test(st.text) && !st.warning && !st.error,
-      'and the status bar entry says 2 conversations need you, in the status bar\'s own colours', st);
-    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? (orange question mark, asked 1m ago) and the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you in the bar\'s own colours, with no yellow or red behind it.' },
+    check(!!st && /1 conversation needs you/.test(st.text) && !st.warning && !st.error,
+      'and the status bar entry says 1 conversation needs you, counting only the question asked after the user\'s last message, in the status bar\'s own colours', st);
+    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? (orange question mark, asked 1m ago) and the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 1 conversation needs you in the bar\'s own colours, with no yellow or red behind it.' },
       pane('agentPlus.conversations'));
   });
 
@@ -806,11 +806,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   await step('status-entry', async () => {
     needs('question-rows');
     const st = await entry('conversations');
-    check(!!st && /2 conversations need you/.test(st.text), 'the status bar entry says 2 conversations need you', st);
+    check(!!st && /1 conversation needs you/.test(st.text), 'the status bar entry says 1 conversation needs you', st);
     const tip = await hoverText(entryLoc('conversations'));
-    check(tip.startsWith('2 conversations need you:') && tip.includes('Asked about the release branch · 1 question') && tip.includes('Asked days ago · 1 question'),
-      'hovering it lists those conversations, each with how many questions it has', tip);
-    await look('status-hover', { pointer: true, toasts: true, expect: 'A hover box above the status bar entry 2 conversations need you, reading 2 conversations need you:, then Asked about the release branch · 1 question and Asked days ago · 1 question on lines of their own.' },
+    check(tip.startsWith('1 conversation needs you:') && tip.includes('Asked about the release branch · 1 question') && !tip.includes('Asked days ago'),
+      'hovering it lists that conversation with how many questions it has, and not the one whose question came before the user\'s last message', tip);
+    await look('status-hover', { pointer: true, toasts: true, expect: 'A hover box above the status bar entry 1 conversation needs you, reading 1 conversation needs you:, then Asked about the release branch · 1 question on a line of its own; Asked days ago is not in it.' },
       page.locator('.monaco-hover, .workbench-hover').first());
     await unhover();
     await exec('workbench.action.closePanel');
