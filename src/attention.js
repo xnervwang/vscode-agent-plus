@@ -24,9 +24,10 @@
  * window whose panel shows the prompt knows more than one that read a machine-wide list, so the most precise of the
  * reasons the windows report is kept.
  *
- * Each window marks `here` on its reports for conversations it shows. Where windows report one conversation
- * differently, a report marked `here` wins over one that is not: a machine-wide list can be half a minute old, and a
- * wait it still reports after that window saw the wait end would hide the next one, which then goes unannounced.
+ * Each window marks `here` on its reports for conversations it shows, and reports them even once they have stopped
+ * with nothing unseen. Where windows report one conversation differently, a report marked `here` wins over one that
+ * is not: a machine-wide list can be half a minute old, and a wait it still reports after that window saw the wait end
+ * would hide the next one, which then goes unannounced.
  *
  * The user is looking at the conversation the focused window shows in front, so it gets no notification and no count
  * in any window. One that window shows anywhere else, in a tab behind others or a side bar, gets no notification
@@ -90,8 +91,10 @@ function reading(c) {
 
 /*
  * The running conversations of `lists` that other windows need to hear about: all but those stopped with no reply
- * unseen. `lists` is [{ sourceId, label, conversations }]; `shown(item)` says whether this window shows that
- * conversation, which marks it `here`. Past MAX_ITEMS the ones that need the user are kept.
+ * unseen, unless this window shows them. `lists` is [{ sourceId, label, conversations }]; `shown(item)` says whether
+ * this window shows that conversation, which marks it `here`. A stopped one this window shows is reported so that its
+ * report outweighs a machine-wide list still giving the wait it ended with, which would otherwise hide the next wait
+ * from a window that reads that list. Past MAX_ITEMS the ones that need the user are kept.
  */
 const activeAt = (c) => (Number.isFinite(c.lastReplyAt) && c.lastReplyAt > 0 ? c.lastReplyAt : Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0);
 const unwritten = (activity, unseen) => !activity || (activity === 'stopped' && !unseen);
@@ -102,13 +105,14 @@ function itemsOf(lists, shown = () => false) {
     for (const c of conversations || []) {
       if (!c || c.running === false || !c.sessionId) continue;
       const { activity, unseen } = reading(c);
-      if (unwritten(activity, unseen)) continue;
+      if (!activity) continue;
       const it = { sourceId: String(sourceId), source: clip(label, 40) || String(sourceId), sessionId: String(c.sessionId),
         state: STATES.includes(c.state) ? c.state : 'idle', activity, unseen, steward: c.steward === true, lastActiveAt: activeAt(c),
         title: clip(c.title, MAX_TITLE) || String(c.sessionId), cwd: typeof c.cwd === 'string' ? c.cwd : '',
         waitingFor: activity === 'waiting' ? waitReason.reasonOf(c.waitingFor) : null };
       let here = false;
       try { here = shown(it) === true; } catch (_) { here = false; }
+      if (unwritten(activity, unseen) && !here) continue;
       if (here) it.here = true;
       out.push(it);
     }
@@ -148,7 +152,7 @@ function readAll(dir, now, kept = null) {
     for (const raw of d.items.slice(0, MAX_ITEMS)) {
       if (!raw || typeof raw.sourceId !== 'string' || typeof raw.sessionId !== 'string') continue;
       const { activity, unseen, legacy } = reading(raw);
-      if (!activity || (activity === 'stopped' && !unseen)) continue;
+      if (!activity || (activity === 'stopped' && !unseen && raw.here !== true)) continue;
       const k = keyOf(raw.sourceId, raw.sessionId);
       const title = clip(raw.title, MAX_TITLE);
       const steward = typeof raw.steward === 'boolean' ? raw.steward : title.includes(titleMarks.CROWN);

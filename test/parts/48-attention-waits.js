@@ -17,6 +17,7 @@ const fake = require('../fake-vscode');
 const waiting = (id, title, waitingFor) => ({ sessionId: id, title, cwd: '/w', state: 'prompt', activity: 'waiting', running: true, waitingFor });
 const finishedConv = (id, title) => ({ sessionId: id, title, cwd: '/w', state: 'unread', activity: 'stopped', unseen: true, running: true });
 const workingConv = (id, title) => ({ sessionId: id, title, cwd: '/w', state: 'working', activity: 'working', running: true });
+const idleConv = (id, title) => ({ sessionId: id, title, cwd: '/w', state: 'idle', activity: 'stopped', unseen: false, running: true });
 
 module.exports = async ({ eq, tmp, root, wait }) => {
   const at = require(path.join(root, 'src', 'attention.js'));
@@ -99,6 +100,36 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await round(m, p, q, f);
     eq(merged(), [['waiting', false, { kind: 'permission' }]], 'between two reports not marked here, the one that needs the user most still wins');
     for (const w of [m, p, q, f]) w.att.dispose();
+  }
+
+  /* The same when the conversation then stops with its reply read: the window showing it still reports it, so the
+     other window's machine-wide list, which keeps reporting the ended wait, neither gets a notice of it nor hides the
+     next wait, which that window keeps while it has no focus and shows once it has. */
+  {
+    const dir = path.join(tmp('here-stopped'), 'attention');
+    const m = make(dir, 'sm', { focused: true }), p = make(dir, 'sp', { here: ['y'] });
+    const ask = () => lists(waiting('y', 'Choose the config', { kind: 'question' }));
+    m.att.publish(ask());
+    p.att.publish(ask());
+    await round(m, p);
+    const first = fresh(m);
+    p.att.publish(lists(workingConv('y', 'Choose the config')));
+    await round(m, p);
+    p.att.publish(lists(idleConv('y', 'Choose the config')));
+    await round(m, p);
+    clock += 1000;
+    await round(m, p);
+    const between = [fresh(m), m.painted];
+    m.focused = false;
+    p.att.publish(ask());
+    await round(m, p);
+    const away = fresh(m);
+    m.focused = true;
+    await round(m, p);
+    eq([first, between, away, fresh(m)],
+      [['"Choose the config" has a question for you.'], [[], []], [], ['"Choose the config" has a question for you.']],
+      'a stopped conversation the window showing it still reports outweighs a machine-wide list still reporting its ended wait: no notice of that wait, and the next one is kept and shown once the window has the focus');
+    for (const w of [m, p]) w.att.dispose();
   }
 
   /* Conversations of two sources that start to wait together: a notice for each, with its source's name. */
