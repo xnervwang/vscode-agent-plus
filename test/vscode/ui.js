@@ -1828,7 +1828,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const tips = [];
     for (const act of ['pin', 'rename', 'archive']) tips.push(await tipOf(SLT.quiet, act));
     check(sameList(tips, ['Pin', 'Rename', 'Archive']), 'resting the pointer on a row\'s button shows what the button does, not the conversation\'s details', tips);
-    await look('sessions-button-tip', { pointer: true, expect: 'The row Nothing going on with its buttons showing at the right, the pointer on the archive button, and a small box under that button saying only Archive, with no session ID or dates in it.' }, sidebarBox());
+    await look('sessions-button-tip', { pointer: true, expect: 'The row Nothing going on with its buttons showing at the right, the pointer on the archive button, and a small box under that button that says Archive and nothing else.' }, sidebarBox());
     await page.mouse.move(5, 5);
     await slRowLoc(SLT.quiet).click({ button: 'right' });
     await slMenu();

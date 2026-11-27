@@ -210,7 +210,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.open('["codex","a"]');
     clock = now0 + 43000;
     await list.refresh();
-    eq(byTitle(list.model(), 'Alpha').unread, true, 'marked unread in front again and then opened from the list, it is not seen at once');
+    eq(byTitle(list.model(), 'Alpha').unread, true, 'opened from the list after being marked unread in front, it is still unread right away');
     clock = now0 + 44000;
     await list.refresh();
     eq(byTitle(list.model(), 'Alpha').unread, false, 'and 1.5 seconds later it is seen, though no other conversation came to the front');

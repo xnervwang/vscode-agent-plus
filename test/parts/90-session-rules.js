@@ -83,7 +83,7 @@ module.exports = async ({ eq, root }) => {
     row({ title: 'archived last', archived: true, archivedAt: now - 1e6, lastActiveAt: now - 9 * DAY })], { groups: [] })
     .filter((s) => s.key === 'ungrouped' || s.key === 'archived').map((s) => s.rows.map((r) => r.title)),
   [['pinned late, quiet', 'pinned early, busy'], ['archived last', 'archived first']],
-  'pinned rows sort by when they were pinned whatever runs in them, and Archived by when each was archived');
+  'pinned rows stay in the order they were pinned, latest first, even when one runs; Archived lists the latest archived first');
 
   /* ── Filters and counts ── */
   const mixed = [row({ title: 'a', here: true }), row({ title: 'b', activity: 'working' }), row({ title: 'c', activity: 'background', asks: true }),
