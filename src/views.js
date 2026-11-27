@@ -298,10 +298,17 @@ function create(host, opts = {}) {
   keep(sessionList);
 
   let attentionLists = [];
+  /* Each source's list for the attention file, with when it was asked for: the window's own list where the source has
+     no listAllConversations() or it does not answer in time. */
   const listAll = async (entry, fallback) => {
-    if (typeof sources.get(entry.source, 'listAllConversations') !== 'function') return fallback;
-    try { return sources.conversations(await Promise.race([sources.call(entry.source, 'listAllConversations', [], []),
-      new Promise((r) => after(() => r(null), listWait))])) || fallback; } catch (_) { return fallback; }
+    const kept = { list: fallback, askedAt: (entry.list && entry.list.lastAskedAt) || 0 };
+    if (typeof sources.get(entry.source, 'listAllConversations') !== 'function') return kept;
+    const askedAt = Date.now();
+    try {
+      const got = sources.conversations(await Promise.race([sources.call(entry.source, 'listAllConversations', [], []),
+        new Promise((r) => after(() => r(null), listWait))]));
+      return got ? { list: got, askedAt } : kept;
+    } catch (_) { return kept; }
   };
   /* A question put after the user last wrote makes a conversation wait for them in every window, so the plan of each
      running conversation whose source gives lastUserAt is read here, whichever folder it is in. */
@@ -333,11 +340,11 @@ function create(host, opts = {}) {
   const publishAttention = async (pairs) => {
     const notifying = notifySettings().enabled, linking = everyone.wanted();
     if (!notifying && !linking) { attentionLists = []; needs.publish([]); needs.refresh(); return; }
-    const gathered = await Promise.all(pairs.map(async ({ entry, list }) => ({ entry, list, all: await listAll(entry, list) })));
+    const gathered = await Promise.all(pairs.map(async ({ entry, list }) => { const got = await listAll(entry, list); return { entry, list, all: got.list, askedAt: got.askedAt }; }));
     if (closing) return;
     if (linking) publishEveryone(gathered.filter((g) => registry.has(g.entry)));
-    attentionLists = gathered.map(({ entry, all }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
-      conversations: withQuestions(entry.id, all) }));
+    attentionLists = gathered.map(({ entry, all, askedAt }) => ({ sourceId: entry.id, label: sources.labelOf(entry.source),
+      conversations: withQuestions(entry.id, all), askedAt }));
     needs.publish(attentionLists);
     needs.refresh();
   };
@@ -379,6 +386,7 @@ function create(host, opts = {}) {
     st.askNext = false;
     st.slow = false;
     st.askedAt = Date.now();
+    const asked = st.askedAt;
     let asking = null;
     const slowTimer = after(() => {
       if (st.pending !== asking || closing) return;
@@ -391,6 +399,7 @@ function create(host, opts = {}) {
       st.slow = false;
       if (closing || !registry.has(entry)) return r;
       st.last = r;
+      st.lastAskedAt = asked;
       /* No sooner than the debounce after this list was asked for: a source that reports a change from inside every
          list it gives would otherwise be listed again the moment each list settles, for as long as the window is open.
          A list that took longer than that is followed at once. */

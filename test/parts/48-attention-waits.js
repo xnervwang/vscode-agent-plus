@@ -102,6 +102,40 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     for (const w of [m, p, q, f]) w.att.dispose();
   }
 
+  /* A wait answered just before its tab closes: the list the window holds can still say it waits. Until a list asked
+     for after the tab went is published, the window neither tells nor counts it; a wait that list still shows is told. */
+  {
+    const dir = path.join(tmp('left'), 'attention');
+    const w = make(dir, 'lw', { focused: true, here: ['x'] });
+    const listed = (askedAt, c) => [{ sourceId: 'claude-code', label: 'Claude Code', conversations: src.conversations([c]), askedAt }];
+    const asks = () => waiting('x', 'Deploy', { kind: 'permission', tool: 'Bash' });
+    w.att.publish(listed(clock, asks()));
+    w.att.refresh();
+    clock += 100;
+    w.here = [];
+    w.att.publish(listed(clock - 300, asks()));
+    await round(w);
+    const stale = [fresh(w), w.painted.slice()];
+    clock += 100;
+    w.att.publish(listed(clock, idleConv('x', 'Deploy')));
+    await round(w);
+    const answered = [fresh(w), w.painted.slice()];
+    w.here = ['x'];
+    w.att.publish(listed(clock, asks()));
+    w.att.refresh();
+    clock += 100;
+    w.here = [];
+    w.att.publish(listed(clock - 300, asks()));
+    await round(w);
+    const held = fresh(w);
+    clock += 100;
+    w.att.publish(listed(clock, asks()));
+    await round(w);
+    eq([stale, answered, held, fresh(w), w.painted], [[[], []], [[], []], [], ['"Deploy" is waiting for you to approve Bash.'], ['x:waiting']],
+      'a conversation whose tab just closed is neither told nor counted on a list asked for before then, and a wait a later list still shows is told');
+    w.att.dispose();
+  }
+
   /* As above, but the conversation then stops with its reply read. The window showing it keeps reporting it, so the
      other window gets no notice of the ended wait, and the next wait is not hidden. */
   {

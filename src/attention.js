@@ -63,6 +63,7 @@ const STABLE_MS = 5000;
 /* What a window reads in its first seconds was there before it started. */
 const WARMUP_MS = 10000;
 const REMEMBER_MS = 120000;
+const HOLD_MS = 5000;
 const MAX_ITEMS = 200;
 const MAX_SEEN = 2000;
 const MAX_TITLE = 120;
@@ -216,6 +217,14 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
   const activeSeen = new Map();
 
   const isFocused = () => { try { return focused() === true; } catch (_) { return false; } };
+  /* key -> when this window stopped showing that conversation. Until a list of its source asked for after then is
+     published, what the windows report for it can be the state from before, such as a wait the user answered just
+     before closing its tab, so it is neither told nor counted; HOLD_MS bounds the wait. */
+  const leftAt = new Map();
+  let shownBefore = new Set();
+  /* sourceId -> when the list in the last publish was asked for. */
+  const askedAt = new Map();
+  const held = (k) => leftAt.has(k);
 
   function write() {
     if (closed || !canWrite()) return;
@@ -239,6 +248,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
 
   function publish(lists) {
     if (closed) return;
+    for (const l of lists || []) if (l && Number.isFinite(l.askedAt)) askedAt.set(String(l.sourceId), l.askedAt);
     /* A stopped conversation with nothing unseen is left out of this window's file, so its reply time is noted here from
        the list: marked unread later, it would otherwise look like a turn that ran between two reads. */
     for (const { sourceId, conversations } of lists || []) {
@@ -287,6 +297,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     for (const it of pending.values()) {
       const cur = union && union.get(it.key);
       if (!cur || cur.kind !== it.kind || s[it.kind] === false) continue;
+      if (held(it.key)) { later.push(it); continue; }
       cur.queuedAt = it.queuedAt;
       if (cur.kind === 'waiting' && waitReason.detail(cur.waitingFor) === 1 && t - it.queuedAt < preciseMs) later.push(cur);
       else items.push(cur);
@@ -337,6 +348,14 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       if (n === ownName) continue;
       for (const [k, at] of notes) if (!(toldElsewhere.get(k) >= at)) toldElsewhere.set(k, at);
     }
+    const shownNow = new Set([...next.values()].filter((it) => here(it)).map((it) => it.key));
+    for (const k of shownBefore) if (!shownNow.has(k) && next.has(k)) leftAt.set(k, t);
+    for (const k of shownNow) leftAt.delete(k);
+    shownBefore = shownNow;
+    for (const [k, at] of leftAt) {
+      const it = next.get(k), asked = it ? askedAt.get(String(it.sourceId)) || 0 : 0;
+      if (!it || asked > at || t - at >= HOLD_MS) leftAt.delete(k);
+    }
     const warm = t - startedAt >= warmupMs;
     const queue = (k, it) => {
       const had = pending.get(k);
@@ -345,6 +364,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
       if (!timer) timer = setTimeout(flush, batchMs);
     };
     for (const [k, it] of next) {
+      if (held(k)) continue;
       const was = last.get(k);
       const seenActive = activeSeen.has(k) ? activeSeen.get(k) : startedAt + warmupMs;
       const rec = { activity: it.activity, kind: it.kind, at: t, from: it.from, stoppedAt: 0 };
@@ -368,7 +388,7 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     union = next;
     if (focus && !hadFocus) replay();
     hadFocus = focus;
-    const all = [...next.values()].filter((it) => it.kind && !looking.has(it.key));
+    const all = [...next.values()].filter((it) => it.kind && !looking.has(it.key) && !held(it.key));
     try { paint(settings().enabled ? all : []); } catch (_) { /* the next refresh */ }
     return all;
   }
@@ -379,8 +399,8 @@ function createAttention({ dir = path.join(sharedHome(), ATTENTION_DIR), windowI
     if (written) { try { fs.unlinkSync(own); } catch (_) { /* gone */ } }
   }
 
-  return { publish, refresh, dispose, items: () => (union ? [...union.values()].filter((it) => it.kind && !looking.has(it.key)) : []) };
+  return { publish, refresh, dispose, items: () => (union ? [...union.values()].filter((it) => it.kind && !looking.has(it.key) && !held(it.key)) : []) };
 }
 
 module.exports = { createAttention, itemsOf, readAll, message, keyOf, kindOf, ATTENTION_DIR, FORMAT, BEAT_MS, STALE_MS, BATCH_MS, STABLE_MS,
-  WARMUP_MS, REMEMBER_MS, SETTLED_MS, PRECISE_MS };
+  WARMUP_MS, REMEMBER_MS, SETTLED_MS, PRECISE_MS, HOLD_MS };
