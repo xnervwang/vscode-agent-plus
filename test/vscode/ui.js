@@ -2022,9 +2022,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slClose();
     await sideBarWidth(230);
     await showSessions('agentPlus.sessions');
-    /* A menu can open with its first item under the pointer that right-clicked, which then rests there. The events a
-       browser sends to an element that appears under a still pointer are sent to Text Color from the right-click's own
-       point; they do not open its submenu over the rest of the menu. */
+    /* The menu can open with Text Color under the pointer that right-clicked it, and the pointer stays there. Text
+       Color gets the events a browser sends to an element that appears under a still pointer, from the right-click's
+       own point, and its submenu has to stay closed. */
     await sl.evaluate(() => {
       window.__ctxAt = null;
       document.addEventListener('contextmenu', (e) => { window.__ctxAt = { x: e.clientX, y: e.clientY }; }, { capture: true, once: true });
@@ -2041,7 +2041,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       await new Promise((r) => setTimeout(r, 700));
       return { ready: true, sub: !!document.querySelector('.sl-ctx-sub') };
     });
-    check(resting.ready && !resting.sub, 'in a narrow side bar, Text Color under a pointer that has not moved since the right-click opens no submenu', resting);
+    check(resting.ready && !resting.sub, 'in a narrow side bar, a right-click that leaves the pointer on Text Color opens no submenu', resting);
     await slItem('Text Color').hover(START);
     const narrow = await until(async () => { const p = await placed(); return p && p; }, 3000, 100);
     check(!!narrow && !narrow.inPlace && (!narrow.covers || narrow.uncovered >= 40), 'in a narrow side bar, resting the pointer on Text Color opens its submenu too, laid over the menu but clear of the start of Text Color', narrow);
