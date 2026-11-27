@@ -179,13 +179,14 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-procs { font-size: .85em; color: var(--vscode-errorForeground, #f14c4c); }
 /* A pinned row's pin is filled and purple, as is its Unpin button: the dot already uses green, blue and red for what a
    conversation is doing, so purple is not read as one of those. */
-.sl-pinned { flex: none; display: flex; margin-left: auto; color: var(--vscode-charts-purple, #b180d7); }
+.sl-pinned { flex: none; display: flex; color: var(--vscode-charts-purple, #b180d7); }
 .sl-pinned svg.sl-icon { width: 14px; height: 14px; }
 .sl-pinned svg.sl-icon path:nth-child(2) { fill: currentColor; }
 .sl-act[data-act="unpin"] { color: var(--vscode-charts-purple, #b180d7); }
 .sl-meta { display: flex; flex: none; align-items: center; gap: 4px; margin-left: auto; }
-.sl-pinned:not(.sl-hidden) + .sl-meta { margin-left: 4px; }
-.sl-time { opacity: .7; font-size: .9em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The time keeps the width of its longest form (11mo) and sits at the right, so the pin before it stays in one column
+   whatever the time says. */
+.sl-time { opacity: .7; font-size: .9em; white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 2.8em; text-align: right; }
 /* The icon at the end of a row for where else it is open: another VS Code window or a terminal. */
 .sl-away { display: inline-flex; color: var(--vscode-foreground); }
 .sl-away svg.sl-icon { width: 14px; height: 14px; }
