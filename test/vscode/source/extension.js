@@ -172,11 +172,14 @@ function activate(context) {
   const thirdList = new Map();
   const thirdChanged = new vscode.EventEmitter();
   context.subscriptions.push(thirdChanged);
-  const otherState = { calls: [], sidebar: [], place: {}, imported: null }, thirdState = { calls: [], sidebar: [], place: {}, imported: null };
+  const otherState = { calls: [], sidebar: [], place: {}, imported: null, account: null, accountEv: new vscode.EventEmitter() };
+  const thirdState = { calls: [], sidebar: [], place: {}, imported: null, account: null, accountEv: new vscode.EventEmitter() };
+  context.subscriptions.push(otherState.accountEv, thirdState.accountEv);
   /* A source with no tabs of its own: what it is asked to do is recorded, and a conversation opened in the sidebar counts
-     as shown there. shownIn gives the test's `place` entry for each conversation, and nothing when none is set. */
+     as shown there. shownIn gives the test's `place` entry for each conversation, and nothing when none is set; its
+     Account & usage part is the state's `account`. */
   const sessionsSource = (id, label, logo, m, ev, st, more) => Object.assign({
-    protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows', 'shownIn'],
+    protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows', 'shownIn', 'accountInfo'],
     logo: { light: vscode.Uri.file(path.join(__dirname, logo)), dark: vscode.Uri.file(path.join(__dirname, logo)) },
     planDir: () => plans,
     listSessions: async () => ({ sessions: [...m.values()].map((c) => Object.assign(sessionDefaults(c), c)), cursor: null }),
@@ -193,6 +196,8 @@ function activate(context) {
     },
     shows: (x) => st.sidebar.includes(x),
     shownIn: (x) => st.place[x],
+    accountInfo: () => st.account,
+    onDidChangeAccountInfo: st.accountEv.event,
   }, more);
 
   return {
@@ -255,6 +260,13 @@ function activate(context) {
       return true;
     },
     otherState: (which) => (which === 'opencode' ? thirdState : otherState),
+    /* Sets fields of the state of the source `which`, such as its Account & usage part, and tells Agent Plus. */
+    configureOther(which, fields) {
+      const st = which === 'opencode' ? thirdState : otherState;
+      Object.assign(st, fields);
+      st.accountEv.fire();
+      return true;
+    },
     /* Makes sessionForTab answer '' for this conversation's tab until knowTab(), and fires the change event so the list
        looks again. */
     forgetTab(id) { if (!state.unknownTabs.includes(id)) state.unknownTabs.push(id); changed.fire(); return true; },

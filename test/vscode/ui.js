@@ -36,7 +36,7 @@ const LOOK_SETTINGS = {};
 const SCALE = 2;
 /* src/envelope.js: 📩 in dark themes, the plain envelope's text form in light ones. */
 const COLOUR = '\u{1F4E9}', TEXT = '\u2709\uFE0E';
-const THEMES = { dark: 'Default Dark Modern', light: 'Default Light Modern', hcLight: 'Default High Contrast Light' };
+const THEMES = { dark: 'Default Dark Modern', light: 'Default Light Modern', hcDark: 'Default High Contrast', hcLight: 'Default High Contrast Light' };
 const SW = 'out/vs/workbench/contrib/webview/browser/pre/service-worker.js';
 const HOUR = 3600e3;
 const ASK_TOKEN = 'Some features add text to the agent\'s context and use tokens.';
@@ -50,6 +50,9 @@ const ALL_FEATURES = ['work plan', 'time-zone note', 'conversation brief', 'wake
 const CODEX_SWITCHES = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'codexPlus.conversationBrief', 'codexPlus.wakeUps',
   'codexPlus.detachedEndNotices'];
 
+/* How the aria-labels of the two activity bar entries start: the session list's container is titled Agent Plus -
+   Conversations, so the Work plan's Agent Plus is told from it by what follows. */
+const SESSIONS_ENTRY = '^Agent Plus - Conversations', PLAN_ENTRY = '^Agent Plus(?! - Conversations)';
 const iso = (ms = Date.now()) => new Date(ms).toISOString();
 const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1363,7 +1366,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   await step('view-settings', async () => {
     await startWorking([conv('run', 'Running a turn', 'working', 'working'), conv('s-wait', 'Still waits', 'prompt', 'waiting')]);
     await setting('agentPlus.workPlanView', false);
-    const gone = await until(async () => !await page.evaluate(() => [...document.querySelectorAll('.activitybar .action-item .action-label')].some((a) => /^Agent Plus/.test(a.getAttribute('aria-label') || ''))), 10000, 300);
+    const gone = await until(async () => !await page.evaluate((re) => [...document.querySelectorAll('.activitybar .action-item .action-label')].some((a) => new RegExp(re).test(a.getAttribute('aria-label') || '')), PLAN_ENTRY), 10000, 300);
     check(!!gone, 'with agentPlus.workPlanView off, the Work plan view goes, and with it the Agent Plus side bar');
     await setting('agentPlus.workPlanView', true);
     await showPlanView();
@@ -1425,11 +1428,39 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   const slHover = () => sl.evaluate(() => { const h = document.querySelector('.sl-hover'); return h && !h.classList.contains('sl-hidden') ? h.textContent : ''; });
   const calls = (which) => src(which === 'codex' ? 'return src.state.calls;' : 'return src.otherState(arg).calls;', which);
   const sidebarBox = () => page.locator('#workbench\\.parts\\.sidebar');
+  /* A colour as getComputedStyle gives it, as [r, g, b, a] with r, g, b in 0-255: rgb(), rgba(), and color(srgb ...),
+     which a color-mix() computes to. Null for anything else. */
+  const rgbaOf = (css) => {
+    let m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/.exec(css || '');
+    if (m) return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
+    m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/.exec(css || '');
+    return m ? [+m[1] * 255, +m[2] * 255, +m[3] * 255, m[4] === undefined ? 1 : +m[4]] : null;
+  };
+  const luminance = (c) => c.slice(0, 3).map((x) => { const v = x / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+    .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const contrast = (a, b) => { const x = luminance(a), y = luminance(b); return Math.round((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) * 100) / 100; };
+  const rgbOf = (c) => (c ? c.slice(0, 3).map(Math.round) : null);
+  /* The colour drawn at a point of `loc`'s box, read from a screenshot, as [r, g, b]. `fx` and `fy` place the point: a
+     fraction of the box's width or height when below 1, a number of CSS pixels from its left or top edge otherwise. */
+  const pixelOf = async (loc, fx = 0.5, fy = 0.5) => {
+    const b = await loc.boundingBox().catch(() => null);
+    if (!b) return null;
+    const x = b.x + (fx < 1 ? b.width * fx : fx), y = b.y + (fy < 1 ? b.height * fy : fy);
+    const png = await page.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } }).catch(() => null);
+    if (!png) return null;
+    const img = pixels.decode(png);
+    return [img.data[0], img.data[1], img.data[2]];
+  };
+  const slTheme = async (name) => { await theme(name); await showSessions('agentPlus.sessions'); await sleep(800); };
+  /* Puts the pointer on the blank top edge of the list's page, above the New bar: off the sections and every control.
+     A pointer Playwright moves out of the page altogether, as to the window's corner, leaves the page's hover where it
+     was, as the page is not told it left. */
+  const slAway = async () => { await sl.locator('.sl-top').hover({ position: { x: 2, y: 2 } }).catch(() => {}); await sleep(200); };
   /*
-   * The two activity bar entries, Conversations for the session list and Agent Plus for the Work plan, once both are
-   * drawn. Null while either is missing or has no size yet.
+   * The two activity bar entries, Agent Plus - Conversations for the session list and Agent Plus for the Work plan, once
+   * both are drawn. Null while either is missing or has no size yet.
    */
-  const barEntries = () => page.evaluate(() => {
+  const barEntries = () => page.evaluate(([sessionsRe, planRe]) => {
     const items = [...document.querySelectorAll('.activitybar .action-item')];
     const find = (re) => {
       const i = items.findIndex((x) => { const l = x.querySelector('.action-label'); return !!l && re.test(l.getAttribute('aria-label') || ''); });
@@ -1437,9 +1468,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       const r = items[i].getBoundingClientRect(), s = getComputedStyle(items[i].querySelector('.action-label'));
       return r.width > 0 && r.height > 0 ? { index: i, x: r.x, y: r.y, width: r.width, height: r.height, icon: `${s.maskImage || ''} ${s.webkitMaskImage || ''}` } : null;
     };
-    const sessions = find(/^Conversations/), plan = find(/^Agent Plus/);
+    const sessions = find(new RegExp(sessionsRe)), plan = find(new RegExp(planRe));
     return sessions && plan ? { sessions, plan } : null;
-  });
+  }, [SESSIONS_ENTRY, PLAN_ENTRY]);
   const barShown = () => until(barEntries, 15000, 200);
   const barBox = (b) => {
     const top = Math.min(b.sessions.y, b.plan.y), bottom = Math.max(b.sessions.y + b.sessions.height, b.plan.y + b.plan.height);
@@ -1534,7 +1565,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       .map((r) => [r.querySelector('.sl-title').textContent, r.querySelector('.sl-away').dataset.away]).sort());
     check(sameList(away.map((x) => x.join(':')), [`${SLT.other}:window`, `${SLT.ocTerm}:terminal`].sort()),
       'a row open in another VS Code window ends in a windows icon and one open in a terminal ends in a terminal icon; no other row has one', away);
-    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then the section bands: no RECENTLY CLOSED, and UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid light stripe at its start; Open in another window and OpenCode in a terminal have an outlined stripe and dimmed text. Review archive sweep has a small envelope icon after its title. Quiet for three weeks, if it is in the picture, has a feature-x badge and a red · 2 processes after its title.' },
+    await look('sessions-dark', { expect: 'The Conversations side bar of Agent Plus in a dark theme: a New bar (an agent logo with a caret, New in tab highlighted with its whole label, then New in sidebar, or only a side bar icon for it where its label does not fit), chips All, Open 1, Running 5, Needs you 3, then the section bands: no RECENTLY CLOSED, and UNGROUPED with a count (the list goes on below the picture). Rows have a logo (blue square for Codex, orange circle for Claude Code, a dark square for OpenCode) with a coloured dot at its top right where something runs or waits: green, a hollow green ring, blue, red, a hollow red ring. Fix the sessions page filter has a solid deep blue stripe at its start and a blue-tinted background; Open in another window and OpenCode in a terminal have a stripe outlined in that blue and dimmed text. All is the chosen chip, in the button blue; Open, Running and Needs you are grey. Review archive sweep has a small envelope icon after its title. Quiet for three weeks, if it is in the picture, has a feature-x badge and a red · 2 processes after its title.' },
       sidebarBox());
     await exec('notifications.clearAll');
     await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-row[data-stripe="elsewhere"]')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
@@ -1557,13 +1588,179 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sideBarWidth(230);
     await showSessions('agentPlus.sessions');
     await sleep(800);
-    const fits = await sl.evaluate(() => [...document.querySelectorAll('.sl-row')].filter((r) => r.offsetParent).every((r) => r.scrollWidth <= r.clientWidth + 1));
-    check(fits, 'in a narrow side bar every row still fits, its title cut short');
+    const over = await sl.evaluate(() => [...document.querySelectorAll('.sl-row')].filter((r) => r.offsetParent && r.scrollWidth > r.clientWidth + 1)
+      .map((r) => [r.querySelector('.sl-title').textContent, r.scrollWidth, r.clientWidth]));
+    check(!over.length, 'in a narrow side bar every row still fits, its title cut short', over);
     const tight = await sl.evaluate(() => { const b = document.querySelector('.sl-new'), p = b.querySelector('.sl-new-half.sl-primary span'), o = b.querySelector('.sl-new-half:not(.sl-primary) .sl-place');
       return { tight: b.classList.contains('sl-tight'), whole: !!p && p.scrollWidth <= p.clientWidth + 1, icon: !!o && getComputedStyle(o).display !== 'none' }; });
     check(tight.tight && tight.whole && tight.icon, 'and the New bar keeps New in tab whole, showing the other half as a side bar icon', tight);
     await look('sessions-narrow', { expect: 'The list in a narrow side bar, about 230 pixels: long titles end in an ellipsis, the time stays at the right, nothing overlaps, and the New bar stays on one line: New in tab with its whole label, and beside it a small side bar icon in place of New in sidebar.' }, sidebarBox());
     await sideBarWidth(420);
+  });
+
+  await step('sessions-title', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    const titleOf = () => page.evaluate(() => { const h = document.querySelector('[id="workbench.parts.sidebar"] .composite.title .title-label h2');
+      return h && h.offsetParent ? h.textContent.trim() : null; });
+    const title = await until(titleOf, 10000, 300);
+    check(title === 'Agent Plus - Conversations', 'the side bar of the session list is titled Agent Plus - Conversations, once, with no view name after it', title);
+    /* The entry's label is drawn under its badge, so the pointer is put on the middle of the entry rather than asked to
+       hover the label. */
+    const entryBox = await page.locator('.activitybar .action-item').filter({ has: page.locator('.action-label[aria-label^="Agent Plus - Conversations"]') }).first()
+      .boundingBox().catch(() => null);
+    await page.mouse.move(5, 5);
+    await until(async () => !await anyHover(), 3000, 200);
+    if (entryBox) await page.mouse.move(entryBox.x + entryBox.width / 2, entryBox.y + entryBox.height / 2, { steps: 4 });
+    const said = (await until(() => page.evaluate(() => {
+      const h = [...document.querySelectorAll('.monaco-hover, .workbench-hover')].find((e) => e.offsetParent && e.innerText.trim());
+      return h ? h.innerText.trim() : '';
+    }), 6000, 200)) || '';
+    check(/^Agent Plus - Conversations/.test(said), 'and the hover of its activity bar entry says Agent Plus - Conversations', said);
+    await look('sessions-title-hover', { pointer: true, expect: 'The pointer on the robot entry of the activity bar, and beside it a hover saying Agent Plus - Conversations (a number of conversations needing you may follow it). The side bar at the right is titled AGENT PLUS - CONVERSATIONS or Agent Plus - Conversations at its top, once.' },
+      page.locator('#workbench\\.parts\\.activitybar'));
+    await page.mouse.move(5, 5);
+    await look('sessions-title-dark', { expect: 'The top line of the side bar in a dark theme: the title Agent Plus - Conversations (in capitals or not, as the theme draws it) once, with nothing such as ": Conversations" after it, then the search, filter and more buttons at the right.' },
+      page.locator('[id="workbench.parts.sidebar"] .composite.title'));
+    await slTheme(THEMES.light);
+    check(await titleOf() === 'Agent Plus - Conversations', 'the title is the same in a light theme', await titleOf());
+    await look('sessions-title-light', { expect: 'The same top line of the side bar in a light theme: Agent Plus - Conversations once, dark text on a light background, and the three buttons at the right.' },
+      page.locator('[id="workbench.parts.sidebar"] .composite.title'));
+    await slTheme(THEMES.dark);
+  });
+
+  /* The stripes and the row in front, measured in each kind of theme. */
+  await step('sessions-stripes', async () => {
+    needs('sessions-rows');
+    otherWindow(['sl-other']);
+    await showSessions('agentPlus.sessions');
+    const BLUE = { dark: [37, 99, 235], light: [29, 78, 216], hcDark: [48, 112, 240], hcLight: [30, 64, 175] };
+    const drawn = async () => {
+      await slAway();
+      const css = await sl.evaluate(([other, term]) => {
+        const row = (t) => [...document.querySelectorAll('.sl-section[data-key="ungrouped"] .sl-row')].find((r) => r.querySelector('.sl-title').textContent === t);
+        const st = (e) => (e ? getComputedStyle(e) : null);
+        const here = document.querySelector('.sl-section[data-key="ungrouped"] .sl-stripe.s-here'), away = row(other) && row(other).querySelector('.sl-stripe');
+        const dot = document.querySelector('.sl-dot.d-blue'), title = row(other) && row(other).querySelector('.sl-title');
+        return { here: here && st(here).backgroundColor, away: away && st(away).borderTopColor, awayFill: away && st(away).backgroundColor, awayWidth: away && st(away).borderTopWidth,
+          dot: dot && st(dot).backgroundColor, body: st(document.body).backgroundColor, cursorTerm: row(term) && st(row(term)).cursor,
+          cursorWindow: row(other) && st(row(other)).cursor, otherColor: title && title.style.color, otherOpacity: title && st(title).opacity };
+      }, [SLT.other, SLT.ocTerm]);
+      const cur = await pixelOf(sl.locator('.sl-section[data-key="ungrouped"] .sl-row.sl-current').first(), 0.6, 3);
+      const head = await pixelOf(sl.locator('.sl-section[data-key="ungrouped"] > .sl-head'), 0.6, 0.5);
+      return { css, cur, head };
+    };
+    const judge = (which, d, { tint = true } = {}) => {
+      const here = rgbaOf(d.css.here), away = rgbaOf(d.css.away), dot = rgbaOf(d.css.dot), body = rgbaOf(d.css.body);
+      check(!!here && !!dot && !!body && sameList(rgbOf(here), BLUE[which]) && luminance(here) < luminance(dot) && contrast(here, body) >= 3,
+        `${which}: the stripe of the conversation open in this window is a solid blue, deeper than the dot of a dialog waiting, and stands out from the list`,
+        { stripe: d.css.here, dot: d.css.dot, body: d.css.body, contrast: here && body ? contrast(here, body) : null });
+      check(!!away && sameList(rgbOf(away), BLUE[which]) && (rgbaOf(d.css.awayFill) || [0, 0, 0, 0])[3] === 0 && parseFloat(d.css.awayWidth) >= 1,
+        `${which}: one open somewhere else has a hollow stripe outlined in the same blue`, d.css);
+      if (!tint) return;
+      const t = d.cur && d.head ? { distance: Math.round(Math.hypot(...d.cur.map((v, i) => v - d.head[i]))), bluer: (d.cur[2] - d.cur[0]) - (d.head[2] - d.head[0]) } : null;
+      check(!!t && t.distance >= 20 && t.bluer >= 15, `${which}: the row in front is tinted blue, apart from the grey band of its section`, { row: d.cur, band: d.head, t });
+    };
+    const box = async () => {
+      const h = await sl.locator('.sl-section[data-key="ungrouped"] > .sl-head').boundingBox().catch(() => null);
+      return h ? { x: h.x, y: h.y - 4, width: h.width, height: h.height + 12 * 29 + 8 } : sidebarBox();
+    };
+    /* A title colour on a row open somewhere else stays, dimmed with the row. */
+    await slRowLoc(SLT.other).click({ button: 'right' });
+    await slMenu();
+    await slItem('Text Color').hover({ position: { x: 10, y: 8 } });
+    await slItem('Purple', true).click();
+    await slWait((r) => /charts-purple/.test((slFind(r, SLT.other) || {}).color || ''));
+    let d = await drawn();
+    judge('dark', d);
+    check(d.css.cursorTerm === 'not-allowed' && d.css.cursorWindow === 'pointer',
+      'the pointer over a row open in a terminal shows that it cannot be opened from here; over one open in another VS Code window it is the usual hand', d.css);
+    check(/charts-purple/.test(d.css.otherColor || '') && Number(d.css.otherOpacity) === 0.45, 'a row open somewhere else keeps its title colour, faded with the rest of the row', d.css);
+    await look('sessions-stripes-dark', { expect: 'A close view of the UNGROUPED band and the rows under it, in a dark theme. The band is grey. The first row under it, Fix the sessions page filter, is the conversation in front: its background is tinted a dark blue that is plainly not the grey of the band, and it has a solid deep blue stripe at its start, a deeper blue than the blue dot at the top right of the logo of Waits for a permission. OpenCode in a terminal and Open in another window have a hollow stripe outlined in that same deep blue and dimmed titles; the title of Open in another window is purple, only fainter. An OpenCode conversation may have a solid grey stripe (closed here lately). No other row has a stripe.' },
+      await box());
+    await slRowLoc(SLT.ocTerm).click();
+    const told = await toastWith('Close it there first', 12000);
+    check(!!told && !(await calls('opencode')).some((c) => c[0] === 'open' && c[1][0] === 'oc-term'), 'clicking a row open in a terminal opens nothing here and says where to close it first', told);
+    await clearToasts();
+    await slTheme(THEMES.light);
+    d = await drawn();
+    judge('light', d);
+    check(Number(d.css.otherOpacity) === 0.6, 'in a light theme the faded title is a little less faded, as fading shows more on a light background', d.css);
+    await look('sessions-stripes-light', { expect: 'The same close view in a light theme: a light grey UNGROUPED band, then Fix the sessions page filter with a pale blue background that is plainly not the grey of the band, and a solid deep blue stripe, deeper than the blue dot of Waits for a permission. OpenCode in a terminal and Open in another window have hollow stripes outlined in that blue and faded titles; Open in another window\'s title is a faded purple.' },
+      await box());
+    await slTheme(THEMES.hcDark);
+    judge('hcDark', await drawn(), { tint: false });
+    await look('sessions-stripes-hc-dark', { expect: 'The same close view in the dark high contrast theme, on black: the stripe of Fix the sessions page filter is a solid blue that is easy to see on black, the hollow stripes of OpenCode in a terminal and Open in another window are outlined in the same blue, and the band and the rows are drawn with the theme\'s own lines.' },
+      await box());
+    await slTheme(THEMES.hcLight);
+    judge('hcLight', await drawn(), { tint: false });
+    await look('sessions-stripes-hc-light', { expect: 'The same close view in the light high contrast theme, on white: a solid dark blue stripe on Fix the sessions page filter, easy to see, hollow stripes of the same blue on OpenCode in a terminal and Open in another window.' },
+      await box());
+    await slTheme(THEMES.dark);
+    await slRowLoc(SLT.other).click({ button: 'right' });
+    await slMenu();
+    await slItem('Text Color').hover({ position: { x: 10, y: 8 } });
+    await slItem('Default', true).click();
+    await slWait((r) => !(slFind(r, SLT.other) || {}).color);
+  });
+
+  /* Rows that run keep their places while they run, and no row moves while the pointer is on the list or the arrow keys
+     are in it. */
+  await step('sessions-order', async () => {
+    needs('sessions-rows');
+    otherWindow(['sl-other']);
+    await showSessions('agentPlus.sessions');
+    await slAway();
+    const FRESH = 'A conversation started just now';
+    const order = async () => (await slRows()).filter((r) => r.section === 'ungrouped').map((r) => r.title);
+    const timeOf = (title) => sl.evaluate((t) => { const r = [...document.querySelectorAll('.sl-section[data-key="ungrouped"] .sl-row')].find((x) => x.querySelector('.sl-title').textContent === t);
+      return r ? r.querySelector('.sl-time').textContent : null; }, title);
+    const before = await order();
+    await patch('sl-askrun', { lastActiveAt: Date.now() });
+    const came = await until(async () => (await timeOf(SLT.askrun)) === 'now', 10000, 300);
+    await sleep(500);
+    const during = await order();
+    check(!!came && sameList(during, before), 'a row running a turn keeps its place while its messages come in, though its time says now', { before, during });
+    await patch('sl-askrun', { state: 'idle', activity: 'stopped', running: false });
+    const moved = await until(async () => { const o = await order(); return o[0] === SLT.askrun && o; }, 10000, 300);
+    check(!!moved, 'once its turn stops, it moves once, to the place of its last message', moved || await order());
+
+    const held = await order();
+    await slRowLoc(SLT.quiet).hover();
+    await patch('sl-weeks', { lastActiveAt: Date.now() });
+    const seen = await until(async () => (await timeOf(SLT.weeks)) === 'now', 10000, 300);
+    await sleep(500);
+    const still = await order();
+    check(!!seen && sameList(still, held), 'while the pointer is on the list, a row with a new message keeps its place', { held, still });
+    await src('src.set(src.conversations().concat([arg])); return true;', conv('sl-fresh', FRESH, 'idle', 'stopped', false, { running: false, lastActiveAt: Date.now() }));
+    const fresh = await slWait((r) => slFind(r, FRESH, 'ungrouped'));
+    const withNew = fresh && fresh.filter((r) => r.section === 'ungrouped').map((r) => r.title);
+    check(!!withNew && withNew[0] === FRESH && sameList(withNew.filter((t) => t !== FRESH), held), 'and a new conversation still appears, at the top, with the other rows where they were', withNew);
+    await look('sessions-order-held', { pointer: true, expect: 'The list with the pointer resting on the row Nothing going on, which is highlighted with its buttons in place of its time (a hover box may show beside it). A conversation started just now is the first row of UNGROUPED and Asked a question, still working the second; further down, in its old place near the end of the list if it is in view, Quiet for three weeks says now at its right though it has not moved up.' },
+      sidebarBox());
+    await slAway();
+    const after = await until(async () => { const o = await order(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
+    check(!!after, 'once the pointer moves off the sections, up to the top of the list, the rows take the order of their last messages', after || await order());
+    await look('sessions-order-after', { expect: 'The list with the pointer gone from the rows: UNGROUPED starts with A conversation started just now, then Quiet for three weeks (with its feature-x badge and red · 2 processes) saying now, then Asked a question, still working.' },
+      sidebarBox());
+
+    await slAway();
+    await sl.locator('.sl-root').focus();
+    await page.keyboard.press('ArrowDown');
+    const keyed = await order();
+    await patch('sl-other', { lastActiveAt: Date.now() });
+    const seen2 = await until(async () => (await timeOf(SLT.other)) === 'now', 10000, 300);
+    await sleep(500);
+    check(!!seen2 && sameList(await order(), keyed), 'while the arrow keys are on a row of the list, the rows keep their places too', await order());
+    await page.keyboard.press('Escape');
+    const let2 = await until(async () => { const o = await order(); return o[0] === SLT.other && o; }, 5000, 200);
+    check(!!let2, 'and once Esc lets go of that row, they take the new order', let2 || await order());
+
+    await src('src.set(src.conversations().filter((c) => c.sessionId !== arg)); return true;', 'sl-fresh');
+    await patch('sl-weeks', { lastActiveAt: slAt - 21 * DAY });
+    await patch('sl-other', { lastActiveAt: slAt - 420e3 });
+    await patch('sl-askrun', { state: 'working', activity: 'working', running: true, lastActiveAt: slAt - 300e3 });
+    await slWait((r) => !slFind(r, FRESH) && (slFind(r, SLT.askrun) || {}).dot === 'redRing');
   });
 
   await step('sessions-hover', async () => {
@@ -1712,12 +1909,13 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const gm = await slMenu();
     check(!!gm && ['New Conversation in This Group', 'New Group', 'Rename Group', 'Delete Group'].every((x) => gm.includes(x)), 'a group\'s menu offers a new conversation in it, a new group, renaming and deleting it', gm);
     await slItem('New Conversation in This Group').click();
-    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group\'s right-click menu with its first item, New Conversation in This Group, opened, and a submenu listing Codex, Claude Code and OpenCode, each with its logo. Where there is room, the submenu is beside the menu, which shows New Group, Rename Group and Delete Group, and does not cover the item it belongs to. In a side bar too narrow for that, the submenu takes the menu\'s place under a first line ‹ New Conversation in This Group, and nothing of the menu shows through.' }, sidebarBox());
+    await look('sessions-menu', { pointer: true, expect: 'The PLUGINS group\'s right-click menu with its first item, New Conversation in This Group, opened, and a submenu listing Codex, Claude Code and OpenCode, each with its logo. Where there is room, the submenu is beside the menu, which shows New Group, Rename Group and Delete Group, and does not cover the item it belongs to. In a side bar too narrow for that, the submenu lies over the right part of the menu with the start of New Conversation in This Group still in view to its left; only where even that does not fit, it takes the menu\'s place under a first line ‹ New Conversation in This Group, and nothing of the menu shows through.' }, sidebarBox());
     const placed = await sl.evaluate(() => {
       const sub = document.querySelector('.sl-ctx-sub'), item = document.querySelector('.sl-ctx:not(.sl-ctx-sub) .sl-ctx-open');
       if (!sub || !item) return null;
       const a = sub.getBoundingClientRect(), b = item.getBoundingClientRect();
-      return { inPlace: !!sub.querySelector('.sl-ctx-back'), covers: a.left < b.right - 2 && a.right > b.left + 2 && a.top < b.bottom && a.bottom > b.top };
+      const covers = a.left < b.right - 2 && a.right > b.left + 2 && a.top < b.bottom && a.bottom > b.top;
+      return { inPlace: !!sub.querySelector('.sl-ctx-back'), covers, uncovered: covers ? Math.round(Math.max(a.left - b.left, b.right - a.right)) : Math.round(b.width) };
     });
     if (placed && placed.inPlace) {
       await sl.locator('.sl-ctx-back').click();
@@ -1726,7 +1924,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       check(!!backTo && ['New Group', 'Rename Group', 'Delete Group'].every((x) => backTo.includes(x)),
         'in a side bar too narrow for the submenu to sit beside the menu, the submenu replaces the menu, and its first line leads back to it', backTo);
     } else {
-      check(!!placed && !placed.covers, 'a submenu opens beside its menu, clear of the item it belongs to', placed);
+      check(!!placed && (!placed.covers || placed.uncovered >= 40), 'a submenu opens beside its menu, clear of the item it belongs to, or where there is no room for that, over part of the menu with the start of its item in view', placed);
     }
     await slClose();
     /* Leave through the chips at the top, which are not a row: the webview keeps the pointer's last position, and once
@@ -1739,6 +1937,99 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slHead('Plugins').click({ button: 'right' });
     await slItem('Delete Group').click();
     check(!!await slWait((r) => slFind(r, SLT.cc, 'ungrouped') && slFind(r, SLT.perm, 'ungrouped')), 'Delete Group puts its conversations back in Ungrouped');
+  });
+
+  /* A row menu's submenus open when the pointer rests on their item, close when it leaves both, and still open with the
+     keys; in a side bar too narrow for a submenu beside its menu, it lies over part of the menu. */
+  await step('sessions-submenus', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    const subItems = () => sl.evaluate(() => { const b = document.querySelector('.sl-ctx-sub'); return b ? [...b.querySelectorAll('.sl-ctx-item')].map((x) => x.textContent.trim()) : null; });
+    const placed = () => sl.evaluate(() => {
+      const sub = document.querySelector('.sl-ctx-sub'), item = document.querySelector('.sl-ctx:not(.sl-ctx-sub) .sl-ctx-open');
+      if (!sub || !item) return null;
+      const a = sub.getBoundingClientRect(), b = item.getBoundingClientRect();
+      const covers = a.left < b.right - 2 && a.right > b.left + 2 && a.top < b.bottom && a.bottom > b.top;
+      return { inPlace: !!sub.querySelector('.sl-ctx-back'), covers, uncovered: covers ? Math.round(Math.max(a.left - b.left, b.right - a.right)) : Math.round(b.width), width: innerWidth };
+    });
+    const menuOn = async (title) => { await page.mouse.move(5, 5); await slRowLoc(title).click({ button: 'right' }); return slMenu(); };
+    /* The start of an item, which a submenu laid over the menu leaves in view; a point away from both menus, without
+       scrolling the list, which would close them. */
+    const START = { position: { x: 10, y: 8 } };
+    const offBoth = async () => {
+      const m = await sl.locator('.sl-ctx:not(.sl-ctx-sub)').boundingBox().catch(() => null);
+      const v = await sidebarBox().boundingBox().catch(() => null);
+      if (!m || !v) return;
+      const y = m.y - 10 > v.y + 40 ? m.y - 10 : m.y + m.height + 10;
+      await page.mouse.move(m.x + 12, y, { steps: 4 });
+    };
+    await exec('agentPlus.newSessionGroup');
+    await until(() => sl.evaluate(() => !!document.querySelector('.sl-head-label.sl-editing')), 8000, 200);
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('Hover group');
+    await page.keyboard.press('Enter');
+    await until(() => sl.evaluate(() => [...document.querySelectorAll('.sl-section[data-kind="group"] .sl-head-label')].some((x) => x.textContent === 'Hover group')), 8000, 200);
+    for (const [label, want] of [['Text Color', 'Green'], ['Add to Group', 'Hover group']]) {
+      await menuOn(SLT.quiet);
+      await slItem(label).hover(START);
+      const items = await until(subItems, 3000, 100);
+      check(!!items && items.some((x) => x.includes(want)), `resting the pointer on ${label} opens its submenu, without a click`, items);
+      const where = await placed();
+      check(!!where && !where.inPlace && (!where.covers || where.uncovered >= 40), `${label}'s submenu opens beside the menu, or over part of it with the start of ${label} in view`, where);
+      if (label === 'Text Color') {
+        await look('sessions-submenu-dark', { pointer: true, expect: 'A row\'s right-click menu in a dark theme with the pointer resting on Text Color, which is highlighted, and its submenu open without a click: Default, then the colours Red, Blue, Green, Yellow, Purple, Orange, Pink and Cyan, each with a round swatch. The submenu sits beside the menu, or, in a side bar too narrow for that, lies over the right part of the menu with the start of Text Color still in view at its left.' },
+          sidebarBox());
+      }
+      await offBoth();
+      const shut = await until(() => sl.evaluate(() => !document.querySelector('.sl-ctx-sub') && !!document.querySelector('.sl-ctx')), 3000, 100);
+      check(!!shut, `moving the pointer off both ${label} and its submenu closes the submenu and leaves the menu open`);
+      await slClose();
+    }
+    await menuOn(SLT.quiet);
+    await page.mouse.move(5, 5);
+    const focusOn = async (label) => {
+      for (let i = 0; i < 20; i++) {
+        const at = await sl.evaluate(() => { const a = document.activeElement; return a && a.closest && a.closest('.sl-ctx-item') ? a.textContent.replace('›', '').trim() : ''; });
+        if (at === label) return true;
+        await page.keyboard.press('ArrowDown');
+      }
+      return false;
+    };
+    const subFocus = () => sl.evaluate(() => { const b = document.querySelector('.sl-ctx-sub'); return b && b.contains(document.activeElement) ? document.activeElement.textContent.trim() : ''; });
+    const onText = await focusOn('Text Color');
+    await page.keyboard.press('ArrowRight');
+    const byRight = await until(subFocus, 3000, 100);
+    check(onText && byRight === 'Default', 'the right arrow key on Text Color opens its submenu, on its first item', byRight);
+    await page.keyboard.press('ArrowLeft');
+    const back = await until(() => sl.evaluate(() => !document.querySelector('.sl-ctx-sub') && document.activeElement && document.activeElement.textContent.replace('›', '').trim()), 3000, 100);
+    check(back === 'Text Color', 'the left arrow key closes it again, back on Text Color', back);
+    await page.keyboard.press('Enter');
+    check(await until(subFocus, 3000, 100) === 'Default', 'and Enter opens it as well');
+    await slClose();
+    await sideBarWidth(230);
+    await showSessions('agentPlus.sessions');
+    await menuOn(SLT.quiet);
+    await slItem('Text Color').hover(START);
+    const narrow = await until(async () => { const p = await placed(); return p && p; }, 3000, 100);
+    check(!!narrow && !narrow.inPlace && (!narrow.covers || narrow.uncovered >= 40), 'in a narrow side bar, resting the pointer on Text Color opens its submenu too, over part of the menu with the start of Text Color in view', narrow);
+    await look('sessions-submenu-narrow', { pointer: true, expect: 'In a narrow side bar, a row\'s menu with the pointer on Text Color and its submenu of colours open over the right part of the menu: the start of the words Text Color, highlighted, shows at the left of the submenu, and the start of the items under it shows too.' },
+      sidebarBox());
+    await slItem('Pin').hover({ position: { x: 8, y: 6 } });
+    check(!!await until(() => sl.evaluate(() => !document.querySelector('.sl-ctx-sub')), 3000, 100), 'and moving the pointer onto the part of another item still in view closes it');
+    await slClose();
+    await sideBarWidth(420);
+    await slTheme(THEMES.light);
+    await menuOn(SLT.quiet);
+    await slItem('Add to Group').hover(START);
+    await until(subItems, 3000, 100);
+    await look('sessions-submenu-light', { pointer: true, expect: 'The same right-click menu in a light theme, with the pointer resting on Add to Group, which is highlighted, and its submenu open without a click, listing Hover group; the submenu sits beside the menu or over its right part, with the start of Add to Group in view.' },
+      sidebarBox());
+    await slClose();
+    await slTheme(THEMES.dark);
+    await page.mouse.move(5, 5);
+    await slHead('Hover group').click({ button: 'right' });
+    await slItem('Delete Group').click();
+    await until(() => sl.evaluate(() => ![...document.querySelectorAll('.sl-section[data-kind="group"] .sl-head-label')].some((x) => x.textContent === 'Hover group')), 8000, 200);
   });
 
   await step('sessions-delete', async () => {
@@ -1777,11 +2068,17 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await src('return src.close(arg);', 'sl-quiet');
     await showSessions('agentPlus.sessions');
     const closed = await slWait((r) => slFind(r, SLT.quiet, 'closed') && (slFind(r, SLT.quiet, 'ungrouped') || {}).stripe === 'closed');
-    check(!!closed, 'a conversation whose tab closes is in Recently closed, and its own row has the light blue stripe', closed && closed.filter((r) => r.title === SLT.quiet));
+    check(!!closed, 'a conversation whose tab closes is in Recently closed, and its own row has the stripe of one closed here lately', closed && closed.filter((r) => r.title === SLT.quiet));
     await slOpen('Recently closed');
     const time = await sl.evaluate(() => { const r = document.querySelector('.sl-section[data-key="closed"] .sl-row .sl-time'); return r && r.textContent; });
     check(/^closed (now|\d+m)$/.test(time || ''), 'and says when it was closed', time);
-    await look('sessions-closed', { expect: 'A RECENTLY CLOSED section with a clock icon at the top of the list, expanded, listing Nothing going on with "closed now" at the right and a light blue stripe at its start.' }, sidebarBox());
+    const grey = await sl.evaluate(() => { const s = document.querySelector('.sl-section[data-key="closed"] .sl-row .sl-stripe.s-closed'); return s ? getComputedStyle(s).backgroundColor : null; });
+    const g = rgbaOf(grey);
+    check(!!g && Math.max(...g.slice(0, 3)) - Math.min(...g.slice(0, 3)) <= 6 && g[3] > 0.3, 'the stripe of one closed here lately is a solid grey of the text colour', grey);
+    await look('sessions-closed', { expect: 'A RECENTLY CLOSED section with a clock icon at the top of the list, expanded, listing Nothing going on with "closed now" at the right and a solid grey stripe at its start, grey rather than blue, and less bright than the blue stripe of the conversation open in this window further down, if that is in view.' }, sidebarBox());
+    await slTheme(THEMES.light);
+    await look('sessions-closed-light', { expect: 'The same RECENTLY CLOSED section in a light theme: Nothing going on with a solid grey stripe at its start, plainly visible on the light background and not blue.' }, sidebarBox());
+    await slTheme(THEMES.dark);
     await setting('agentPlus.sessions.recentlyClosed', 0);
     check(!!await until(() => sl.evaluate(() => { const s = document.querySelector('.sl-section[data-key="closed"]'); return !s || s.classList.contains('sl-hidden'); }), 8000, 300),
       'with agentPlus.sessions.recentlyClosed 0 the section goes');
@@ -1806,6 +2103,20 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sl.locator('.sl-chip[data-chip="running"]').click();
     const running = await slWait((r) => { const s = r.filter((x) => x.shown && x.section !== 'closed').map((x) => x.title); return s.length && s.every((t) => [SLT.run, SLT.bg, SLT.askrun, SLT.cc, SLT.ocTerm].includes(t)); });
     check(!!running, 'Running keeps the conversations running a turn or background work', running && running.filter((x) => x.shown).map((x) => x.title));
+    const chipsDrawn = async () => {
+      await slAway();
+      const on = await pixelOf(sl.locator('.sl-chip.sl-on'), 4), off = await pixelOf(sl.locator('.sl-chip[data-chip="all"]'), 4);
+      return { on, off, contrast: on && off ? contrast(on, off) : 0, grey: off ? Math.max(...off) - Math.min(...off) : 99 };
+    };
+    const CHIPS_LOOK = 'under the New bar, the chips All, Open, Running and Needs you with their counts. Running is the chosen one, in the button blue with light text; the other three are a neutral grey with ordinary text, so that the chosen one is told apart at a glance.';
+    let c = await chipsDrawn();
+    check(c.contrast >= 1.5 && c.grey <= 12, 'dark: a chip not chosen is grey, and the chosen one stands apart from it', c);
+    await look('sessions-chips-dark', { expect: `The top of the list in a dark theme: ${CHIPS_LOOK}` }, sl.locator('.sl-top'));
+    await slTheme(THEMES.light);
+    c = await chipsDrawn();
+    check(c.contrast >= 1.5 && c.grey <= 12, 'light: a chip not chosen is grey, and the chosen one stands apart from it', c);
+    await look('sessions-chips-light', { expect: `The top of the list in a light theme: ${CHIPS_LOOK}` }, sl.locator('.sl-top'));
+    await slTheme(THEMES.dark);
     check(!!needsYou, 'Needs you keeps the three waiting on the user', (needsYou || await slRows()).filter((x) => x.shown).map((x) => [x.title, x.section, x.dot]));
     await sl.locator('.sl-chip[data-chip="all"]').click();
     await exec('agentPlus.filterSessions');
@@ -1833,10 +2144,31 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       bars: [{ label: '5-hour limit', percent: 32, resetsAt: Date.now() + 2 * HOUR + 600e3 }, { label: 'Weekly limit', percent: 86, resetsAt: Date.now() + 3 * DAY }],
       links: [{ label: 'View details', command: 'agentPlusTest.installPlugin' }], conversation: { title: SLT.run, rows: [{ label: 'Tokens', value: '412k' }] } } });
     await showSessions('agentPlus.sessions');
+    const folded = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return !!a && !a.classList.contains('sl-hidden') && !a.classList.contains('sl-open'); }), 10000, 300);
+    check(!!folded, 'Account & usage starts collapsed');
+    await look('sessions-account-folded', { expect: 'An ACCOUNT & USAGE band at the top of the list, collapsed: its chevron points right and nothing of the accounts shows under it; the sections below it follow straight after.' }, sidebarBox());
+    await slOpen('Account & usage');
     const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
     check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32%\s+resets 2h 1\dm/.test(shown) && /This conversation\s+Fix the sessions page filter/i.test(shown),
       'Account & usage shows the agent\'s rows, its limits and when they reset, and the conversation in front', shown);
-    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars come a thin line and a small heading THIS CONVERSATION in capitals; under it, Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k; the account\'s figures above it must not look like the conversation\'s.' }, sidebarBox());
+    await src('return src.configureOther(arg[0], arg[1]);', ['claude-code', { account: { rows: [{ label: 'Plan', value: 'Max' }], conversation: { title: SLT.cc, rows: [{ label: 'Context', value: '38%' }] } } }]);
+    await src('return src.configureOther(arg[0], arg[1]);', ['opencode', { account: { rows: [{ label: 'Provider', value: 'Bedrock' }] } }]);
+    const blocks = await until(() => sl.evaluate(() => {
+      const b = [...document.querySelectorAll('.sl-section[data-key="account"] .sl-acct')];
+      if (b.length < 3) return null;
+      const st = (e) => getComputedStyle(e);
+      return { names: b.map((x) => x.querySelector('.sl-acct-name').textContent), lines: b.map((x) => `${st(x).borderTopStyle} ${st(x).borderTopWidth}`),
+        subs: [...document.querySelectorAll('.sl-section[data-key="account"] .sl-acct-sub')].map((x) => st(x).borderTopStyle) };
+    }), 10000, 300);
+    check(!!blocks && sameList(blocks.names, ['Codex', 'Claude Code', 'OpenCode']) && blocks.lines[0].startsWith('none') && blocks.lines.slice(1).every((l) => l === 'solid 1px')
+      && blocks.subs.length === 2 && blocks.subs.every((x) => x === 'none'),
+    'each agent has a block of its own, with a line between two blocks and none above the first; the heading of the conversation\'s figures in a block has no line', blocks);
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded, in a dark theme, with three blocks one under the other and a thin line across between each two: first a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, with no line above it, a small heading THIS CONVERSATION in capitals; under it, Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k. Then a line, and a Claude Code block with Plan Max and its own THIS CONVERSATION heading with A Claude Code conversation and Context 38%; then a line, and an OpenCode block with Provider Bedrock. Which lines belong to which agent is clear at a glance.' }, sidebarBox());
+    await slTheme(THEMES.light);
+    await look('sessions-account-open-light', { expect: 'The same ACCOUNT & USAGE section in a light theme: the Codex, Claude Code and OpenCode blocks with a thin grey line between each two and none above a THIS CONVERSATION heading; dark text on a light background.' }, sidebarBox());
+    await slTheme(THEMES.dark);
+    await src('return src.configureOther(arg[0], arg[1]);', ['claude-code', { account: null }]);
+    await src('return src.configureOther(arg[0], arg[1]);', ['opencode', { account: null }]);
     await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
     check(!!await until(async () => (await src('return src.state.ran;')).includes('installPlugin'), 5000, 200), 'a link runs the command the agent gave');
     await slHead('Account & usage').click();
@@ -1856,10 +2188,41 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
   await step('sessions-new', async () => {
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');
+    const first = await until(() => sl.evaluate(() => document.querySelector('.sl-new-agent').title), 5000, 200);
+    check(/starts? in Claude Code\b/.test(first || ''), 'the New bar starts with Claude Code, the first of Claude Code, Codex and OpenCode that is installed, though Codex registered first', first);
+    const half = sl.locator('.sl-new-half.sl-primary');
+    const hovered = async () => {
+      await slAway();
+      const off = await pixelOf(half, 3, 3);
+      await half.hover({ position: { x: 3, y: 3 } });
+      await sleep(300);
+      const on = await pixelOf(half, 3, 3);
+      return { off, on, contrast: off && on ? contrast(off, on) : 0 };
+    };
+    let h = await hovered();
+    check(h.contrast >= 1.25, 'dark: the pointer on New in tab changes its colour plainly', h);
+    await look('sessions-new-hover-dark', { pointer: true, expect: 'The New bar in a dark theme with the pointer on New in tab: its blue is plainly darker than the button blue VS Code draws elsewhere, such as the chosen chip All under it, while the text stays white and readable.' },
+      sl.locator('.sl-top'));
+    const bg = await themeColor('button.background');
+    const hex = `#${(bg.match(/\d+/g) || []).slice(0, 3).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+    await setting('workbench.colorCustomizations', { 'button.hoverBackground': hex });
+    await sleep(1000);
+    h = await hovered();
+    check(h.contrast >= 1.25, 'and so it does in a theme whose button hover colour is the button colour itself', Object.assign({ hoverBackground: hex }, h));
+    await look('sessions-new-hover-same', { pointer: true, expect: 'The New bar in a dark theme set to give buttons the same colour under the pointer as without it, with the pointer on New in tab: New in tab is still plainly darker than the blue of the chosen chip All under it.' },
+      sl.locator('.sl-top'));
+    await setting('workbench.colorCustomizations', null);
+    await slTheme(THEMES.light);
+    h = await hovered();
+    check(h.contrast >= 1.25, 'light: the pointer on New in tab changes its colour plainly', h);
+    await look('sessions-new-hover-light', { pointer: true, expect: 'The New bar in a light theme with the pointer on New in tab: its blue is plainly darker than the chosen chip All under it, the text white and readable.' },
+      sl.locator('.sl-top'));
+    await slTheme(THEMES.dark);
+    await page.mouse.move(5, 5);
     await sl.locator('.sl-new-agent').click();
     const m = await slMenu();
     check(!!m && sameList(m, ['Codex', 'Claude Code', 'OpenCode']), 'the New bar\'s logo opens a list of the agents', m);
-    await look('sessions-new-menu', { pointer: true, expect: 'Under the New bar\'s logo, a small menu listing Codex, Claude Code and OpenCode, each with its logo, with a tick in a column before Codex\'s logo, as the agents filter marks its choices.' }, sidebarBox());
+    await look('sessions-new-menu', { pointer: true, expect: 'Under the New bar\'s logo, a small menu listing Codex, Claude Code and OpenCode, each with its logo, with a tick in a column before Claude Code\'s logo only, as the agents filter marks its choices.' }, sidebarBox());
     await slItem('Claude Code').click();
     await until(() => sl.evaluate(() => /Claude Code/.test(document.querySelector('.sl-new-agent').title)), 5000, 200);
     await sl.locator('.sl-new-half[data-where="sidebar"]').click();
