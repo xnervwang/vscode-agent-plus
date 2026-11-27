@@ -51,7 +51,7 @@
     unpin: ['M9.5 2.5l4 4', 'M10.5 3.5L7 7H4.5L9 11.5V9l3.5-3.5', 'M6.5 9.5L3 13', 'M2.5 2.5l11 11'],
     pencil: ['M10.5 2.5l3 3-7.5 7.5H3v-3z'],
     archive: ['M2.5 3.5h11v3h-11z', 'M3.5 6.5v6h9v-6', 'M6.5 9h3'],
-    restore: ['M2.5 3.5h11v3h-11z', 'M3.5 6.5v6h9v-6', 'M8 12V8.5', 'M6.5 10l1.5-1.5 1.5 1.5'],
+    restore: ['M6 3.5l-3 3 3 3', 'M3 6.5h7a3 3 0 0 1 0 6H8'],
     history: ['M3 8a5 5 0 1 0 1.5-3.5', 'M3 2.5V5h2.5', 'M8 5.5V8l2 1.5'],
     folder: ['M2 4.5A1 1 0 0 1 3 3.5h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'],
     account: ['M8 2.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 0 1 0-5z', 'M3 13.5c.5-2.5 2.5-4 5-4s4.5 1.5 5 4'],
@@ -209,6 +209,8 @@
     archive.dataset.act = 'archive';
     const restore = button('sl-act', 'Unarchive', icon('restore'));
     restore.dataset.act = 'unarchive';
+    /* button() sets a title on each, and the browser would draw that tooltip over showTip's box. */
+    for (const b of [pin, unpin, rename, archive, restore]) b.removeAttribute('title');
     acts.append(pin, unpin, rename, archive, restore);
     meta.append(away, time, acts);
     r.append(stripe, logo, title, marks, pinned, meta);
@@ -965,6 +967,24 @@
     }, HOVER_MS);
   }
 
+  /* A row's buttons show their own name in the hover box instead of the conversation's details. */
+  const TIP_MS = 400;
+  function showTip(b) {
+    hideHover();
+    if (hoverQuiet) return;
+    hoverRow = b;
+    hoverTimer = setTimeout(() => {
+      hoverTimer = 0;
+      if (!b.isConnected || hoverRow !== b || cm || !b.matches(':hover')) return;
+      hoverBox.textContent = b.getAttribute('aria-label') || '';
+      hoverBox.classList.remove('sl-hidden');
+      const at = b.getBoundingClientRect();
+      const w = hoverBox.offsetWidth, h = hoverBox.offsetHeight;
+      hoverBox.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, at.left + at.width / 2 - w / 2)))}px`;
+      hoverBox.style.top = `${Math.round(at.bottom + 4 + h <= window.innerHeight - 8 ? at.bottom + 4 : Math.max(8, at.top - h - 4))}px`;
+    }, TIP_MS);
+  }
+
   /* ── events ── */
   root.addEventListener('click', (e) => {
     const t = e.target;
@@ -1034,6 +1054,8 @@
   });
   root.addEventListener('wheel', (e) => { if (cm && (e.deltaX || e.deltaY) && !inCtx(e.target)) closeCtx(); }, { passive: true });
   root.addEventListener('mouseover', (e) => {
+    const act = e.target.closest('.sl-row .sl-act');
+    if (act) { if (act !== hoverRow) showTip(act); return; }
     const r = e.target.closest('.sl-row');
     if (r && r !== hoverRow && !r._editing) showHover(r);
     else if (!r && hoverRow) hideHover();

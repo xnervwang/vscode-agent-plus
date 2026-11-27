@@ -381,7 +381,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       .filter((t) => /^Agent Plus/.test(t)));
     check(!bar.length, 'and no Agent Plus in the activity bar', bar);
     const panelTabs = await page.evaluate(() => [...document.querySelectorAll('.part.panel .composite-bar .action-label')].map((a) => (a.getAttribute('aria-label') || a.innerText || '').trim()));
-    check(!panelTabs.some((t) => /^Conversations/.test(t)), 'and no Conversations tab in the panel', panelTabs);
+    check(!panelTabs.some((t) => /^(Conversations|Answer)/.test(t)), 'and no Conversations or Answer tab in the panel', panelTabs);
+    const editorActions = await page.evaluate(() => [...document.querySelectorAll('.editor-actions .action-label')].map((a) => a.getAttribute('aria-label') || '')
+      .filter((t) => /Agent Plus|Conversation/i.test(t)));
+    check(!editorActions.length, 'and no button of its own at the top right of the editor', editorActions);
+    await look('alone-window', { expect: 'The whole window with only Agent Plus installed. The activity bar on the left has VS Code\'s own icons only, without the robot icon of Agent Plus - Conversations or the list icon of Agent Plus. The bottom panel has no Conversations or Answer tab, and neither the status bar nor the top right of the editor shows anything of Agent Plus. A notification may show at the bottom right.' });
     await look('alone-notice', { toasts: true, expect: 'A notification at the bottom right saying that Agent Plus is used by Claude Code Plus and Codex Plus, which install it themselves, and does nothing on its own, with the buttons Install Claude Code Plus and Install Codex Plus. No Agent Plus icon in the activity bar on the left, and no Conversations, bell or token mode entry in the status bar.' },
       toastLoc(ALONE));
   });
@@ -1718,7 +1722,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slAway();
     const FRESH = 'A conversation started just now';
     const order = async () => (await slRows()).filter((r) => r.section === 'ungrouped').map((r) => r.title);
-    /* The rows of Ungrouped that do not run, which follow the running ones. */
+    /* Ungrouped's rows that are not running. */
     const rest = async () => (await slRows()).filter((r) => r.section === 'ungrouped' && !/^(green|greenRing|redRing)$/.test(r.dot || '')).map((r) => r.title);
     const timeOf = (title) => sl.evaluate((t) => { const r = [...document.querySelectorAll('.sl-section[data-key="ungrouped"] .sl-row')].find((x) => x.querySelector('.sl-title').textContent === t);
       return r ? r.querySelector('.sl-time').textContent : null; }, title);
@@ -1730,7 +1734,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!came && sameList(during, before), 'a row running a turn keeps its place while its messages come in, though its time says now', { before, during });
     await patch('sl-askrun', { state: 'idle', activity: 'stopped', running: false });
     const moved = await until(async () => { const o = await rest(); return o[0] === SLT.askrun && o; }, 10000, 300);
-    check(!!moved, 'once its turn stops, it moves once, to the top of the rows that do not run', moved || await order());
+    check(!!moved, 'once its turn stops, it moves once, to the top of the idle rows', moved || await order());
 
     const held = await order();
     await slRowLoc(SLT.quiet).hover();
@@ -1744,13 +1748,13 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const withNew = fresh && fresh.filter((r) => r.section === 'ungrouped').map((r) => r.title);
     const newRest = fresh && fresh.filter((r) => r.section === 'ungrouped' && !/^(green|greenRing|redRing)$/.test(r.dot || '')).map((r) => r.title);
     check(!!withNew && newRest[0] === FRESH && sameList(withNew.filter((t) => t !== FRESH), held),
-      'and a new conversation still appears, at the top of the rows that do not run, with the other rows where they were', withNew);
+      'a new conversation still shows up first among the idle rows, and the rest keep their places', withNew);
     await look('sessions-order-held', { pointer: true, expect: 'The list, scrolled to show Nothing going on, the row under the pointer: it is highlighted, with its buttons in place of its time (a hover box may show beside it). Near the end of UNGROUPED, Quiet for three weeks shows the time now at its right, yet it is still in its old place under Claude Code, stopped, rather than at the top. The first rows of UNGROUPED may be scrolled out of view.' },
       sidebarBox());
     await slAway();
     const after = await until(async () => { const o = await rest(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
-    check(!!after, 'once the pointer moves off the sections, to the blank strip above the New bar, the rows that do not run take the order of their last messages', after || await order());
-    await look('sessions-order-after', { expect: 'The list with the pointer gone from the rows. UNGROUPED starts with the running conversations, each with a green dot or ring on its logo; right after them comes A conversation started just now, then Quiet for three weeks, saying now, with its feature-x badge and red · 2 processes.' },
+    check(!!after, 'once the pointer moves off the sections, to the blank strip above the New bar, the idle rows take the order of their last messages', after || await order());
+    await look('sessions-order-after', { expect: 'The list with the pointer gone from the rows. UNGROUPED starts with the running conversations, each with a green dot or ring on its logo. Below them are A conversation started just now and then Quiet for three weeks, which says now and has its feature-x badge and red · 2 processes.' },
       sidebarBox());
 
     await slAway();
@@ -1765,19 +1769,16 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const let2 = await until(async () => { const o = await rest(); return o[0] === SLT.other && o; }, 5000, 200);
     check(!!let2, 'and after Esc takes the highlight off that row, they take the new order', let2 || await order());
 
-    /* Two running rows take turns getting messages, and nothing moves; when one stops it moves once, to the top of the
-       rows that do not run. */
     await slAway();
     const turns = await order();
     for (const id of ['sl-run', 'sl-bg', 'sl-run', 'sl-bg']) { await patch(id, { lastActiveAt: Date.now() }); await sleep(800); }
     const afterTurns = await order();
-    check(sameList(afterTurns, turns), 'two running rows taking turns with new messages leave the order as it was', { turns, afterTurns });
+    check(sameList(afterTurns, turns), 'two running rows that take turns getting new messages leave the order as it was', { turns, afterTurns });
     await patch('sl-run', { state: 'idle', activity: 'stopped', running: false, lastActiveAt: Date.now() });
     const stopped = await until(async () => { const o = await rest(); return o[0] === SLT.run && o; }, 10000, 300);
     const once = await order();
     await sleep(1500);
-    check(!!stopped && sameList(await order(), once), 'when one of them stops it moves once, to the top of the rows that do not run, and stays there', { stopped, once, now: await order() });
-    /* Pinned rows sort by when they were pinned, the latest first, and their messages do not move them. */
+    check(!!stopped && sameList(await order(), once), 'after one of them stops, it sits first among the idle rows and does not move again', { stopped, once, now: await order() });
     const pin = async (title, label) => { await page.mouse.move(5, 5); await slRowLoc(title).click({ button: 'right' }); await slMenu(); await slItem(label).click(); };
     await pin(SLT.quiet, 'Pin');
     await slWait((r) => (slFind(r, SLT.quiet, 'ungrouped') || {}).pinned);
@@ -1817,6 +1818,29 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slRowLoc(SLT.ocTerm).hover();
     const term = await until(async () => { const t = await slHover(); return /Runs in terminal pts\/3/.test(t) && t; }, 5000, 200);
     check(!!term && /opencode in \/work\/expense-tracker/.test(term) && /A turn is running/.test(term), 'and the hover box of one running in a terminal names the terminal, what the agent says of it, and what its dot means', term || await slHover());
+    await page.mouse.move(5, 5);
+    await sleep(300);
+    const tipOf = async (title, act) => {
+      await slRowLoc(title).hover();
+      await slRowLoc(title).locator(`.sl-act[data-act="${act}"]`).hover();
+      return until(async () => { const t = await slHover(); return t && !/Session ID/.test(t) && t; }, 3000, 100);
+    };
+    const tips = [];
+    for (const act of ['pin', 'rename', 'archive']) tips.push(await tipOf(SLT.quiet, act));
+    check(sameList(tips, ['Pin', 'Rename', 'Archive']), 'resting the pointer on a row\'s button shows what the button does, not the conversation\'s details', tips);
+    await look('sessions-button-tip', { pointer: true, expect: 'The row Nothing going on with its buttons showing at the right, the pointer on the archive button, and a small box under that button saying only Archive, with no session ID or dates in it.' }, sidebarBox());
+    await page.mouse.move(5, 5);
+    await slRowLoc(SLT.quiet).click({ button: 'right' });
+    await slMenu();
+    await slItem('Pin').click();
+    await slWait((r) => (slFind(r, SLT.quiet, 'ungrouped') || {}).pinned);
+    const unpinTip = await tipOf(SLT.quiet, 'unpin');
+    check(unpinTip === 'Unpin', 'and on a pinned row the same button says Unpin', unpinTip);
+    await page.mouse.move(5, 5);
+    await slRowLoc(SLT.quiet).click({ button: 'right' });
+    await slMenu();
+    await slItem('Unpin').click();
+    await slWait((r) => !(slFind(r, SLT.quiet, 'ungrouped') || {}).pinned);
     await page.mouse.move(5, 5);
   });
 
@@ -1872,6 +1896,41 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slAct(SLT.quiet, 'pin');
     const pinned = await slWait((r) => (slFind(r, SLT.quiet) || {}).pinned && r.filter((x) => x.section === 'ungrouped')[0].title === SLT.quiet);
     check(!!pinned, 'the pin button on a row pins it, and pinned conversations go first in their section', pinned && pinned.filter((x) => x.section === 'ungrouped').slice(0, 3));
+    const pinPaint = () => sl.evaluate((t) => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--vscode-charts-purple, #b180d7)';
+      document.body.appendChild(probe);
+      const purple = getComputedStyle(probe).color;
+      probe.remove();
+      const rows = [...document.querySelectorAll('.sl-row')];
+      const row = rows.find((r) => r.querySelector('.sl-title').textContent === t);
+      const other = rows.find((r) => r !== row && r.querySelector('.sl-act[data-act="pin"]:not(.sl-hidden)'));
+      const body = row && row.querySelector('.sl-pinned svg path:nth-child(2)');
+      return { purple, pinned: row ? getComputedStyle(row.querySelector('.sl-pinned')).color : '', filled: body ? getComputedStyle(body).fill : '',
+        unpin: row ? getComputedStyle(row.querySelector('.sl-act[data-act="unpin"]')).color : '',
+        pin: other ? getComputedStyle(other.querySelector('.sl-act[data-act="pin"]')).color : '' };
+    }, SLT.quiet);
+    const purplePin = (p) => !!p && p.pinned === p.purple && !!p.filled && p.filled !== 'none' && p.unpin === p.purple && !!p.pin && p.pin !== p.purple;
+    const paintDark = await pinPaint();
+    check(purplePin(paintDark), 'a pinned row\'s pin is filled in the theme\'s purple and so is its Unpin button, while another row\'s Pin button keeps the plain colour', paintDark);
+    await slAway();
+    await sleep(300);
+    await look('sessions-pinned-dark', { expect: 'The list in a dark theme. Nothing going on is the first row of Ungrouped and has a small pin at its right end, filled in purple. No other row has a pin.' }, sidebarBox());
+    await slRowLoc(SLT.quiet).hover();
+    await sleep(500);
+    await look('sessions-unpin-dark', { pointer: true, expect: 'The pointer is on Nothing going on, the first row of Ungrouped. Its buttons show at the right: an Unpin button (a pin with a line through it) drawn in purple, then a pencil and an archive box in the plain colour of the other icons.' }, sidebarBox());
+    await page.mouse.move(5, 5);
+    await theme(THEMES.light);
+    await showSessions('agentPlus.sessions');
+    await sleep(800);
+    const paintLight = await pinPaint();
+    check(purplePin(paintLight), 'and in a light theme the same, in that theme\'s purple', paintLight);
+    await slAway();
+    await sleep(300);
+    await look('sessions-pinned-light', { expect: 'The same list in a light theme. The pin on Nothing going on is a darker purple and stands out on the light background.' }, sidebarBox());
+    await theme(THEMES.dark);
+    await showSessions('agentPlus.sessions');
+    await sleep(800);
     await slAct(SLT.unread, 'rename');
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('Review the archive sweep');
@@ -1922,8 +1981,59 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-section[data-key="archived"] .sl-row')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
     await sleep(300);
     await look('sessions-archived', { expect: 'The ARCHIVED section expanded under Ungrouped, listing Nothing going on (green title, no pin) and Archived long ago with the dark OpenCode logo.' }, sidebarBox());
+    const unarchiveSpec = (which) => ({ pointer: true, expect: `The pointer is on Nothing going on in the ARCHIVED section, ${which}. Its only button at the right end is Unarchive, a U-turn arrow pointing left, drawn with lines as thin as the pencil and archive icons elsewhere in the list. It is not an archive box with an arrow.` });
+    await slRowLoc(SLT.quiet, 'archived').hover();
+    await sleep(500);
+    await look('sessions-unarchive-dark', unarchiveSpec('in a dark theme'), sidebarBox());
+    await page.mouse.move(5, 5);
+    await theme(THEMES.light);
+    await showSessions('agentPlus.sessions');
+    await sleep(800);
+    await slRowLoc(SLT.quiet, 'archived').hover();
+    await sleep(500);
+    await look('sessions-unarchive-light', unarchiveSpec('in a light theme, the arrow dark on the light background'), sidebarBox());
+    await page.mouse.move(5, 5);
+    await theme(THEMES.dark);
+    await showSessions('agentPlus.sessions');
+    await sleep(800);
     await slAct(SLT.quiet, 'unarchive', 'archived');
     check(!!await slWait((r) => slFind(r, SLT.quiet, 'ungrouped')), 'Unarchive puts it back in Ungrouped');
+  });
+
+  await step('sessions-unread-open', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    const envelope = (section) => sl.evaluate(([t, sec]) => [...document.querySelectorAll(`.sl-section[data-key="${sec}"] .sl-row`)]
+      .some((r) => r.querySelector('.sl-title').textContent === t && !!r.querySelector('.sl-unread svg')), [SLT.quiet, section]);
+    const markUnread = async () => {
+      await slRowLoc(SLT.quiet, 'archived').click({ button: 'right' });
+      await slMenu();
+      await slItem('Mark as Unread').click();
+      await page.mouse.move(5, 5);
+      return !!await until(() => envelope('archived'), 8000, 200);
+    };
+    await slRowLoc(SLT.quiet).click();
+    check(!!await frontIs(SLT.quiet), 'a conversation opened from the list is in front');
+    await slAct(SLT.quiet, 'archive');
+    await slWait((r) => slFind(r, SLT.quiet, 'archived'));
+    await slOpen('Archived');
+    const shown = await markUnread();
+    await sleep(3000);
+    check(shown && await envelope('archived') && !!await frontIs(SLT.quiet),
+      'marked unread from the list while in front, an archived conversation shows the envelope and still has it three seconds later');
+    const told = (await src('return src.state.seen.length;')) || 0;
+    await slRowLoc(SLT.quiet, 'archived').click();
+    check(!!await until(async () => !await envelope('archived'), 8000, 300), 'opening it from the list then clears the envelope, though it was already in front');
+    check(!!await until(async () => (await src('return src.state.seen;')).slice(told).some(([ids, seen]) => seen === true && ids.includes('sl-quiet')), 5000, 300),
+      'and its agent is told it has been seen');
+    await slRowLoc(SLT.ask).click();
+    check(!!await frontIs(SLT.ask), 'with another conversation in front');
+    const again = await markUnread();
+    await slRowLoc(SLT.quiet, 'archived').click();
+    check(again && !!await frontIs(SLT.quiet) && !!await until(async () => !await envelope('archived'), 8000, 300),
+      'an archived conversation marked unread while another was in front loses the envelope once it is opened from the list');
+    await slAct(SLT.quiet, 'unarchive', 'archived');
+    await slWait((r) => slFind(r, SLT.quiet, 'ungrouped'));
   });
 
   let slGroup = '';

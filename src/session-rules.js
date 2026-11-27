@@ -57,9 +57,9 @@ function unread(row) {
 const sortTime = (r) => +(r.sortAt !== undefined ? r.sortAt : r.lastActiveAt) || 0;
 
 /*
- * The order in a group or Ungrouped, in three tiers: pinned rows, newest pinned first; running rows, the latest to
- * start running first; the rest, by their last activity. None of these times changes while a row stays in its tier, so
- * a row moves only when it starts or stops running, is pinned or unpinned, appears, or is archived or brought back.
+ * The order in a group or Ungrouped: pinned rows by when they were pinned, then running rows by when they started, then
+ * the rest by their last activity, newest first in each tier. None of these times changes while a row stays in its
+ * tier, so rows hold still until one changes tier.
  */
 const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || '')) || String(a.key).localeCompare(String(b.key));
 function compare(a, b) {

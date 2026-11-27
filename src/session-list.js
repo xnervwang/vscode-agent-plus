@@ -159,7 +159,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const queues = new Map();
   /* key -> the time a running row sorts by (see the top of this file). */
   const runFrom = new Map();
-  /* key -> when the list first saw a pinned row whose record has no time for the pin. */
+  /* key -> a fallback pin time for a pinned row whose record has none. */
   const pinSeen = new Map();
   let chosenNew = '';
 
@@ -350,8 +350,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   /*
    * The conversation in front is seen once it has stayed in front SEEN_AFTER_MS: a tab brought forward for a moment, as
    * a loader does to every restored tab, or passed over on the way to another, is not read. One the user marked unread
-   * while it was in front stays unread until another comes to the front. A source's own `unseen` is the source's to
-   * clear, as it does when the user looks at the conversation in its agent.
+   * while it was in front is held unread until another comes to the front or openRow lets it go. A source's own `unseen`
+   * is the source's to clear, as it does when the user looks at the conversation in its agent.
    */
   let frontKey = '', frontSince = 0, seenTimer = 0;
   const heldUnread = new Set();
@@ -444,6 +444,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   async function openRow(key, where) {
     const r = rows.get(key);
     if (!r) return 'gone';
+    /* A conversation opened from the list counts as seen, even one marked unread while it was already in front. */
+    if (heldUnread.delete(key)) { if (frontKey === key) frontSince = now(); schedule(); }
     const e = entryOf(r.sourceId);
     if (!e) return 'gone';
     if (r.here) { await sources.call(e.source, 'reveal', [r.sessionId, { title: r.title, cwd: r.cwd }], false); return 'here'; }
