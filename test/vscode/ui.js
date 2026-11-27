@@ -615,9 +615,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     });
     check(tab === '2', 'the Conversations tab\'s badge counts the two questions', tab);
     const st = await entry('conversations');
-    check(!!st && /2 conversations need you/.test(st.text) && st.warning && !st.error,
-      'and the status bar entry says 2 conversations need you, on a yellow background', st);
-    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you on a yellow background.' },
+    check(!!st && /2 conversations need you/.test(st.text) && !st.warning && !st.error,
+      'and the status bar entry says 2 conversations need you, in the status bar\'s own colours', st);
+    await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? with an orange question mark and asked 1m ago, then the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 2 conversations need you in the status bar\'s own colours, with no yellow or red behind it.' },
       pane('agentPlus.conversations'));
   });
 
@@ -1070,15 +1070,15 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const counted = await until(async () => (await bell()) === before + 1, 10000, 300);
     check(!!counted, 'a conversation that starts to wait adds one to the count in the status bar', { before, now: await bell() });
     const tip = await entry('conversations');
-    check(!!tip && tip.label.includes('Waiting for you to approve something or answer') && tip.label.includes(NWAIT) && tip.warning,
-      'its hover lists it under Waiting for you to approve something or answer, and the entry turns yellow', tip);
+    check(!!tip && tip.label.includes('Waiting for you to approve something or answer') && tip.label.includes(NWAIT) && !tip.warning,
+      'its hover lists it under Waiting for you to approve something or answer, and the entry keeps the status bar\'s own colours', tip);
     if (!canFocus) {
       check(await noToast(NWAIT, 6000), `with no window focused (this ${process.platform} runner gave the window none), no notification is shown`);
       return;
     }
     const t = await toastWith(`"${NWAIT}" is waiting for you.`, 10000);
     check(!!t && sameList(t.buttons, ['Open', 'Dismiss']), 'the focused window shows a notification that it is waiting for you, with Open and Dismiss', t || await toasts());
-    await look('notify-waiting', { toasts: true, expect: 'A notification at the bottom right: "Waits for permission" is waiting for you., with the buttons Open and Dismiss. In the status bar, on a yellow background, N conversations need you.' },
+    await look('notify-waiting', { toasts: true, expect: 'A notification at the bottom right: "Waits for permission" is waiting for you., with the buttons Open and Dismiss. In the status bar, in its own colours, N conversations need you.' },
       toastLoc(`"${NWAIT}" is waiting for you.`));
     await press(`"${NWAIT}" is waiting for you.`, 'Dismiss');
     check(await until(async () => !(await toasts()).some((x) => x.text.includes(NWAIT)), 5000, 200) && (await bell()) === before + 1,
@@ -1151,7 +1151,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await settle();
     check((await bell()) === before, 'and once another tab is in front it is still not counted', { before, now: await bell() });
     check(await noToast(NFRONT, 4000), 'but not announced after the fact');
-    await look('attention-count', { expect: 'The status bar at the bottom right has N conversations need you on a yellow background, counting the conversations that wait for you; there is no separate bell entry of Agent Plus, and no notification is on screen.' },
+    await look('attention-count', { expect: 'The status bar at the bottom right has N conversations need you in the status bar\'s own colours, counting the conversations that wait for you; there is no separate bell entry of Agent Plus, and no notification is on screen.' },
       page.locator('#workbench\\.parts\\.statusbar'));
   });
 
@@ -1343,7 +1343,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     }, 10000, 300);
     check(!!off, 'with agentPlus.conversationsView off, the Conversations and Answer views go', off);
     check((await bell()) === 1, 'while the status bar entry still counts the conversation waiting', await entry('conversations'));
-    await look('view-settings-off', { expect: 'No Conversations tab in the panel; the status bar has 1 conversation needs you on a yellow background and the token mode entry All.' },
+    await look('view-settings-off', { expect: 'No Conversations tab in the panel; the status bar has 1 conversation needs you in the status bar\'s own colours and the token mode entry All.' },
       page.locator('#workbench\\.parts\\.statusbar'));
     await setting('agentPlus.conversationsView', true);
     await showConversations();
