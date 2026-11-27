@@ -158,7 +158,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const queues = new Map();
   /* key -> the time a running row sorts by (see the top of this file). */
   const runFrom = new Map();
-  /* The agent picked in the New bar's menu, for the next conversation started in this window; starting one clears it. */
+  /* The agent picked in the New bar's menu. It applies to the next new conversation in this window and is cleared once
+     one starts. */
   let chosenNew = '';
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});

@@ -604,7 +604,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     eq(list.model().newSource, 'claude-code', 'once that conversation has started, the New bar starts with Claude Code again');
     await list.create('claude-code', 'sidebar');
-    eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { where: 'tab' }, 'starting a conversation keeps the half it started in, and not its agent');
+    eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { where: 'tab' }, 'starting a conversation saves the half it started in, not its agent');
     const next = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await next.refresh();
     eq(next.model().newSource, 'claude-code', 'a new window starts with Claude Code');

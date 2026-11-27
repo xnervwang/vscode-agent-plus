@@ -1675,7 +1675,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     let d = await drawn();
     judge('dark', d);
     check(d.css.cursorTerm === 'not-allowed' && d.css.cursorWindow === 'pointer',
-      'the pointer over a row open in a terminal shows that it cannot be opened from here; over one open in another VS Code window it is the usual hand', d.css);
+      'over a row open in a terminal the pointer is the not-allowed cursor; over one open in another VS Code window it is the usual hand', d.css);
     check(/charts-purple/.test(d.css.termColor || '') && Number(d.css.termOpacity) === 0.45, 'a row open somewhere else keeps its title colour, faded with the rest of the row', d.css);
     await look('sessions-stripes-dark', { expect: 'A close view of the UNGROUPED band and the rows under it, in a dark theme. The band is grey. The first row under it, Fix the sessions page filter, is the conversation in front: its background has a dark blue tint that stands out from the grey band, and it has a solid deep blue stripe at its start, deeper than the blue dot on the logo of Waits for a permission. OpenCode in a terminal and Open in another window (at the bottom, possibly cut off by the edge of the view) have a hollow stripe outlined in that same deep blue and dimmed titles; the title of OpenCode in a terminal is purple, only fainter. The row titled An OpenCode conversation may have a solid grey stripe (closed here lately). No other row has a stripe.' },
       await box());
@@ -2179,7 +2179,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     'each agent has a block of its own, with a line between two blocks, none above the first, and none above a block\'s THIS CONVERSATION heading', blocks);
     /* Scrolls to the end of the section: the three blocks are taller than the view. */
     const toEnd = () => sl.evaluate(() => { const b = [...document.querySelectorAll('.sl-section[data-key="account"] .sl-acct')].pop(); if (b) b.scrollIntoView({ block: 'end' }); });
-    const LINES_LOOK = 'the end of the Codex block (THIS CONVERSATION, with no line above that heading, Fix the sessions page filter and Tokens 412k), then a thin line across, a Claude Code block with its logo, Plan Max and its own THIS CONVERSATION heading (no line above it) with A Claude Code conversation and Context 38%, then another thin line, and an OpenCode block with its logo and Provider Bedrock. The top of the section may be scrolled out of view.';
+    const LINES_LOOK = 'the end of the Codex block (THIS CONVERSATION, with no line above that heading, Fix the sessions page filter and Tokens 412k), then a thin line across, a Claude Code block with its logo, Plan Max and its own THIS CONVERSATION heading, also with no line above it, with A Claude Code conversation and Context 38%, then another thin line, and an OpenCode block with its logo and Provider Bedrock. The top of the section may be scrolled out of view.';
     await toEnd();
     await look('sessions-account-lines', { expect: `The ACCOUNT & USAGE section in a dark theme, scrolled to its end: ${LINES_LOOK}` }, sidebarBox());
     await slTheme(THEMES.light);
