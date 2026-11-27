@@ -659,5 +659,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     lb.dispose();
     eq(fs.existsSync(path.join(shared, 'session-list', 'windows', `${process.ppid}.json`)), false, "a closed window's entry is removed");
     la.dispose();
+    const tr = setup({ trusted: false, folder: tmp('arch-r'), shared: tmp('arch-r-shared') });
+    tr.entries.push({ id: 'codex', source: source('codex', [conv('r1')]) });
+    const lr = L.createSessionList(tr.host, { now, since: now0 - 300 * DAY });
+    await lr.refresh();
+    eq(fs.existsSync(path.join(tr.shared, 'session-list')), false, 'a window in Restricted Mode writes nothing to the folder the windows share, not even its entry');
+    lr.dispose();
   }
 };

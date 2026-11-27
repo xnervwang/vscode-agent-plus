@@ -390,11 +390,11 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (closed) return;
     try {
       const dir = shared('session-list');
-      fs.mkdirSync(dir, { recursive: true });
+      if (!host.trusted || host.trusted()) fs.mkdirSync(dir, { recursive: true });
       const w = fs.watch(dir, (_ev, name) => { if (!name || String(name) === `${project.key}.json`) schedule(30); });
       w.on('error', () => { try { w.close(); } catch (_) { /* gone */ } if (storeWatch === w) storeWatch = null; });
       storeWatch = w;
-    } catch (e) { say(`session list: watching the record of ${project.label} failed: ${(e && e.message) || e}`); }
+    } catch (e) { if (!host.trusted || host.trusted()) say(`session list: watching the record of ${project.label} failed: ${(e && e.message) || e}`); }
   }
   watchStore();
 
@@ -406,7 +406,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const shownFile = () => path.join(shared('session-list'), 'windows', `${pid}.json`);
   let shownSig = '', shownAt = 0;
   function publishShown(force) {
-    if (closed) return;
+    /* A window in Restricted Mode writes nothing to the folder the windows share. */
+    if (closed || (host.trusted && !host.trusted())) return;
+    if (!storeWatch) watchStore();
     const keys = [...rows.keys()].sort();
     const sig = JSON.stringify([project.key, keys]);
     if (!force && sig === shownSig && now() - shownAt < SHOWN_EVERY_MS) return;
