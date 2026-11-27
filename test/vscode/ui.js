@@ -1690,11 +1690,15 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await look('sessions-stripes-light', { expect: 'The same close view in a light theme: a light grey UNGROUPED band, then Fix the sessions page filter with a pale blue background that is plainly not the grey of the band, and a solid deep blue stripe, deeper than the blue dot of Waits for a permission. OpenCode in a terminal and Open in another window have hollow stripes outlined in that blue and faded titles; OpenCode in a terminal\'s title is a faded purple.' },
       await box());
     await slTheme(THEMES.hcDark);
-    judge('hcDark', await drawn(), { tint: false });
-    await look('sessions-stripes-hc-dark', { expect: 'The same close view in the dark high contrast theme, on black: the stripe of Fix the sessions page filter is a solid blue that is easy to see on black, the hollow stripes of OpenCode in a terminal and Open in another window are outlined in the same blue, and the UNGROUPED band has the theme\'s lines above and below it; the row in front has a dark blue tint.' },
+    d = await drawn();
+    judge('hcDark', d, { tint: false });
+    check(Number(d.css.termOpacity) === 0.7, 'hcDark: a high contrast theme fades a row open somewhere else less, so that its title stays readable', d.css);
+    await look('sessions-stripes-hc-dark', { expect: 'The same close view in the dark high contrast theme, on black: the stripe of Fix the sessions page filter is a solid blue that is easy to see on black, the hollow stripes of OpenCode in a terminal and Open in another window are outlined in the same blue, the purple title of OpenCode in a terminal is fainter than the other titles yet still easy to read on black, and the UNGROUPED band has the theme\'s lines above and below it; the row in front has a dark blue tint.' },
       await box());
     await slTheme(THEMES.hcLight);
-    judge('hcLight', await drawn(), { tint: false });
+    d = await drawn();
+    judge('hcLight', d, { tint: false });
+    check(Number(d.css.termOpacity) === 0.7, 'hcLight: and so does the light high contrast theme', d.css);
     await look('sessions-stripes-hc-light', { expect: 'The same close view in the light high contrast theme, on white: a solid dark blue stripe on Fix the sessions page filter, easy to see, hollow stripes of the same blue on OpenCode in a terminal and Open in another window.' },
       await box());
     await slTheme(THEMES.dark);

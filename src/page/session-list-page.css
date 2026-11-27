@@ -162,8 +162,12 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Open somewhere else: the title and logo are dimmed as if disabled; the dot is not. */
 .sl-row.sl-elsewhere .sl-title, .sl-row.sl-elsewhere .sl-logo-img, .sl-row.sl-elsewhere .sl-time { opacity: .45; }
-/* A faded title looks fainter on a light background than on a dark one. */
+/* A faded title looks fainter on a light background than on a dark one, and a high contrast theme keeps text readable
+   first. */
 .vscode-light .sl-row.sl-elsewhere .sl-title, .vscode-light .sl-row.sl-elsewhere .sl-logo-img, .vscode-light .sl-row.sl-elsewhere .sl-time { opacity: .6; }
+.vscode-high-contrast .sl-row.sl-elsewhere .sl-title, .vscode-high-contrast .sl-row.sl-elsewhere .sl-logo-img, .vscode-high-contrast .sl-row.sl-elsewhere .sl-time,
+.vscode-high-contrast-light .sl-row.sl-elsewhere .sl-title, .vscode-high-contrast-light .sl-row.sl-elsewhere .sl-logo-img,
+.vscode-high-contrast-light .sl-row.sl-elsewhere .sl-time { opacity: .7; }
 .sl-marks { flex: none; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .sl-marks:empty { display: none; }
 .sl-crown, .sl-unread { display: inline-flex; line-height: 1; }
