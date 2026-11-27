@@ -844,11 +844,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!a, 'with a conversation\'s tab in front, the Work plan view shows its plan, the newest row first, each numbered by its place in the file', await planRows());
     const head = await page.evaluate(() => { const h = document.querySelector('#workbench\\.view\\.extension\\.agentPlus .pane-header'); return h ? h.getAttribute('aria-label') : ''; });
     check(/^Work plan - Codex/.test(head || ''), 'and names the agent', head);
-    const badge = await page.evaluate(() => {
-      const a = [...document.querySelectorAll('.activitybar .action-item')].find((x) => { const l = x.querySelector('.action-label'); return !!l && /^Agent Plus/.test(l.getAttribute('aria-label') || ''); });
+    const badge = await page.evaluate((re) => {
+      const a = [...document.querySelectorAll('.activitybar .action-item')].find((x) => { const l = x.querySelector('.action-label'); return !!l && new RegExp(re).test(l.getAttribute('aria-label') || ''); });
       const b = a && a.querySelector('.badge-content');
       return b ? b.innerText.trim() : '';
-    });
+    }, PLAN_ENTRY);
     check(badge === '1', 'its badge in the activity bar counts the one row still to do', badge);
     if (a) {
       const blue = await themeColor('charts.blue'), orange = await themeColor('charts.orange'), purple = await themeColor('charts.purple');
