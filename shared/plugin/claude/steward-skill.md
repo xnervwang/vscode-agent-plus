@@ -105,8 +105,8 @@ Leave out conversations that are idle with no work, have only questions waiting 
 Each message makes a conversation run a whole turn and read its whole context again.
 
 When the user asks you to check on other conversations after the windows were reloaded, VS Code or the machine was
-restarted, or the computer slept, use the last list you got before the event. Send a check-in message only to
-conversations that list showed were working, running a command, or running a task or process in the background.
+restarted, or the computer slept, use the last list you got before the event. Pass that request on only to conversations
+that list showed were working, running a command, or running a task or process in the background.
 
 In this case, a work plan row in progress does not count as work on its own. The user often pauses a conversation on
 purpose with a row still in progress, and a message would start it again. Say how many conversations you left out in the

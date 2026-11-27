@@ -1944,8 +1944,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!await slWait((r) => slFind(r, SLT.cc, 'ungrouped') && slFind(r, SLT.perm, 'ungrouped')), 'Delete Group puts its conversations back in Ungrouped');
   });
 
-  /* Row menu submenus: resting the pointer on the item opens one, leaving the item and the submenu closes it, and the
-     keys still open it. */
+  /* Row menu submenus: resting the pointer on their item opens one, leaving the item and the submenu closes it, and the
+     right arrow key and Enter still open it. */
   await step('sessions-submenus', async () => {
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');
@@ -1996,8 +1996,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
        closes a submenu they opened. */
     await offBoth();
     await sleep(300);
-    /* A key reaches the webview a moment after press() returns, so each press waits for the focus to move before the
-       focused item is read again; reading at once can count one item twice and step past the label. */
+    /* A key reaches the webview a moment after page.keyboard.press() returns, so each press waits for the focus to move
+       before the focused item is read again; reading at once can count one item twice and press past the item being
+       looked for. */
     const focused = () => sl.evaluate(() => { const a = document.activeElement; return a && a.closest && a.closest('.sl-ctx-item') ? a.textContent.replace('›', '').trim() : ''; });
     const focusOn = async (label) => {
       for (let i = 0; i < 20; i++) {
@@ -2209,7 +2210,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');
     const first = await until(() => sl.evaluate(() => document.querySelector('.sl-new-agent').title), 5000, 200);
-    check(/starts? in Claude Code\b/.test(first || ''), 'the New bar starts with Claude Code, first in its fixed order of Claude Code, Codex and OpenCode, though Codex registered earlier', first);
+    check(/starts? in Claude Code\b/.test(first || ''), 'the New bar starts with Claude Code, the first of Claude Code, Codex and OpenCode in the order it picks from, though Codex registered earlier', first);
     const half = sl.locator('.sl-new-half.sl-primary');
     const hovered = async () => {
       await slAway();
@@ -2223,7 +2224,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(h.contrast >= 1.25, 'dark: New in tab plainly changes colour under the pointer', h);
     await look('sessions-new-hover-dark', { pointer: true, expect: 'The New bar in a dark theme with the pointer on New in tab: its blue is plainly darker than the button blue VS Code draws elsewhere, such as the chosen chip All under it; the white text on it is still easy to read.' },
       sl.locator('.sl-top'));
-    /* Not the default blue, so that the picture shows the colour customization took effect. */
+    /* The theme's button colour and button hover colour both set to one purple, not the default blue, so that the
+       picture shows the customization took effect. */
     const hex = '#7b3fbf';
     await setting('workbench.colorCustomizations', { 'button.background': hex, 'button.hoverBackground': hex });
     await sleep(1000);

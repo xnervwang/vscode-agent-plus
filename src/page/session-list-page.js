@@ -271,7 +271,7 @@
     t.textContent = '';
     t.append(title.slice(0, at), el('mark', 'sl-mark', title.slice(at, at + q.length)), title.slice(at + q.length));
   }
-  /* A sub-agent's rows move with the top-level row above them. */
+  /* A sub-agent's rows move with the nearest top-level row above them. */
   function heldOrder(list, rows) {
     const at = new Map([...list.children].map((r, i) => [r.dataset.key, i]));
     const blocks = [];
