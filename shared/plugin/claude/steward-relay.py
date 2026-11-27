@@ -30,6 +30,7 @@
     python3 steward-relay.py --drop <session id, key or exact title> [<plugin data directory>]
     python3 steward-relay.py --all on|off [<plugin data directory>]
     python3 steward-relay.py --new on|off [<plugin data directory>]
+    python3 steward-relay.py --archive <session id> [<session id> ...] [<plugin data directory>]
 
 Run from the steward conversation: its session id comes from CLAUDE_CODE_SESSION_ID. Claude Code Plus types the
 message into that conversation's input in the VS Code window that has it open and sends it, so it arrives as the
@@ -59,6 +60,18 @@ this turn, or else to the one the user last typed to.
 key, or its exact title (in a here-document instead, when it is awkward in a command line). --all turns "All, including
 new ones" on or off, and --new "New conversations". The window that shows the steward makes the change only when the
 latest message before this command in the steward conversation is one the user typed there; otherwise it prints why.
+
+--archive <session id> [<session id> ...] [<plugin data directory>] asks the window showing the steward to archive the
+named conversations in Agent Plus's session list. You can also give the session ids one per line in a here-document.
+Give at most 50 per command; run it again for more. The window acts only when the user asked for the archive and the
+latest message before the command is one the user typed in the steward conversation. A message from another session, a
+notice, or a handoff does not count. The window does not act on a subagent's call. It archives only conversations this
+steward manages. It skips any conversation that is working, waiting for the user, or running background work. It also
+skips one run by another process if the window cannot see its state. Archiving requires an Agent Plus version with the
+archive interface and affects only the session lists of projects open in VS Code windows on this machine. A conversation
+that none of those lists shows is not archived. As with Archive on a row, the conversation leaves its group and is
+unpinned. It can still be opened and run, and the user can unarchive it from the list. The script prints one line per
+conversation: "Archived: ..." or "Not archived: ...: <reason>". It exits 0 only if all were archived.
 
 A key "<source id>:<session id>" (steward_table.py) names another agent's conversation, which takes only a plain
 message. The request goes to Agent Plus through the window that shows the steward, and Agent Plus sends the message as
@@ -110,7 +123,9 @@ NO_ACTIONS = ("Not done: a supervisor can only send plain messages to %(label)s 
 WINDOWS_DIR = "windows"
 # Claude Code Plus rewrites a window's entry once a minute while the window is open.
 WINDOW_STALE_SECONDS = 120
-FLAGS = ("--rename", "--close", "--open", "--resume", "--handoff", "--take", "--drop", "--all", "--new")
+FLAGS = ("--rename", "--close", "--open", "--resume", "--handoff", "--take", "--drop", "--all", "--new", "--archive")
+# Agent Plus archives at most this many in one call.
+ARCHIVE_MAX = 50
 LIST = ("--take", "--drop", "--all", "--new")
 SWITCHES = ("--all", "--new")
 # Each takes the next argument.
@@ -319,11 +334,85 @@ USAGE = ("usage: steward-relay.py [--anyway | --rename | --close [--confirmed] |
          " <session id or folder> [<plugin data directory>] < text\n"
          "       steward-relay.py --handoff [--to <supervisor session id>] [<plugin data directory>] < text\n"
          "       steward-relay.py --take | --drop <session id, key or title> [<plugin data directory>]\n"
-         "       steward-relay.py --all | --new on|off [<plugin data directory>]")
+         "       steward-relay.py --all | --new on|off [<plugin data directory>]\n"
+         "       steward-relay.py --archive <session id> [<session id> ...] [<plugin data directory>]")
+
+
+def archive(args):
+    """--archive: the conversations named, Claude Code session ids on the command line or one a line on standard input,
+    then the plugin data directory if given. The window that shows this steward archives them in Agent Plus's session
+    list, each one only if this steward manages it and it is not working, waiting for the user or running background work,
+    and only when the user asked for it in this steward conversation (the latest message before this command is one the
+    user typed there). Prints a line for each conversation."""
+    rest = [a for a in args if a != "--archive"]
+    if any(a in FLAGS + MODIFIERS + VALUED for a in rest):
+        print(USAGE)
+        return 2
+    data = rest.pop() if rest and os.path.isabs(rest[-1]) else A.FALLBACK
+    names = rest or (read_input().split() if not sys.stdin.isatty() else [])
+    ids = []
+    for n in names:
+        sid = steward_table.managed_id(n)
+        if not sid or steward_table.is_other(sid):
+            print("Not done: %s is not a Claude Code session id; only Claude Code conversations are archived this way." % n)
+            return 1
+        if sid not in ids:
+            ids.append(sid)
+    if not ids:
+        print("Not done: no conversation was named.")
+        return 1
+    if len(ids) > ARCHIVE_MAX:
+        print("Not done: %d conversations were named; give at most %d at a time." % (len(ids), ARCHIVE_MAX))
+        return 1
+    steward = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    if not SESSION_NAME.match(steward):
+        print("Not done: CLAUDE_CODE_SESSION_ID is not set, so this was not run from the supervisor conversation.")
+        return 1
+    directory = os.path.join(data, RELAY_DIR)
+    os.makedirs(directory, exist_ok=True)
+    rid = str(uuid.uuid4())
+    request_file = os.path.join(directory, rid + ".json")
+    result = os.path.join(directory, rid + ".result.json")
+    write_atomic(request_file, json.dumps({"id": rid, "action": "archive", "to": ids[0], "ids": ids, "text": "",
+                                           "steward": steward.lower(), "at": int(time.time() * 1000)}))
+    deadline = time.time() + WAIT_SECONDS
+    while time.time() < deadline:
+        if os.path.exists(result):
+            try:
+                with open(result, encoding="utf-8") as fh:
+                    r = json.load(fh)
+            except (OSError, ValueError):
+                time.sleep(0.2)
+                continue
+            try:
+                os.remove(result)
+            except OSError:
+                pass
+            each = [e for e in listed(r.get("results")) if isinstance(e, dict)]
+            if not each:
+                print("Not done: %s." % (r.get("reason") or r.get("outcome") or "no answer"))
+                return 1
+            for e in each:
+                sid = str(e.get("sessionId") or "")
+                who = '"%s" (%s)' % (e.get("title"), sid) if e.get("title") else sid
+                if e.get("outcome") == "archived":
+                    print("Archived: %s." % who)
+                else:
+                    print("Not archived: %s: %s." % (who, e.get("reason") or e.get("outcome") or "no reason given"))
+            return 0 if all(e.get("outcome") == "archived" for e in each) else 1
+        time.sleep(0.25)
+    try:
+        os.remove(request_file)
+        print("Not done: no VS Code window that shows this supervisor conversation took the request.")
+    except OSError:
+        print("Unclear whether it was done: a window took the request but gave no answer in time.")
+    return 1
 
 
 def main(argv):
     args = argv[1:]
+    if "--archive" in args:
+        return archive(args)
     action = next((a for a in args if a in FLAGS), "")
     confirmed = "--confirmed" in args
     listing = "--windows" in args
