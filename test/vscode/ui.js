@@ -1657,7 +1657,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
         `${which}: the stripe of the conversation open in this window is a solid blue, deeper than the blue dot of a pending approval, and stands out from the list`,
         { stripe: d.css.here, dot: d.css.dot, body: d.css.body, contrast: here && body ? contrast(here, body) : null });
       check(!!away && sameList(rgbOf(away), BLUE[which]) && (rgbaOf(d.css.awayFill) || [0, 0, 0, 0])[3] === 0 && parseFloat(d.css.awayWidth) >= 1,
-        `${which}: one open somewhere else has a hollow stripe outlined in the same blue`, d.css);
+        `${which}: a row open somewhere else has a hollow stripe outlined in the same blue as the one open in this window`, d.css);
       if (!tint) return;
       const t = d.cur && d.head ? { distance: Math.round(Math.hypot(...d.cur.map((v, i) => v - d.head[i]))), bluer: (d.cur[2] - d.cur[0]) - (d.head[2] - d.head[0]) } : null;
       check(!!t && t.distance >= 20 && t.bluer >= 15, `${which}: the row in front is tinted blue, apart from the grey band of its section`, { row: d.cur, band: d.head, t });
