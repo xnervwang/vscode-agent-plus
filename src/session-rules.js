@@ -56,12 +56,19 @@ function unread(row) {
 
 const sortTime = (r) => +(r.sortAt !== undefined ? r.sortAt : r.lastActiveAt) || 0;
 
+/*
+ * The order in a group or Ungrouped, in three tiers: pinned rows, newest pinned first; running rows, the latest to
+ * start running first; the rest, by their last activity. None of these times changes while a row stays in its tier, so
+ * a row moves only when it starts or stops running, is pinned or unpinned, appears, or is archived or brought back.
+ */
+const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || '')) || String(a.key).localeCompare(String(b.key));
 function compare(a, b) {
   if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-  const t = sortTime(b) - sortTime(a);
-  if (t) return t;
-  return String(a.title || '').localeCompare(String(b.title || '')) || String(a.key).localeCompare(String(b.key));
+  const t = a.pinned ? (+b.pinnedAt || 0) - (+a.pinnedAt || 0)
+    : runs(a) !== runs(b) ? (runs(a) ? -1 : 1) : sortTime(b) - sortTime(a);
+  return t || byTitle(a, b);
 }
+const byArchive = (a, b) => (+b.archivedAt || 0) - (+a.archivedAt || 0) || byTitle(a, b);
 
 /*
  * The sections: Recently closed, then each group in `groups` order, Ungrouped, Archived. A conversation is in its
@@ -80,7 +87,7 @@ function sections(rows, { groups = [], recent = 10 } = {}) {
     if (inside.length || g.made) out.push({ key: `group:${g.id}`, groupId: g.id, label: g.name, rows: inside, made: !!g.made });
   }
   out.push({ key: 'ungrouped', label: 'Ungrouped', rows: live.filter((r) => !r.group || !known.has(r.group)).sort(compare) });
-  out.push({ key: 'archived', label: 'Archived', rows: rows.filter((r) => r.archived).sort(compare) });
+  out.push({ key: 'archived', label: 'Archived', rows: rows.filter((r) => r.archived).sort(byArchive) });
   return out;
 }
 

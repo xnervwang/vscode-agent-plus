@@ -72,6 +72,18 @@ module.exports = async ({ eq, root }) => {
   eq(R.sections([row({ title: 'ran first', lastActiveAt: now - 10e3, sortAt: now - 600e3 }), row({ title: 'quiet', lastActiveAt: now - 300e3 }),
     row({ title: 'ran later', lastActiveAt: now - 20e3, sortAt: now - 120e3 })], { groups: [] }).find((s) => s.key === 'ungrouped').rows.map((r) => r.title),
   ['ran later', 'quiet', 'ran first'], 'a row with a sortAt sorts by it in place of its lastActiveAt');
+  eq(R.sections([row({ title: 'stopped lately', lastActiveAt: now - 60e3 }), row({ title: 'runs long', activity: 'working', lastActiveAt: now, sortAt: now - 3600e3 }),
+    row({ title: 'background', activity: 'background', lastActiveAt: now - 5e3, sortAt: now - 600e3 }), row({ title: 'pinned, quiet', pinned: true, lastActiveAt: now - 9 * DAY })],
+  { groups: [] }).find((s) => s.key === 'ungrouped').rows.map((r) => r.title),
+  ['pinned, quiet', 'background', 'runs long', 'stopped lately'],
+  'pinned rows first, then running ones, the latest to start on top, then the rest by their last activity');
+  eq(R.sections([row({ title: 'pinned early, busy', pinned: true, pinnedAt: now - 9e6, activity: 'working', lastActiveAt: now }),
+    row({ title: 'pinned late, quiet', pinned: true, pinnedAt: now - 1e6, lastActiveAt: now - 8 * DAY }),
+    row({ title: 'archived first', archived: true, archivedAt: now - 5e6, lastActiveAt: now }),
+    row({ title: 'archived last', archived: true, archivedAt: now - 1e6, lastActiveAt: now - 9 * DAY })], { groups: [] })
+    .filter((s) => s.key === 'ungrouped' || s.key === 'archived').map((s) => s.rows.map((r) => r.title)),
+  [['pinned late, quiet', 'pinned early, busy'], ['archived last', 'archived first']],
+  'pinned rows sort by when they were pinned whatever runs in them, and Archived by when each was archived');
 
   /* ── Filters and counts ── */
   const mixed = [row({ title: 'a', here: true }), row({ title: 'b', activity: 'working' }), row({ title: 'c', activity: 'background', asks: true }),

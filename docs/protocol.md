@@ -326,7 +326,7 @@ The session list is a webview view in an activity bar container of Agent Plus's 
 | `title` | As for Conversations |
 | `cwd` | The conversation's folder |
 | `createdAt` | When it started, in epoch milliseconds |
-| `lastActiveAt` | When it last had a message, in epoch milliseconds. Not a file's modification time, nor a time a rename or another change of its metadata moves: the list sorts by it and shows it |
+| `lastActiveAt` | When it last had a message, in epoch milliseconds. Not a file's modification time, nor a time a rename or another change of its metadata moves: the list shows it, and sorts by it the rows that are neither pinned nor running |
 | `lastReplyAt` | When the agent's last reply landed. A reply later than the newest time the user saw the conversation is unread |
 | `lastUserAt` | When the user last wrote to it, as for Conversations. A plan question asked after it makes the conversation ask the user (the red dots) |
 | `viewedAt` | Optional. When the agent's own interface last showed the conversation to the user, such as OpenCode's `time_viewed`; counts as seen |

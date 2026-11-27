@@ -152,7 +152,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const flat = (mm) => Object.fromEntries(mm.sections.map((s) => [s.key, s.rows.map((r) => r.title)]));
     const byTitle = (mm, title) => mm.sections.flatMap((s) => s.rows).find((r) => r.title === title);
     eq([flat(m).ungrouped, m.counts, byTitle(m, 'Alpha').stripe, byTitle(m, 'Beta').stripe, byTitle(m, 'Dialog').dot, byTitle(m, 'Asks').dot, byTitle(m, 'Beta').dot],
-      [['Alpha', 'Asks', 'Beta', 'Dialog', 'Other agent'], { all: 5, open: 2, running: 1, needs: 2 }, 'here', 'here', 'blue', 'red', 'green'],
+      [['Beta', 'Alpha', 'Asks', 'Dialog', 'Other agent'], { all: 5, open: 2, running: 1, needs: 2 }, 'here', 'here', 'blue', 'red', 'green'],
       'rows of every source in one list, background and empty ones hidden, a tab or a sidebar here drawn as open here, with their dots and counts');
     eq(byTitle(m, 'Other agent').stripe, '', 'only a source that lists the shows feature is asked whether its sidebar shows a conversation');
     const placeLine = (mm, title) => byTitle(mm, title).hover.split('\n').filter((l) => l.startsWith('Open in this window'));
@@ -218,7 +218,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     t.host.settings = () => ({ hideBackground: false });
     await list.refresh();
     m = list.model();
-    eq(m.sections.find((s) => s.key === 'ungrouped').rows.map((r) => [r.title, r.depth]).slice(0, 3), [['Alpha', 0], ['Kid', 1], ['Asks', 0]],
+    eq(m.sections.find((s) => s.key === 'ungrouped').rows.map((r) => [r.title, r.depth]).slice(0, 3), [['Beta', 0], ['Alpha', 0], ['Kid', 1]],
       'with background conversations shown, a sub-agent goes straight under the conversation that started it');
     t.host.settings = () => ({});
 
@@ -549,19 +549,19 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     const order = () => list.model().sections.find((x) => x.key === 'ungrouped').rows.map((r) => r.title);
     const set = (id, o) => Object.assign(codex.sessions.find((x) => x.sessionId === id), o);
-    eq(order(), ['Quiet', 'Runs', 'Background'], 'a row already running when the list first sees it sorts by the last message it had at that moment');
+    eq(order(), ['Runs', 'Quiet', 'Background'], 'a row already running when the list first sees it comes before the rows that do not run');
     set('r', { lastActiveAt: now0 - 10e3 });
     set('b', { activity: 'background', running: true });
     await list.refresh({ relist: true });
     set('b', { lastActiveAt: now0 - 240e3 });
     await list.refresh({ relist: true });
-    eq(order(), ['Quiet', 'Runs', 'Background'], 'while a turn or background work runs, its newer messages do not move the row');
+    eq(order(), ['Runs', 'Background', 'Quiet'], 'running rows keep the order they started in, the later one first, and their newer messages do not move them');
     set('r', { activity: 'stopped', running: false });
     await list.refresh({ relist: true });
-    eq(order(), ['Runs', 'Quiet', 'Background'], 'once its turn stops, the row moves to the place of its last message, and one still running stays put');
+    eq(order(), ['Background', 'Runs', 'Quiet'], 'once its turn stops, the row moves among the rows that do not run, to the place of its last message');
     set('q', { activity: 'working', running: true, lastActiveAt: now0 - 1e3 });
     await list.refresh({ relist: true });
-    eq(order(), ['Quiet', 'Runs', 'Background'], 'a row that starts running is placed by the message it started with');
+    eq(order(), ['Quiet', 'Background', 'Runs'], 'a row that starts running goes to the top of the running rows');
     eq(list.model().sections.find((x) => x.key === 'ungrouped').rows.find((r) => r.title === 'Background').time, '4m',
       'the time shown on a row is still that of its last message');
     list.dispose();

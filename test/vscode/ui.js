@@ -1718,6 +1718,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slAway();
     const FRESH = 'A conversation started just now';
     const order = async () => (await slRows()).filter((r) => r.section === 'ungrouped').map((r) => r.title);
+    /* The rows of Ungrouped that do not run, which follow the running ones. */
+    const rest = async () => (await slRows()).filter((r) => r.section === 'ungrouped' && !/^(green|greenRing|redRing)$/.test(r.dot || '')).map((r) => r.title);
     const timeOf = (title) => sl.evaluate((t) => { const r = [...document.querySelectorAll('.sl-section[data-key="ungrouped"] .sl-row')].find((x) => x.querySelector('.sl-title').textContent === t);
       return r ? r.querySelector('.sl-time').textContent : null; }, title);
     const before = await order();
@@ -1727,8 +1729,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const during = await order();
     check(!!came && sameList(during, before), 'a row running a turn keeps its place while its messages come in, though its time says now', { before, during });
     await patch('sl-askrun', { state: 'idle', activity: 'stopped', running: false });
-    const moved = await until(async () => { const o = await order(); return o[0] === SLT.askrun && o; }, 10000, 300);
-    check(!!moved, 'once its turn stops, it moves once, to the place of its last message', moved || await order());
+    const moved = await until(async () => { const o = await rest(); return o[0] === SLT.askrun && o; }, 10000, 300);
+    check(!!moved, 'once its turn stops, it moves once, to the top of the rows that do not run', moved || await order());
 
     const held = await order();
     await slRowLoc(SLT.quiet).hover();
@@ -1740,13 +1742,15 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await src('src.set(src.conversations().concat([arg])); return true;', conv('sl-fresh', FRESH, 'idle', 'stopped', false, { running: false, lastActiveAt: Date.now() }));
     const fresh = await slWait((r) => slFind(r, FRESH, 'ungrouped'));
     const withNew = fresh && fresh.filter((r) => r.section === 'ungrouped').map((r) => r.title);
-    check(!!withNew && withNew[0] === FRESH && sameList(withNew.filter((t) => t !== FRESH), held), 'and a new conversation still appears, at the top, with the other rows where they were', withNew);
+    const newRest = fresh && fresh.filter((r) => r.section === 'ungrouped' && !/^(green|greenRing|redRing)$/.test(r.dot || '')).map((r) => r.title);
+    check(!!withNew && newRest[0] === FRESH && sameList(withNew.filter((t) => t !== FRESH), held),
+      'and a new conversation still appears, at the top of the rows that do not run, with the other rows where they were', withNew);
     await look('sessions-order-held', { pointer: true, expect: 'The list, scrolled to show Nothing going on, the row under the pointer: it is highlighted, with its buttons in place of its time (a hover box may show beside it). Near the end of UNGROUPED, Quiet for three weeks shows the time now at its right, yet it is still in its old place under Claude Code, stopped, rather than at the top. The first rows of UNGROUPED may be scrolled out of view.' },
       sidebarBox());
     await slAway();
-    const after = await until(async () => { const o = await order(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
-    check(!!after, 'once the pointer moves off the sections, to the blank strip above the New bar, the rows take the order of their last messages', after || await order());
-    await look('sessions-order-after', { expect: 'The list with the pointer gone from the rows. UNGROUPED starts with A conversation started just now; next is Quiet for three weeks, saying now, with its feature-x badge and red · 2 processes; then Asked a question, still working.' },
+    const after = await until(async () => { const o = await rest(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
+    check(!!after, 'once the pointer moves off the sections, to the blank strip above the New bar, the rows that do not run take the order of their last messages', after || await order());
+    await look('sessions-order-after', { expect: 'The list with the pointer gone from the rows. UNGROUPED starts with the running conversations, each with a green dot or ring on its logo; right after them comes A conversation started just now, then Quiet for three weeks, saying now, with its feature-x badge and red · 2 processes.' },
       sidebarBox());
 
     await slAway();
@@ -1758,8 +1762,40 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sleep(500);
     check(!!seen2 && sameList(await order(), keyed), 'the rows also stay put while the arrow keys are on a row', await order());
     await page.keyboard.press('Escape');
-    const let2 = await until(async () => { const o = await order(); return o[0] === SLT.other && o; }, 5000, 200);
+    const let2 = await until(async () => { const o = await rest(); return o[0] === SLT.other && o; }, 5000, 200);
     check(!!let2, 'and after Esc takes the highlight off that row, they take the new order', let2 || await order());
+
+    /* Two running rows take turns getting messages, and nothing moves; when one stops it moves once, to the top of the
+       rows that do not run. */
+    await slAway();
+    const turns = await order();
+    for (const id of ['sl-run', 'sl-bg', 'sl-run', 'sl-bg']) { await patch(id, { lastActiveAt: Date.now() }); await sleep(800); }
+    const afterTurns = await order();
+    check(sameList(afterTurns, turns), 'two running rows taking turns with new messages leave the order as it was', { turns, afterTurns });
+    await patch('sl-run', { state: 'idle', activity: 'stopped', running: false, lastActiveAt: Date.now() });
+    const stopped = await until(async () => { const o = await rest(); return o[0] === SLT.run && o; }, 10000, 300);
+    const once = await order();
+    await sleep(1500);
+    check(!!stopped && sameList(await order(), once), 'when one of them stops it moves once, to the top of the rows that do not run, and stays there', { stopped, once, now: await order() });
+    /* Pinned rows sort by when they were pinned, the latest first, and their messages do not move them. */
+    const pin = async (title, label) => { await page.mouse.move(5, 5); await slRowLoc(title).click({ button: 'right' }); await slMenu(); await slItem(label).click(); };
+    await pin(SLT.quiet, 'Pin');
+    await slWait((r) => (slFind(r, SLT.quiet, 'ungrouped') || {}).pinned);
+    await pin(SLT.month, 'Pin');
+    const pinned = await slWait((r) => (slFind(r, SLT.month, 'ungrouped') || {}).pinned && r);
+    await slAway();
+    const pinOrder = (await order()).slice(0, 2);
+    await patch('sl-quiet', { lastActiveAt: Date.now() });
+    await until(async () => (await timeOf(SLT.quiet)) === 'now', 10000, 300);
+    await sleep(500);
+    check(!!pinned && sameList(pinOrder, [SLT.month, SLT.quiet]) && sameList((await order()).slice(0, 2), pinOrder),
+      'pinned rows come first, the latest pinned on top, and a new message in one does not move it', { pinOrder, now: await order() });
+    await pin(SLT.quiet, 'Unpin');
+    await pin(SLT.month, 'Unpin');
+    await slWait((r) => !(slFind(r, SLT.quiet, 'ungrouped') || {}).pinned && !(slFind(r, SLT.month, 'ungrouped') || {}).pinned);
+    await patch('sl-quiet', { lastActiveAt: slAt - 480e3 });
+    await patch('sl-run', { state: 'working', activity: 'working', running: true, lastActiveAt: slAt - 60e3 });
+    await patch('sl-bg', { lastActiveAt: slAt - 120e3 });
 
     await src('src.set(src.conversations().filter((c) => c.sessionId !== arg)); return true;', 'sl-fresh');
     await patch('sl-weeks', { lastActiveAt: slAt - 21 * DAY });

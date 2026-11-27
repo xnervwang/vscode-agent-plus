@@ -14,7 +14,8 @@
  * on its own once an hour in one window of the project at a time.
  *
  * A row that runs a turn or background work sorts by the lastActiveAt it had when the list first saw it running, so its
- * own messages do not move it until it stops; then it sorts by its lastActiveAt again.
+ * own messages do not move it until it stops; then it sorts by its lastActiveAt again. Pinned rows sort by when they
+ * were pinned (compare in src/session-rules.js).
  *
  * A source's list is read again when the source fires onDidChangeSessions, and every RELIST_MS besides. A source
  * whose list could not be read keeps its previous list, and the list says so above its rows; nothing of a source
@@ -158,6 +159,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const queues = new Map();
   /* key -> the time a running row sorts by (see the top of this file). */
   const runFrom = new Map();
+  /* key -> when the list first saw a pinned row whose record has no time for the pin. */
+  const pinSeen = new Map();
   let chosenNew = '';
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
@@ -310,6 +313,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         next.set(k, Object.assign({}, x, { key: k, sourceId: e.id, asks, here: look.here.has(k), elsewhere: look.here.has(k) ? [] : elsewhere,
           sortAt: running ? runFrom.get(k) : +x.lastActiveAt || 0,
           group: rec.group, archived: rec.archived, archivedAt: rec.archivedAt, pinned: rec.pinned, color: rec.color,
+          pinnedAt: !rec.pinned ? 0 : rec.pinnedAt || pinSeen.get(k) || (pinSeen.set(k, now()), pinSeen.get(k)),
           seenAt: Math.max(rec.seenAt, store.since()), unreadMark: rec.unreadMark, closedAt: look.here.has(k) ? 0 : closedAt.get(k) || 0,
           hidden: s.hideBackground && x.kind !== 'user' }));
       }

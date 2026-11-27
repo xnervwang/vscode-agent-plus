@@ -163,7 +163,7 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
     record(sourceId, sessionId) {
       const r = read().s[keyOf(sourceId, sessionId)] || {};
       const v = (f, i = 0, d = null) => (Array.isArray(r[f]) ? r[f][i] : d);
-      return { group: v('g'), archived: !!v('a'), archivedAt: v('a') ? v('a', 1, 0) : 0, pinned: !!v('p'), color: v('c'),
+      return { group: v('g'), archived: !!v('a'), archivedAt: v('a') ? v('a', 1, 0) : 0, pinned: !!v('p'), pinnedAt: v('p') ? v('p', 1, 0) : 0, color: v('c'),
         seenAt: +r.r || 0, unreadMark: !!v('u') };
     },
     /* Every conversation the store has something for, as [sourceId, sessionId]. */
