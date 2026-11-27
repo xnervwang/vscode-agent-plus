@@ -94,7 +94,7 @@ module.exports = async ({ eq, root, wait }) => {
     const l = bar.model(busy, wide).lists;
     eq([Object.keys(l).sort(), l[''].now, l[''].head, l[''].rows.length, l[''].rows[1], l[''].more],
       [['', 'ask', 'discussing', 'doing', 'todo', 'waiting'], '3.2 CLI: budget subcommand', '10 rows not done', 10, { state: 'doing', text: '3.2 CLI: budget subcommand', depth: 2 }, 0],
-      'hovering the rest of the bar lists every open row, under the current row\'s whole title and how many are not done');
+      'hovering the rest of the bar lists the open rows, under the current row\'s whole title and how many are not done');
     eq([l.waiting, l.discussing.rows.map((r) => r.text)],
       [{ now: '', head: '2 waiting', rows: [{ state: 'waiting', text: '5 Report', depth: 1 }, { state: 'waiting', text: '6 Fonts', depth: 1 }], more: 0 }, ['9 Colours']],
       'hovering a bubble lists the rows of its state, without the ones that wait for the answer');

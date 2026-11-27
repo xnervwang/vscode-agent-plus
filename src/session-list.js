@@ -160,8 +160,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
    * be in front while this one is the active tab, whatever a source still says. With no conversation tab active, the
    * one a source says is focused.
    */
-  /* Where a conversation found by shows() is: what the source's shownIn says, or '' when it does not say. shows() alone
-     does not tell a sidebar from a tab that sessionForTab could not match, such as one behind another tab. */
+  /* Where a conversation found by shows() is, as the source's shownIn says. shows() alone does not tell a sidebar from
+     a tab that sessionForTab could not match, such as one behind another tab. */
   const placeOf = (shownIn, id) => {
     if (!shownIn) return '';
     try { const p = shownIn(id); return p === 'sidebar' || p === 'tab' ? p : ''; } catch (_) { return ''; }

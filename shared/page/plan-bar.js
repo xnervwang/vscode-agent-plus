@@ -11,9 +11,9 @@
  *
  * It counts the open rows by state in bubbles, one for each state of BUBBLES that has rows, and the rows waiting for
  * the user's answer in a solid "N to decide" part; a row that asks is counted there only, so the numbers add up to the
- * rows still open but parked. Narrower than COMPACT_BELOW, it drops the word Plan and the arrow, and "to decide" keeps
- * only its number. Hovering a bubble lists its rows, hovering "to decide" its questions, and hovering the rest of the
- * bar every open row.
+ * open rows that are not parked. Narrower than COMPACT_BELOW, it drops the word Plan and the arrow, and "to decide"
+ * keeps only its number. Hovering a bubble lists its rows, hovering "to decide" its questions, and hovering the rest of
+ * the bar the open rows.
  */
 var agentPlusPlanBar = (function () {
   'use strict';
@@ -299,7 +299,6 @@ var agentPlusPlanBar = (function () {
       if (list) showList();
     }
 
-    /* The part of the bar `target` is in. */
     var keyOf = function (target) {
       for (var n = target; n && n !== el; n = n.parentNode) {
         var k = n.getAttribute ? n.getAttribute('data-key') : null;

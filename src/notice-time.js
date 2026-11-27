@@ -5,11 +5,12 @@
 
 'use strict';
 /*
- * The time a notification starts with, in brackets, in the time zone of the machine VS Code runs on. In a remote window
- * this extension runs on another machine whose clock can be in another zone, so the reader's zone comes from elsewhere,
- * such as a page, which runs where the reader is; whoever knows it hands it over with setReaderZone(). A time on the
- * reader's day of `now` is HH:MM, one on another day has the month and day before it. Until the reader's zone is
- * known the time is in this machine's zone and names it, so that it never reads as a time of the reader's zone.
+ * The time a notification starts with, in brackets, in the reader's time zone: that of the machine the VS Code window
+ * is shown on. In a remote window this extension runs on another machine whose clock can be in another zone, so the
+ * reader's zone comes from elsewhere, such as a page, which runs where the reader is; whoever knows it hands it over
+ * with setReaderZone(). A time on the reader's day of `now` is HH:MM, one on another day has the month and day before
+ * it. Until the reader's zone is known the time is in this machine's zone and names it, so that it never reads as a
+ * time of the reader's zone.
  *
  *   stamped(text, at)   text with the time `at` (epoch ms, now if left out) before it: "[14:05] text"
  *   stampOf(at, opts)   the time alone: "14:05", "Nov 25 14:05", "14:05 UTC"; opts.now and opts.zone for a test
@@ -24,7 +25,7 @@ let readerZone = () => '';
 function setReaderZone(fn) { readerZone = typeof fn === 'function' ? fn : () => ''; }
 
 const formats = new Map();
-/* A formatter of `zone`, '' for this machine's; null for a zone Intl does not know. */
+/* '' is this machine's zone; for a zone Intl does not know the formatter is null. */
 function formatOf(zone) {
   if (formats.has(zone)) return formats.get(zone);
   let f = null;

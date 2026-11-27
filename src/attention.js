@@ -91,10 +91,9 @@ function reading(c) {
 
 /*
  * The running conversations of `lists` that other windows need to hear about: all but those stopped with no reply
- * unseen, unless this window shows them. `lists` is [{ sourceId, label, conversations }]; `shown(item)` says whether
- * this window shows that conversation, which marks it `here`. A stopped one this window shows is reported so that its
- * report outweighs a machine-wide list still giving the wait it ended with, which would otherwise hide the next wait
- * from a window that reads that list. Past MAX_ITEMS the ones that need the user are kept.
+ * unseen, unless this window shows them, for the reason given at the top of this file. `lists` is
+ * [{ sourceId, label, conversations }]; `shown(item)` says whether this window shows that conversation, which marks
+ * it `here`. Past MAX_ITEMS the ones that need the user are kept.
  */
 const activeAt = (c) => (Number.isFinite(c.lastReplyAt) && c.lastReplyAt > 0 ? c.lastReplyAt : Number.isFinite(c.lastActiveAt) ? c.lastActiveAt : 0);
 const unwritten = (activity, unseen) => !activity || (activity === 'stopped' && !unseen);

@@ -95,9 +95,10 @@ function create({ version = '1.145.0', trusted = true } = {}) {
     getText: () => state.documents[uri.path],
     positionAt: (offset) => offset,
   });
-  /* A notification's text is recorded without the time src/notice-time.js puts before it, which is kept as `stamp`; one
-     shown without that time is also listed in `unstamped`, which test/parts/99-notice-times.js reads after every part. A
-     modal dialog is not a notification and carries none. */
+  /* A notification's text is recorded without the time src/notice-time.js puts before it, so that the parts match it as
+     it is written; the time is kept as `stamp`. One shown without that time is also listed in `unstamped`, which
+     test/parts/99-notice-times.js checks once every other part has run. A modal dialog is not a notification and
+     carries none. */
   const answer = (kind) => async (raw, ...rest) => {
     const buttons = rest.filter((b) => typeof b === 'string');
     const modal = rest.some((x) => !!x && typeof x === 'object' && x.modal === true);

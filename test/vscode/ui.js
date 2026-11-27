@@ -1441,14 +1441,13 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     return sessions && plan ? { sessions, plan } : null;
   });
   const barShown = () => until(barEntries, 15000, 200);
-  /* A box around the two entries, with the bar's full width and a little of what is above and below them. */
   const barBox = (b) => {
     const top = Math.min(b.sessions.y, b.plan.y), bottom = Math.max(b.sessions.y + b.sessions.height, b.plan.y + b.plan.height);
     const left = Math.min(b.sessions.x, b.plan.x), right = Math.max(b.sessions.x + b.sessions.width, b.plan.x + b.plan.width);
     return { x: left, y: top - 8, width: right - left, height: bottom - top + 16 };
   };
   /* What both close views of the two entries should show, after the theme's own words. */
-  const BAR_LOOK = 'on top the robot of the Conversations session list (a speech-bubble head with two square eyes, a small ear on each side and an antenna ending in a ring), and right under it the Work plan of Agent Plus (a page with a folded corner, a tick and a list). The two icons look the same size: the robot\'s head is about as wide as the page and the whole robot about as tall, and the outlines of both are equally thick. The robot\'s entry is the one shown, so it is the brighter of the two and may have a marker line at its left edge. Neither icon is cut off, and nothing but a number badge covers either.';
+  const BAR_LOOK = 'on top the robot of the Conversations session list (a speech-bubble head with two square eyes, a small ear on each side and an antenna ending in a ring), and right under it the Work plan of Agent Plus (a page with a folded corner, a tick and a list). The two icons look the same size: the robot\'s head is about as wide as the page and the whole robot about as tall, and the outlines of both are equally thick. The robot\'s entry is the active one, as its list is open, so it is the brighter of the two and may have a marker line at its left edge. Neither icon is cut off, and nothing but a number badge covers either.';
   const DAY = 86400e3;
   /* A stand-in for another VS Code window: an entry in each source's windows/<pid>.json, with this test's own process
      as the window. */
