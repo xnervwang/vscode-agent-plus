@@ -1691,7 +1691,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       await box());
     await slTheme(THEMES.hcDark);
     judge('hcDark', await drawn(), { tint: false });
-    await look('sessions-stripes-hc-dark', { expect: 'The same close view in the dark high contrast theme, on black: the stripe of Fix the sessions page filter is a solid blue that is easy to see on black, the hollow stripes of OpenCode in a terminal and Open in another window are outlined in the same blue, and the band and the rows are drawn with the theme\'s own lines.' },
+    await look('sessions-stripes-hc-dark', { expect: 'The same close view in the dark high contrast theme, on black: the stripe of Fix the sessions page filter is a solid blue that is easy to see on black, the hollow stripes of OpenCode in a terminal and Open in another window are outlined in the same blue, and the UNGROUPED band has the theme\'s lines above and below it; the row in front has a dark blue tint.' },
       await box());
     await slTheme(THEMES.hcLight);
     judge('hcLight', await drawn(), { tint: false });
@@ -2152,6 +2152,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const shown = await until(() => sl.evaluate(() => { const a = document.querySelector('.sl-section[data-key="account"]'); return a && !a.classList.contains('sl-hidden') && a.classList.contains('sl-open') && /Signed in with/.test(a.innerText) && a.innerText; }), 10000, 300);
     check(!!shown && /Signed in with\s+API key/.test(shown) && /5-hour limit\s+32%\s+resets 2h 1\dm/.test(shown) && /This conversation\s+Fix the sessions page filter/i.test(shown),
       'Account & usage shows the agent\'s rows, its limits and when they reset, and the conversation in front', shown);
+    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded: a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, with no line above it, a small heading THIS CONVERSATION in capitals; under it, Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k; the account\'s figures above it must not look like the conversation\'s.' }, sidebarBox());
     await src('return src.configureOther(arg[0], arg[1]);', ['claude-code', { account: { rows: [{ label: 'Plan', value: 'Max' }], conversation: { title: SLT.cc, rows: [{ label: 'Context', value: '38%' }] } } }]);
     await src('return src.configureOther(arg[0], arg[1]);', ['opencode', { account: { rows: [{ label: 'Provider', value: 'Bedrock' }] } }]);
     const blocks = await until(() => sl.evaluate(() => {
@@ -2164,10 +2165,16 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!blocks && sameList(blocks.names, ['Codex', 'Claude Code', 'OpenCode']) && blocks.lines[0].startsWith('none') && blocks.lines.slice(1).every((l) => l === 'solid 1px')
       && blocks.subs.length === 2 && blocks.subs.every((x) => x === 'none'),
     'each agent has a block of its own, with a line between two blocks and none above the first; the heading of the conversation\'s figures in a block has no line', blocks);
-    await look('sessions-account-open', { expect: 'An ACCOUNT & USAGE section at the top of the list, expanded, in a dark theme, with three blocks one under the other and a thin line across between each two: first a Codex block with its logo and a View details link at the right, Signed in with API key, Tokens today 1.9M, and two bars laid out alike: 5-hour limit 32% with a short blue fill and Weekly limit 86% with a long orange fill, each with the percentage on the label\'s line and when it resets under the bar. After the bars, with no line above it, a small heading THIS CONVERSATION in capitals; under it, Fix the sessions page filter in ordinary letters, then that conversation\'s Tokens 412k. Then a line, and a Claude Code block with Plan Max and its own THIS CONVERSATION heading with A Claude Code conversation and Context 38%; then a line, and an OpenCode block with Provider Bedrock. Which lines belong to which agent is clear at a glance.' }, sidebarBox());
+    /* The three blocks are taller than the view, so the list is scrolled to the end of the section for their pictures. */
+    const toEnd = () => sl.evaluate(() => { const b = [...document.querySelectorAll('.sl-section[data-key="account"] .sl-acct')].pop(); if (b) b.scrollIntoView({ block: 'end' }); });
+    const LINES_LOOK = 'the end of the Codex block (THIS CONVERSATION, with no line above that heading, Fix the sessions page filter and Tokens 412k), then a thin line across, a Claude Code block with its logo, Plan Max and its own THIS CONVERSATION heading (no line above it) with A Claude Code conversation and Context 38%, then another thin line, and an OpenCode block with its logo and Provider Bedrock. Which lines belong to which agent is clear at a glance. The top of the section may be scrolled out of view.';
+    await toEnd();
+    await look('sessions-account-lines', { expect: `The ACCOUNT & USAGE section in a dark theme, scrolled to its end: ${LINES_LOOK}` }, sidebarBox());
     await slTheme(THEMES.light);
-    await look('sessions-account-open-light', { expect: 'The same ACCOUNT & USAGE section in a light theme: the Codex, Claude Code and OpenCode blocks with a thin grey line between each two and none above a THIS CONVERSATION heading; dark text on a light background.' }, sidebarBox());
+    await toEnd();
+    await look('sessions-account-lines-light', { expect: `The same in a light theme, dark text on a light background with grey lines: ${LINES_LOOK}` }, sidebarBox());
     await slTheme(THEMES.dark);
+    await sl.evaluate(() => { const r = document.querySelector('.sl-root'); if (r) r.scrollTop = 0; });
     await src('return src.configureOther(arg[0], arg[1]);', ['claude-code', { account: null }]);
     await src('return src.configureOther(arg[0], arg[1]);', ['opencode', { account: null }]);
     await sl.locator('.sl-acct .sl-link').filter({ hasText: 'View details' }).click();
@@ -2204,13 +2211,13 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(h.contrast >= 1.25, 'dark: the pointer on New in tab changes its colour plainly', h);
     await look('sessions-new-hover-dark', { pointer: true, expect: 'The New bar in a dark theme with the pointer on New in tab: its blue is plainly darker than the button blue VS Code draws elsewhere, such as the chosen chip All under it, while the text stays white and readable.' },
       sl.locator('.sl-top'));
-    const bg = await themeColor('button.background');
-    const hex = `#${(bg.match(/\d+/g) || []).slice(0, 3).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
-    await setting('workbench.colorCustomizations', { 'button.hoverBackground': hex });
+    /* Purple, so that the picture shows the colours set in effect. */
+    const hex = '#7b3fbf';
+    await setting('workbench.colorCustomizations', { 'button.background': hex, 'button.hoverBackground': hex });
     await sleep(1000);
     h = await hovered();
     check(h.contrast >= 1.25, 'and so it does in a theme whose button hover colour is the button colour itself', Object.assign({ hoverBackground: hex }, h));
-    await look('sessions-new-hover-same', { pointer: true, expect: 'The New bar in a dark theme set to give buttons the same colour under the pointer as without it, with the pointer on New in tab: New in tab is still plainly darker than the blue of the chosen chip All under it.' },
+    await look('sessions-new-hover-same', { pointer: true, expect: 'The New bar in a dark theme whose buttons are set to purple, the same purple under the pointer as without it: the chosen chip All under the bar is that purple, and New in tab, with the pointer on it, is plainly a darker purple than All, its text white and readable.' },
       sl.locator('.sl-top'));
     await setting('workbench.colorCustomizations', null);
     await slTheme(THEMES.light);
