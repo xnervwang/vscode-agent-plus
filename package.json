@@ -145,7 +145,7 @@
       "activitybar": [
         {
           "id": "agentPlusSessions",
-          "title": "Conversations",
+          "title": "Agent Plus - Conversations",
           "icon": "images/sessions.svg"
         },
         {
@@ -187,7 +187,7 @@
         {
           "type": "webview",
           "id": "agentPlus.sessions",
-          "name": "Conversations",
+          "name": "Agent Plus - Conversations",
           "when": "!agentPlus.alone"
         }
       ]

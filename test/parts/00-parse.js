@@ -49,6 +49,11 @@ module.exports = async ({ ok, bad, eq, root }) => {
   /* VS Code puts an extension's activity bar containers in the order package.json lists them. */
   eq(pkg.contributes.viewsContainers.activitybar.map((c) => c.id), ['agentPlusSessions', 'agentPlus'],
     'the session list\'s container comes first in the activity bar, above the Work plan\'s');
+  /* A container holding one view titles the side bar with the container's title alone only when the view's name is the
+     same; otherwise it reads "<container>: <view>". */
+  eq([pkg.contributes.viewsContainers.activitybar[0].title, pkg.contributes.views.agentPlusSessions.map((v) => v.name), pkg.contributes.viewsContainers.panel[0].title],
+    ['Agent Plus - Conversations', ['Agent Plus - Conversations'], 'Conversations'],
+    'the session list\'s container and its one view are both titled Agent Plus - Conversations, so the side bar and the activity bar\'s hover say it once; the panel\'s container stays Conversations');
   /* The package carries extension.js, src/ and images/, and .vscodeignore leaves shared/ out: a module of the extension
      that required a file elsewhere would load in the tests and fail once installed. */
   const walkJs = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkJs(path.join(d, e.name)) : /\.js$/.test(e.name) ? [path.join(d, e.name)] : []));
