@@ -66,12 +66,12 @@ named conversations in Agent Plus's session list. You can also give the session 
 Give at most 50 per command; run it again for more. The window acts only when the user asked for the archive and the
 latest message before the command is one the user typed in the steward conversation. A message from another session, a
 notice, or a handoff does not count. The window does not act on a subagent's call. It archives only conversations this
-steward manages. It skips any conversation that is working, waiting for the user, or running background work. It also
-skips one run by another process if the window cannot see its state. Archiving requires an Agent Plus version with the
-archive interface and affects only the session lists of projects open in VS Code windows on this machine. As with
-Archive on a row, the conversation leaves its group and is unpinned. It can still be opened and run, and the user can
-unarchive it from the list. The script prints one line per conversation: "Archived: ..." or "Not archived: ...:
-<reason>". It exits 0 only if all were archived.
+steward manages, and skips any that is working, waiting for the user or running background work, or that another process
+runs while the window cannot see its state. Archiving requires an Agent Plus version with the archive interface and
+affects only the session lists of projects open in VS Code windows on this machine. As with Archive on a row, the
+conversation leaves its group and is unpinned. It can still be opened and run, and the user can unarchive it from the
+list. The script prints one line per conversation: "Archived: ..." or "Not archived: ...: <reason>". It exits 0 only if
+all were archived.
 
 A key "<source id>:<session id>" (steward_table.py) names another agent's conversation, which takes only a plain
 message. The request goes to Agent Plus through the window that shows the steward, and Agent Plus sends the message as
