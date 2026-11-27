@@ -1127,10 +1127,11 @@
     if (typeof e.dataTransfer.setDragImage === 'function') e.dataTransfer.setDragImage(dragImage, -12, -12);
   });
   root.addEventListener('dragend', () => { dragging = null; dropImage(); for (const h of root.querySelectorAll('.sl-drop')) h.classList.remove('sl-drop'); });
+  /* A group or Ungrouped takes a drop anywhere on it, its header or its rows, and is lit as a whole while one is over it. */
   const target = (e) => {
-    const h = e.target.closest && e.target.closest('.sl-head');
-    const se = h && sectionEls.get(h.dataset.toggle);
-    return se && (se._s.kind === 'group' || se._s.kind === 'ungrouped') ? h : null;
+    const s = e.target.closest && e.target.closest('.sl-section');
+    const se = s && sectionEls.get(s.dataset.key);
+    return se === s && (se._s.kind === 'group' || se._s.kind === 'ungrouped') ? s : null;
   };
   root.addEventListener('dragover', (e) => {
     const h = target(e);
@@ -1148,7 +1149,7 @@
     let keys = dragging;
     try { keys = JSON.parse(e.dataTransfer.getData(DRAG) || 'null') || keys; } catch (_) { /* the drag's own list */ }
     dragging = null;
-    if (Array.isArray(keys) && keys.length) send({ kind: 'move', keys, section: h.dataset.toggle });
+    if (Array.isArray(keys) && keys.length) send({ kind: 'move', keys, section: h.dataset.key });
   });
 
   window.addEventListener('message', (e) => {

@@ -2056,6 +2056,22 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slRowLoc(SLT.perm).dragTo(slHead('Plugins'));
     const dragged = await slWait((r) => slFind(r, SLT.perm, slGroup), 8000);
     check(!!dragged, 'and so does dragging a row onto the group', dragged && dragged.filter((x) => x.section === slGroup));
+    const lit = (key) => sl.evaluate((k) => [...document.querySelectorAll('.sl-section.sl-drop')].map((s) => s.dataset.key).join(',') === k, key);
+    /* Presses on one row and moves onto another without letting go; the caller lets go. */
+    const dragOnto = async (from, onto) => { await from.hover(); await page.mouse.down(); await onto.hover(); await onto.hover({ position: { x: 60, y: 10 } }); };
+    await dragOnto(slRowLoc(SLT.askrun, 'ungrouped'), slRowLoc(SLT.cc, slGroup));
+    const litOver = await until(() => lit(slGroup), 3000, 100);
+    await look('sessions-drag-group', { pointer: true, expect: 'A conversation is being dragged over A Claude Code conversation, a row of the PLUGINS group. The whole group, its PLUGINS header and the rows under it, is lit in the drop colour with a thin outline around it; no other section is lit.' }, sidebarBox());
+    await page.mouse.up();
+    const intoRow = await slWait((r) => slFind(r, SLT.askrun, slGroup), 8000);
+    check(!!litOver && !!intoRow, 'dragged over a row of a group, the whole group lights up as over its header, and dropped there the row goes into that group',
+      intoRow && intoRow.filter((x) => x.section === slGroup).map((x) => x.title));
+    await dragOnto(slRowLoc(SLT.askrun, slGroup), slRowLoc(SLT.run, 'ungrouped'));
+    const litBack = await until(() => lit('ungrouped'), 3000, 100);
+    const litNow = await sl.evaluate(() => [...document.querySelectorAll('.sl-section.sl-drop')].map((s) => s.dataset.key));
+    await page.mouse.up();
+    const back = await slWait((r) => slFind(r, SLT.askrun, 'ungrouped'), 8000);
+    check(!!litBack && !!back, 'and dropped on a row of Ungrouped it goes back there', { litNow, back: !!back, where: ((back || await slRows()).find((x) => x.title === SLT.askrun) || {}).section });
     await slHead('Plugins').click({ button: 'right' });
     const gm = await slMenu();
     check(!!gm && ['New Conversation in This Group', 'New Group', 'Rename Group', 'Delete Group'].every((x) => gm.includes(x)), 'a group\'s menu offers a new conversation in it, a new group, renaming and deleting it', gm);
