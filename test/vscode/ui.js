@@ -50,8 +50,8 @@ const ALL_FEATURES = ['work plan', 'time-zone note', 'conversation brief', 'wake
 const CODEX_SWITCHES = ['codexPlus.workPlan', 'codexPlus.tellCodexYourTimeZone', 'codexPlus.conversationBrief', 'codexPlus.wakeUps',
   'codexPlus.detachedEndNotices'];
 
-/* How the aria-labels of the two activity bar entries start; the session list's container is titled Agent Plus -
-   Conversations. */
+/* How the aria-labels of the session list's and the Work plan's activity bar entries start; the session list's
+   container is titled Agent Plus - Conversations. */
 const SESSIONS_ENTRY = '^Agent Plus - Conversations', PLAN_ENTRY = '^Agent Plus(?! - Conversations)';
 const iso = (ms = Date.now()) => new Date(ms).toISOString();
 const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -649,7 +649,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(tab === '2', 'the Conversations tab\'s badge counts the two questions', tab);
     const st = await entry('conversations');
     check(!!st && /1 conversation needs you/.test(st.text) && !st.warning && !st.error,
-      'and the status bar entry, in the status bar\'s own colours, says 1 conversation needs you: only the question asked since the user\'s last message counts', st);
+      'and the status bar entry, in the status bar\'s own colours, says 1 conversation needs you: only the conversation whose question came after the user\'s last message counts', st);
     await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? (orange question mark, asked 1m ago) and the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 1 conversation needs you in the bar\'s own colours, with no yellow or red behind it.' },
       pane('agentPlus.conversations'));
   });
@@ -1440,8 +1440,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
   const contrast = (a, b) => { const x = luminance(a), y = luminance(b); return Math.round((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) * 100) / 100; };
   const rgbOf = (c) => (c ? c.slice(0, 3).map(Math.round) : null);
-  /* Reads from a screenshot the colour, as [r, g, b], at a point of `loc`'s box. `fx` and `fy` place the point: a
-     fraction of the box's width or height when below 1, a number of CSS pixels from its left or top edge otherwise. */
+  /* `fx` and `fy` place the point in `loc`'s box: a fraction of the box's width or height when below 1, a number of CSS
+     pixels from its left or top edge otherwise. */
   const pixelOf = async (loc, fx = 0.5, fy = 0.5) => {
     const b = await loc.boundingBox().catch(() => null);
     if (!b) return null;
@@ -1605,8 +1605,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       return h && h.offsetParent ? h.textContent.trim() : null; });
     const title = await until(titleOf, 10000, 300);
     check(title === 'Agent Plus - Conversations', 'the side bar of the session list is titled Agent Plus - Conversations, once, with no view name after it', title);
-    /* The entry's label is drawn under its badge, so the pointer is put on the middle of the entry rather than asked to
-       hover the label. */
+    /* The activity bar entry's label is drawn under its badge, so the pointer is put on the middle of the entry rather
+       than asked to hover the label. */
     const entryBox = await page.locator('.activitybar .action-item').filter({ has: page.locator('.action-label[aria-label^="Agent Plus - Conversations"]') }).first()
       .boundingBox().catch(() => null);
     await page.mouse.move(5, 5);
@@ -1677,7 +1677,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(d.css.cursorTerm === 'not-allowed' && d.css.cursorWindow === 'pointer',
       'the pointer over a row open in a terminal shows that it cannot be opened from here; over one open in another VS Code window it is the usual hand', d.css);
     check(/charts-purple/.test(d.css.termColor || '') && Number(d.css.termOpacity) === 0.45, 'a row open somewhere else keeps its title colour, faded with the rest of the row', d.css);
-    await look('sessions-stripes-dark', { expect: 'A close view of the UNGROUPED band and the rows under it, in a dark theme. The band is grey. The first row under it, Fix the sessions page filter, is the conversation in front: its background has a dark blue tint that stands out from the grey band, and it has a solid deep blue stripe at its start, deeper than the blue dot on the logo of Waits for a permission. OpenCode in a terminal and Open in another window (at the bottom, possibly cut off by the edge of the view) have a hollow stripe outlined in that same deep blue and dimmed titles; the title of OpenCode in a terminal is purple, only fainter. An OpenCode conversation may have a solid grey stripe (closed here lately). No other row has a stripe.' },
+    await look('sessions-stripes-dark', { expect: 'A close view of the UNGROUPED band and the rows under it, in a dark theme. The band is grey. The first row under it, Fix the sessions page filter, is the conversation in front: its background has a dark blue tint that stands out from the grey band, and it has a solid deep blue stripe at its start, deeper than the blue dot on the logo of Waits for a permission. OpenCode in a terminal and Open in another window (at the bottom, possibly cut off by the edge of the view) have a hollow stripe outlined in that same deep blue and dimmed titles; the title of OpenCode in a terminal is purple, only fainter. The row titled An OpenCode conversation may have a solid grey stripe (closed here lately). No other row has a stripe.' },
       await box());
     await slRowLoc(SLT.ocTerm).click();
     const told = await toastWith('Close it there first', 12000);
@@ -1692,7 +1692,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slTheme(THEMES.hcDark);
     d = await drawn();
     judge('hcDark', d, { tint: false });
-    check(Number(d.css.termOpacity) === 0.7, 'hcDark: a high contrast theme fades a row open somewhere else less, so that its title stays readable', d.css);
+    check(Number(d.css.termOpacity) === 0.7, 'hcDark: in a high contrast theme the title of a row open somewhere else is faded less, so that it stays readable', d.css);
     await look('sessions-stripes-hc-dark', { expect: 'The same close view in the dark high contrast theme, on black: the stripe of Fix the sessions page filter is a solid blue that is easy to see, the hollow stripes of OpenCode in a terminal and Open in another window are outlined in the same blue, the purple title of OpenCode in a terminal is fainter than the other titles yet still easy to read, and the UNGROUPED band has the theme\'s lines above and below it; the row in front has a dark blue tint.' },
       await box());
     await slTheme(THEMES.hcLight);
@@ -1741,7 +1741,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const fresh = await slWait((r) => slFind(r, FRESH, 'ungrouped'));
     const withNew = fresh && fresh.filter((r) => r.section === 'ungrouped').map((r) => r.title);
     check(!!withNew && withNew[0] === FRESH && sameList(withNew.filter((t) => t !== FRESH), held), 'and a new conversation still appears, at the top, with the other rows where they were', withNew);
-    await look('sessions-order-held', { pointer: true, expect: 'The list, scrolled to show Nothing going on, the row under the pointer: it is highlighted, with its buttons in place of its time (a hover box may show beside it). Near the end of UNGROUPED, Quiet for three weeks says now at its right, yet it is still in its old place under Claude Code, stopped, rather than at the top. The first rows of UNGROUPED may be scrolled out of view.' },
+    await look('sessions-order-held', { pointer: true, expect: 'The list, scrolled to show Nothing going on, the row under the pointer: it is highlighted, with its buttons in place of its time (a hover box may show beside it). Near the end of UNGROUPED, Quiet for three weeks shows the time now at its right, yet it is still in its old place under Claude Code, stopped, rather than at the top. The first rows of UNGROUPED may be scrolled out of view.' },
       sidebarBox());
     await slAway();
     const after = await until(async () => { const o = await order(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
@@ -1944,8 +1944,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(!!await slWait((r) => slFind(r, SLT.cc, 'ungrouped') && slFind(r, SLT.perm, 'ungrouped')), 'Delete Group puts its conversations back in Ungrouped');
   });
 
-  /* A row menu's submenus open when the pointer rests on their item, close when it leaves both, and still open with the
-     keys. */
+  /* Row menu submenus: resting the pointer on the item opens one, leaving the item and the submenu closes it, and the
+     keys still open it. */
   await step('sessions-submenus', async () => {
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');
@@ -1993,11 +1993,11 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await menuOn(SLT.quiet);
     /* The menu opens under the pointer, and a pointer moved out of the window leaves the page thinking it is still on
        one of the items: the next change of layout gives that item a mouseover, which takes the focus from the keys and
-       closes a submenu they opened. The pointer is moved off the menu inside the page first. */
+       closes a submenu they opened. */
     await offBoth();
     await sleep(300);
     /* A key reaches the webview a moment after press() returns, so each press waits for the focus to move before the
-       next is read; reading at once can count one item twice and step past the label. */
+       focused item is read again; reading at once can count one item twice and step past the label. */
     const focused = () => sl.evaluate(() => { const a = document.activeElement; return a && a.closest && a.closest('.sl-ctx-item') ? a.textContent.replace('›', '').trim() : ''; });
     const focusOn = async (label) => {
       for (let i = 0; i < 20; i++) {
@@ -2121,7 +2121,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       const on = await pixelOf(sl.locator('.sl-chip.sl-on'), 4), off = await pixelOf(sl.locator('.sl-chip[data-chip="all"]'), 4);
       return { on, off, contrast: on && off ? contrast(on, off) : 0, grey: off ? Math.max(...off) - Math.min(...off) : 99 };
     };
-    const CHIPS_LOOK = 'under the New bar, the chips All, Open, Running and Needs you with their counts. Running is the chosen one, in the button blue with light text; the other three are a neutral grey with ordinary text.';
+    const CHIPS_LOOK = 'under the New bar, the chips All, Open, Running and Needs you with their counts. Running, the chosen chip, has the button colour and light text; the other three are a neutral grey with ordinary text.';
     let c = await chipsDrawn();
     check(c.contrast >= 1.5 && c.grey <= 12, 'dark: the chips not chosen are grey, and the chosen one stands out against them', c);
     await look('sessions-chips-dark', { expect: `The top of the list in a dark theme: ${CHIPS_LOOK}` }, sl.locator('.sl-top'));
@@ -2209,7 +2209,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');
     const first = await until(() => sl.evaluate(() => document.querySelector('.sl-new-agent').title), 5000, 200);
-    check(/starts? in Claude Code\b/.test(first || ''), 'the New bar starts with Claude Code, which comes before Codex and OpenCode, though Codex registered earlier', first);
+    check(/starts? in Claude Code\b/.test(first || ''), 'the New bar starts with Claude Code, first in its fixed order of Claude Code, Codex and OpenCode, though Codex registered earlier', first);
     const half = sl.locator('.sl-new-half.sl-primary');
     const hovered = async () => {
       await slAway();
@@ -2221,9 +2221,9 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     };
     let h = await hovered();
     check(h.contrast >= 1.25, 'dark: New in tab plainly changes colour under the pointer', h);
-    await look('sessions-new-hover-dark', { pointer: true, expect: 'The New bar in a dark theme with the pointer on New in tab: its blue is plainly darker than the button blue VS Code draws elsewhere, such as the chosen chip All under it, while the text stays white and readable.' },
+    await look('sessions-new-hover-dark', { pointer: true, expect: 'The New bar in a dark theme with the pointer on New in tab: its blue is plainly darker than the button blue VS Code draws elsewhere, such as the chosen chip All under it; the white text on it is still easy to read.' },
       sl.locator('.sl-top'));
-    /* Not the default blue, so that the picture shows the setting took effect. */
+    /* Not the default blue, so that the picture shows the colour customization took effect. */
     const hex = '#7b3fbf';
     await setting('workbench.colorCustomizations', { 'button.background': hex, 'button.hoverBackground': hex });
     await sleep(1000);

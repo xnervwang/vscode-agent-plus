@@ -492,8 +492,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (!host.globalMemento) { schedule(0); return; }
     Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
   }
-  /* The agent a new conversation starts in unless one is named: chosenNew if it can start conversations, else the one
-     NEW_ORDER gives. */
   function newSourceOf(srcs) {
     const can = srcs.filter((x) => (x.create || []).length);
     if (can.some((x) => x.id === chosenNew)) return chosenNew;

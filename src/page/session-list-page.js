@@ -102,9 +102,10 @@
   }
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => fitNew()).observe(newBar);
   /*
-   * The default half's colour under the pointer. Where the theme's button hover colour is hard to tell from the button's
-   * own, as in VS Code's default themes or a theme that gives both the same, it is the button's colour mixed 18% with
-   * black, or with white under dark text, so that the text stays as readable.
+   * The colour under the pointer of the New bar's default half, the one drawn in the button colour. Where the theme's
+   * button hover colour is hard to tell from the button's own, as in VS Code's default themes or a theme that gives
+   * both the same, it is the button's colour mixed 18% with black, or with white under dark text, so that the text
+   * stays as readable.
    */
   const HOVER_MIN_RATIO = 1.3;
   function fitHover() {
@@ -270,7 +271,7 @@
     t.textContent = '';
     t.append(title.slice(0, at), el('mark', 'sl-mark', title.slice(at, at + q.length)), title.slice(at + q.length));
   }
-  /* A sub-agent's row moves with the row it is under. */
+  /* A sub-agent's rows move with the top-level row above them. */
   function heldOrder(list, rows) {
     const at = new Map([...list.children].map((r, i) => [r.dataset.key, i]));
     const blocks = [];
@@ -304,7 +305,8 @@
   let shownFront = '';
   let pendingGroupRename = '';
   let lastDetail = '';
-  /* Whether a model was drawn in an order other than its own while the rows held still. */
+  /* Set when a section was last drawn in the held order rather than the model's, so that letting go has something to
+     redraw. */
   let held = false;
   const still = () => body.matches(':hover') || !!cm || (!!hl && document.hasFocus() && root.contains(document.activeElement));
   function letRowsMove() {
@@ -572,8 +574,8 @@
     return null;
   }
   const SUB_UNCOVERED = 48;
-  /* The left edge of a submenu laid over part of its menu against the window's right edge, so that the start of the
-     item, where its label is, stays in view; null when that leaves less than SUB_UNCOVERED pixels of it. */
+  /* The left edge of a submenu laid over part of its menu against the window's right edge, so that the item's label, at
+     its start, stays in view; null when that leaves less than SUB_UNCOVERED pixels of the item. */
   function subOver(at, w) {
     const left = Math.max(EDGE, window.innerWidth - EDGE - w);
     return left - at.left >= SUB_UNCOVERED ? left : null;
@@ -625,7 +627,7 @@
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
   /* The pointer moved off a submenu or its item to somewhere outside both: the submenu closes after SUB_CLOSE_MS unless
-     the pointer comes back first. A submenu that took the menu's place is left open. */
+     the pointer comes back first. A submenu that took the menu's place (see openSub below) is left open. */
   function leaveSub(e, i) {
     if (!cm || !cm.sub || cm.subAt !== i || cm.subInPlace) return;
     const to = e.relatedTarget;
@@ -634,11 +636,11 @@
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
   /*
-   * Opens item i's submenu beside it; resting the pointer on the item opens it, as do the keys and a click. Where the
-   * list is too narrow for that, the submenu is laid over part of the menu, leaving the start of the item in view.
-   * Where even that does not fit, it takes the menu's place, under a first line naming the item that goes back to the
-   * menu; it then opens only on a click or a key, since one opened by the pointer passing over the item would cover the
-   * rest of the menu.
+   * Opens item i's submenu beside it; resting the pointer on the item opens it, as do the right arrow key, Enter, Space
+   * and a click. Where the list is too narrow for that, the submenu is laid over part of the menu, leaving the start of
+   * the item in view. Where even that does not fit, it takes the menu's place, under a first line naming the item that
+   * goes back to the menu; it then opens only on a click or a key, since one opened by the pointer passing over the
+   * item would cover the rest of the menu.
    */
   function openSub(i, focus, byPointer = false) {
     stopTimer();
@@ -750,8 +752,8 @@
     const keys = keysFor(r);
     const items = itemsFor(r._row.ctx || {}, keys);
     if (!items.length) return false;
-    /* Delete... left out of an archived row's menu goes to the output channel with the reason this page was given, so
-       that a missing one can be told apart from a stale one afterwards. */
+    /* Delete... left out of an archived row's menu goes to the Agent Plus output channel with the reason this page was
+       given, so that a missing one can be told apart from a stale one afterwards. */
     if (!items.some((it) => it.name === 'delete')) {
       const left = keys.map((k) => rowsOf(k)[0]).filter((x) => x && x._row && x._row.archived).map((x) => ({ key: x._row.key, why: x._row.deleteWhy || '' }));
       if (left.length) send({ kind: 'noDelete', rows: left });

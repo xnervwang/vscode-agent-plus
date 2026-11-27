@@ -563,7 +563,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh({ relist: true });
     eq(order(), ['Quiet', 'Runs', 'Background'], 'a row that starts running is placed by the message it started with');
     eq(list.model().sections.find((x) => x.key === 'ungrouped').rows.find((r) => r.title === 'Background').time, '4m',
-      'and the time on a row is still that of its last message');
+      'the time shown on a row is still that of its last message');
     list.dispose();
   }
 
@@ -592,7 +592,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await list.refresh();
     eq([list.model().newSource, list.model().newWhere], ['claude-code', 'sidebar'],
-      'whichever agent was used last, the New bar starts with Claude Code, in the half picked last');
+      'even after another agent was used, the New bar starts with Claude Code, in the half picked last');
     list.chooseNew('codex', 'tab');
     await list.refresh();
     eq([list.model().newSource, list.model().newWhere, t.host.globalMemento.get(L.LAST_NEW_KEY)], ['codex', 'tab', { where: 'tab' }],

@@ -6,8 +6,8 @@
 /*
  * The shared Python that reads what Claude Code Plus writes for a supervisor, run from a copy laid out as Claude Code
  * Plus ships it (hooks/ and skills/<name>/SKILL.md). The first line of a relayed message and a notice say "supervisor"
- * or, from older builds, "steward", and a transcript can hold both, so each reader takes either; the skill may sit
- * under either folder name.
+ * or "steward", and a transcript can hold both, so each reader takes either; the skill may sit under either folder
+ * name.
  */
 const cp = require('child_process');
 const crypto = require('crypto');
@@ -70,7 +70,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const by = ` (sent by the supervisor "Lead" (${LEAD}), not typed by the user there):`;
     eq([out.includes('Fix the build.'), /notice from Claude Code Plus/.test(out), out.split(by).length - 1, out.includes('(sent by the steward')],
       [true, false, 2, false],
-      '--said leaves out notices that begin with either word, and marks messages signed with either word as sent by the supervisor');
+      '--said leaves out notices whether they begin "Supervisor notice" or "Steward notice", and marks a message signed "supervisor" or "steward" as sent by the supervisor');
   }
 
   {

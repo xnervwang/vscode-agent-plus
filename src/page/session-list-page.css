@@ -7,8 +7,8 @@
    band of the theme's section header colour with a line above and below, to set the sections apart at a glance. Colours
    come from VS Code theme variables, except the five status dots, which keep fixed colours so that they look the same
    in every theme, and the blue of a conversation open in this window (--sl-here): one shade for each kind of theme,
-   each deeper than the blue dot of a waiting dialog. The row in front is tinted with it, which sets it apart from the
-   grey section bands. */
+   each deeper than the blue dot of a waiting dialog. The row in front is tinted with it, so it stands out from the grey
+   section bands. */
 html, body { margin: 0; padding: 0; height: 100%; }
 body { --sl-here: #2563eb; }
 body.vscode-light { --sl-here: #1d4ed8; }

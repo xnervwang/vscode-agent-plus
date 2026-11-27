@@ -105,12 +105,12 @@ Leave out conversations that are idle with no work, have only questions waiting 
 Each message makes a conversation run a whole turn and read its whole context again.
 
 When the user asks you to check on other conversations after the windows were reloaded, VS Code or the machine was
-restarted, or the computer slept, use your lists from before the event. Send the message only to conversations those
-lists showed were working, running a command, or running a task or process in the background.
+restarted, or the computer slept, use the last list you got before the event. Send the check-in only to conversations
+that list showed were working, running a command, or running a task or process in the background.
 
 In this case, a work plan row in progress does not count as work on its own. The user often pauses a conversation on
-purpose with a row still in progress, and a message would start it again. Include the number of conversations you left
-out in the line where you say what you sent and to whom.
+purpose with a row still in progress, and a message would start it again. Say how many you left out in the same line
+that says what you sent and to whom.
 
 Pass things on this way whenever you want a conversation to do something, and whenever the message carries an
 approval. To find out how a conversation is doing, read it with steward-peek.py first (below). If that does not answer
