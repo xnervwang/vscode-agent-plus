@@ -158,8 +158,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const queues = new Map();
   /* key -> the time a running row sorts by (see the top of this file). */
   const runFrom = new Map();
-  /* The agent picked in the New bar's menu. It applies to the next new conversation in this window and is cleared once
-     one starts. */
   let chosenNew = '';
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
@@ -478,7 +476,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const res = await runAction(e, 'create', [], { where: at });
     const made = res.find((x) => x.outcome === 'done');
     if (!made) { warn(`No new conversation: ${(res[0] && res[0].reason) || 'the agent did not start one'}`); return 'failed'; }
-    chosenNew = '';
     if (groupId) {
       if (made.sessionId) store.setGroup([[sourceId, made.sessionId]], groupId);
       else pendingGroup = { sourceId, groupId, at: now() };
