@@ -2022,7 +2022,26 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slClose();
     await sideBarWidth(230);
     await showSessions('agentPlus.sessions');
+    /* A menu can open with its first item under the pointer that right-clicked, which then rests there. The events a
+       browser sends to an element that appears under a still pointer are sent to Text Color from the right-click's own
+       point; they do not open its submenu over the rest of the menu. */
+    await sl.evaluate(() => {
+      window.__ctxAt = null;
+      document.addEventListener('contextmenu', (e) => { window.__ctxAt = { x: e.clientX, y: e.clientY }; }, { capture: true, once: true });
+    });
     await menuOn(SLT.quiet);
+    const resting = await sl.evaluate(async () => {
+      const at = window.__ctxAt;
+      const b = [...document.querySelectorAll('.sl-ctx:not(.sl-ctx-sub) .sl-ctx-item')].find((x) => x.textContent.includes('Text Color'));
+      if (!at || !b) return { ready: false, at: !!at, item: !!b };
+      const o = { clientX: at.x, clientY: at.y };
+      b.dispatchEvent(new MouseEvent('mouseover', Object.assign({ bubbles: true }, o)));
+      b.dispatchEvent(new MouseEvent('mouseenter', o));
+      b.dispatchEvent(new MouseEvent('mousemove', Object.assign({ bubbles: true }, o)));
+      await new Promise((r) => setTimeout(r, 700));
+      return { ready: true, sub: !!document.querySelector('.sl-ctx-sub') };
+    });
+    check(resting.ready && !resting.sub, 'in a narrow side bar, Text Color under a pointer that has not moved since the right-click opens no submenu', resting);
     await slItem('Text Color').hover(START);
     const narrow = await until(async () => { const p = await placed(); return p && p; }, 3000, 100);
     check(!!narrow && !narrow.inPlace && (!narrow.covers || narrow.uncovered >= 40), 'in a narrow side bar, resting the pointer on Text Color opens its submenu too, laid over the menu but clear of the start of Text Color', narrow);

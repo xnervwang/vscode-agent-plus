@@ -520,6 +520,8 @@
    */
   const EDGE = 8;
   const SUB_CLOSE_MS = 150;
+  /* How long the pointer rests on an item before its submenu opens, so that passing over it opens nothing. */
+  const SUB_OPEN_MS = 250;
   let cm = null;
   let swallowClick = false;
   const inCtx = (t) => !!(cm && t && t.closest && t.closest('.sl-ctx'));
@@ -612,23 +614,44 @@
     const { box, buttons } = menuBox(items, false);
     buttons.forEach((b, i) => { b.addEventListener('mouseenter', () => hoverItem(i)); b.addEventListener('mouseleave', (e) => leaveSub(e, i)); });
     box.addEventListener('scroll', () => closeSub(false));
+    /* A menu opened by a right-click appears under a pointer that has not moved, and the item there must not open its
+       submenu over the rest of the menu: only a pointer that has moved since the menu opened opens one. */
+    box.addEventListener('mousemove', (e) => {
+      if (!cm || cm.box !== box || cm.moved || Math.abs(e.clientX - cm.x) + Math.abs(e.clientY - cm.y) < 4) return;
+      cm.moved = true;
+      const i = cm.buttons.indexOf(e.target.closest && e.target.closest('.sl-ctx-item'));
+      if (i >= 0) hoverItem(i);
+    });
     root.appendChild(box);
-    cm = { box, buttons, items, run, rebuild, back: document.activeElement || null, sub: null, subButtons: [], subAt: -1, timer: 0, x, y };
+    cm = { box, buttons, items, run, rebuild, back: document.activeElement || null, sub: null, subButtons: [], subAt: -1, timer: 0, x, y,
+      moved: false, opening: -1, openTimer: 0 };
     box.style.left = `${mainLeft(x, box.offsetWidth, items.some((it) => it.submenu))}px`;
     box.style.top = `${fitTop(y, box.offsetHeight)}px`;
     if (buttons[0]) buttons[0].focus();
   }
   const stopTimer = () => { if (cm && cm.timer) { clearTimeout(cm.timer); cm.timer = 0; } };
+  /* Drops a submenu waiting for the pointer to rest on its item. */
+  const stopOpen = () => { if (cm && cm.openTimer) { clearTimeout(cm.openTimer); cm.openTimer = 0; } if (cm) cm.opening = -1; };
+  const closeSoon = () => { stopTimer(); cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS); };
   function hoverItem(i) {
     if (!cm) return;
-    if (cm.items[i].submenu) { openSub(i, false, true); return; }
+    if (cm.items[i].submenu) {
+      if (cm.subAt === i) { stopTimer(); stopOpen(); return; }
+      if (cm.sub && !cm.subInPlace) closeSoon();
+      if (!cm.moved) return;
+      stopOpen();
+      cm.opening = i;
+      cm.openTimer = setTimeout(() => { if (cm && cm.opening === i) { cm.openTimer = 0; cm.opening = -1; openSub(i, false, true); } }, SUB_OPEN_MS);
+      return;
+    }
+    stopOpen();
     if (!cm.sub) return;
-    stopTimer();
-    cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
+    closeSoon();
   }
   /* The pointer moved off a submenu or its item to somewhere outside both: the submenu closes after SUB_CLOSE_MS unless
      the pointer comes back first. A submenu that took the menu's place (see openSub below) is left open. */
   function leaveSub(e, i) {
+    if (cm && cm.opening === i) stopOpen();
     if (!cm || !cm.sub || cm.subAt !== i || cm.subInPlace) return;
     const to = e.relatedTarget;
     if (to && (cm.sub.contains(to) || cm.buttons[i].contains(to))) return;
@@ -636,14 +659,15 @@
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
   /*
-   * Opens item i's submenu beside it; resting the pointer on the item opens it, as do the right arrow key, Enter, Space
-   * and a click. Where the list is too narrow for that, the submenu is laid over part of the menu, leaving the start of
-   * the item in view. Where even that does not fit, it takes the menu's place, under a first line naming the item that
-   * goes back to the menu; it then opens only on a click or a key, since one opened by the pointer passing over the
-   * item would cover the rest of the menu.
+   * Opens item i's submenu beside it; resting the pointer on the item for SUB_OPEN_MS opens it, as do the right arrow
+   * key, Enter, Space and a click. Where the list is too narrow for that, the submenu is laid over part of the menu,
+   * leaving the start of the item in view. Where even that does not fit, it takes the menu's place, under a first line
+   * naming the item that goes back to the menu; it then opens only on a click or a key, since one opened by the pointer
+   * passing over the item would cover the rest of the menu.
    */
   function openSub(i, focus, byPointer = false) {
     stopTimer();
+    stopOpen();
     if (cm.subAt !== i) {
       if (byPointer && cm.inPlace && cm.inPlace.has(i)) { closeSub(false); return; }
       closeSub(false);
@@ -693,6 +717,7 @@
     if (!cm) return;
     const was = cm;
     stopTimer();
+    stopOpen();
     const a = document.activeElement;
     const had = !a || a === document.body || was.box.contains(a) || (!!was.sub && was.sub.contains(a));
     if (was.sub) was.sub.remove();
