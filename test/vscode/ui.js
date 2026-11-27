@@ -1552,6 +1552,37 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await page.mouse.move(5, 5);
   });
 
+  /* A conversation that only shows() finds can be in a sidebar or in a tab behind another one, which the source's
+     sessionForTab could not match, so the hover names the sidebar only when the source's shownIn says so. */
+  await step('sessions-place', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    /* The hover box is filled when the pointer comes onto the row, so each try leaves the row and comes back. */
+    const placeSaid = async (place, want) => {
+      await src('return src.showIn(arg[0], arg[1], arg[2]);', ['opencode', ['oc-1'], place]);
+      if (!await slWait((r) => (slFind(r, SLT.oc) || {}).stripe === 'here')) return null;
+      let last = '';
+      const got = await until(async () => {
+        await page.mouse.move(5, 5);
+        await sleep(200);
+        await slRowLoc(SLT.oc).hover();
+        last = await until(async () => { const t = await slHover(); return /Open in this window/.test(t) && t; }, 2000, 100) || '';
+        return want(last) && last;
+      }, 10000, 300);
+      return got || last;
+    };
+    const plain = (t) => /Open in this window/.test(t) && !/in the sidebar/.test(t);
+    const none = await placeSaid({}, plain);
+    check(plain(none || ''), 'a conversation its source shows() without saying where gets the solid stripe, and its hover says Open in this window and no place', none || await slHover());
+    const side = await placeSaid({ 'oc-1': 'sidebar' }, (t) => /Open in this window, in the sidebar/.test(t));
+    check(/Open in this window, in the sidebar/.test(side || ''), 'with shownIn answering sidebar, the hover says Open in this window, in the sidebar', side || await slHover());
+    const tab = await placeSaid({ 'oc-1': 'tab' }, plain);
+    check(plain(tab || ''), 'and with it answering tab, for a tab sessionForTab could not match, the hover names no sidebar', tab || await slHover());
+    await page.mouse.move(5, 5);
+    await src('return src.showIn(arg[0], arg[1], arg[2]);', ['opencode', [], {}]);
+    check(!!await slWait((r) => (slFind(r, SLT.oc) || {}).stripe !== 'here'), 'once the source no longer shows it, the row is not open here');
+  });
+
   await step('sessions-actions', async () => {
     needs('sessions-rows');
     otherWindow(['sl-other']);

@@ -154,6 +154,9 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       [['Alpha', 'Asks', 'Beta', 'Dialog', 'Other agent'], { all: 5, open: 2, running: 1, needs: 2 }, 'here', 'here', 'blue', 'red', 'green'],
       'rows of every source in one list, background and empty ones hidden, a tab or a sidebar here drawn as open here, with their dots and counts');
     eq(byTitle(m, 'Other agent').stripe, '', 'only a source that lists the shows feature is asked whether its sidebar shows a conversation');
+    const placeLine = (mm, title) => byTitle(mm, title).hover.split('\n').filter((l) => l.startsWith('Open in this window'));
+    eq([placeLine(m, 'Alpha'), placeLine(m, 'Beta')], [['Open in this window'], ['Open in this window']],
+      'the hover says a conversation is open in this window, and names no place for one found by shows() alone: a tab behind another can be one');
     const flags = (t) => { const r = byTitle(m, t); return [r.runs, r.needs]; };
     eq([flags('Beta'), flags('Dialog'), flags('Asks'), flags('Alpha')], [[true, false], [false, true], [false, true], [false, false]],
       'each row says whether it runs and whether it needs the user, which the page\'s chips filter by');
@@ -232,6 +235,35 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     await list.reopenLast();
     eq(oc.calls.pop(), ['open', ['ses_aaaaaaaaaaaaaaaaaaaaaaaaaa'], { where: 'sidebar' }], 'a source that reports a closing says where it was shown, and the list reopens it there');
+    list.dispose();
+  }
+
+  /* ── Where a conversation found by shows() is ── */
+  {
+    const t = setup();
+    const codex = source('codex', [conv('a', { title: 'In the sidebar' }), conv('b', { title: 'Behind a tab' }), conv('c', { title: 'Not said' })],
+      { features: ['sessions', 'sessionImport', 'sessionSeen', 'shows', 'shownIn'], caps: { open: ['sidebar', 'tab'], create: ['tab'], rename: true, delete: true, own: [] } });
+    const place = { a: 'sidebar', b: 'tab', c: 'somewhere' };
+    codex.shownIn = (x) => place[x];
+    for (const x of ['a', 'b', 'c']) codex.sidebar.add(x);
+    t.entries.push({ id: 'codex', source: codex });
+    const list = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
+    t.control.setTabs([{ label: 'x', input: {} }], 0);
+    await list.refresh();
+    const byTitle = (mm, title) => mm.sections.flatMap((s) => s.rows).find((r) => r.title === title);
+    const placeLine = (title) => byTitle(list.model(), title).hover.split('\n').filter((l) => l.startsWith('Open in this window'));
+    eq([placeLine('In the sidebar'), placeLine('Behind a tab'), placeLine('Not said')],
+      [['Open in this window, in the sidebar'], ['Open in this window'], ['Open in this window']],
+      'a source that lists shownIn names the place: the hover says in the sidebar only when it answers sidebar');
+    const reopened = [];
+    for (const x of ['a', 'b', 'c']) {
+      codex.sidebar.delete(x);
+      clock += 1000;
+      await list.refresh();
+      await list.reopenLast();
+      reopened.push(codex.calls.pop()[2].where);
+    }
+    eq(reopened, ['sidebar', 'tab', 'sidebar'], 'once closed, each reopens where shownIn said it was, and one with no place where its source opens first');
     list.dispose();
   }
 

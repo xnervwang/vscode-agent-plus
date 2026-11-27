@@ -169,11 +169,11 @@ function activate(context) {
   const thirdList = new Map();
   const thirdChanged = new vscode.EventEmitter();
   context.subscriptions.push(thirdChanged);
-  const otherState = { calls: [], sidebar: [], imported: null }, thirdState = { calls: [], sidebar: [], imported: null };
+  const otherState = { calls: [], sidebar: [], place: {}, imported: null }, thirdState = { calls: [], sidebar: [], place: {}, imported: null };
   /* A source with no tabs of its own: what it is asked to do is recorded, and a conversation opened in the sidebar counts
-     as shown there. */
+     as shown there. shownIn answers what the test put in `place`, nothing by default. */
   const sessionsSource = (id, label, logo, m, ev, st, more) => Object.assign({
-    protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows'],
+    protocol: 1, id, label, extensionId: `xnervwang.${id}-plus`, features: ['sessions', 'sessionImport', 'shows', 'shownIn'],
     logo: { light: vscode.Uri.file(path.join(__dirname, logo)), dark: vscode.Uri.file(path.join(__dirname, logo)) },
     planDir: () => plans,
     listSessions: async () => ({ sessions: [...m.values()].map((c) => Object.assign(sessionDefaults(c), c)), cursor: null }),
@@ -189,6 +189,7 @@ function activate(context) {
       return { results: ids.map((x) => ({ sessionId: x, outcome: 'done' })) };
     },
     shows: (x) => st.sidebar.includes(x),
+    shownIn: (x) => st.place[x],
   }, more);
 
   return {
@@ -251,6 +252,14 @@ function activate(context) {
       return true;
     },
     otherState: (which) => (which === 'opencode' ? thirdState : otherState),
+    /* Says the tabless source's sidebar shows these conversations, and what its shownIn answers for each. */
+    showIn(which, ids, place) {
+      const [st, ev] = which === 'opencode' ? [thirdState, thirdChanged] : [otherState, otherChanged];
+      st.sidebar = ids.slice();
+      st.place = Object.assign({}, place || {});
+      ev.fire();
+      return true;
+    },
   };
 }
 

@@ -83,7 +83,7 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | Member | Meaning |
 | --- | --- |
 | `protocol` | `1` |
-| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation. The core calls `shows` and `openHere` (rows below) only if the source lists the corresponding name here. The core listens to the source's `onDidChangeStewards` if the source lists `'stewards'` or `'stewardList'`. |
+| `features` | Optional capability names the source implements. `'brief'`: its conversations keep a brief in their plans (see Plan files), so clicking a conversation's row shows it in the Answer view instead of going to the conversation. The core calls `shows`, `shownIn` and `openHere` (rows below) only if the source lists the corresponding name here. The core listens to the source's `onDidChangeStewards` if the source lists `'stewards'` or `'stewardList'`. |
 | `id` | Source id, such as `'codex'` or `'claude-code'` |
 | `label` | Shown in tooltips and in the work plan view's description |
 | `extensionId` | The extension that registered it, such as `'xnervwang.codex-plus'`; used for update notices |
@@ -103,7 +103,8 @@ Only `protocol` and `id` are required. A missing member, or one that throws when
 | `onDidChangePlanNotice` | `vscode.Event<void>` |
 | `timeZone()` | The reader's IANA time zone, when the source knows it |
 | `listAllConversations()` | `Promise<Conversation[]>`, the same shape as `listConversations()`, covering every conversation on this machine rather than this window's, with states every window agrees on. A call must not report a state older than one an earlier call reported: the core merges every window's report and a `waiting` one outranks the rest, so a wait reported after it ended keeps the conversation waiting in every window, and its next wait is not announced. Read for notifications and for `allConversations()` only; without it the core reads `listConversations()` |
-| `shows(sessionId)` | Whether this window shows that conversation where `sessionForTab` cannot see it, such as a sidebar (see Opening) |
+| `shows(sessionId)` | Whether this window shows that conversation where `sessionForTab` cannot see it, such as a sidebar (see Opening). `true` says only that it is shown here: the session list's hover then says Open in this window without a place, and once it is closed it reopens where the source opens first |
+| `shownIn(sessionId)` | Where a conversation `shows` answered `true` for is: `'sidebar'`, or `'tab'` for a tab `sessionForTab` could not match; anything else is no place. The session list's hover says Open in this window, in the sidebar only for `'sidebar'`, and a closed conversation reopens at the place given |
 | `openHere(sessionId, row)` | `Promise<boolean>`: open the conversation in this window, after no window took the request and the user picked Open it here (see Notifications, Opening) |
 | `open(sessionId, row)` | `Promise<'here'\|'sent'\|'nowhere'>`: bring the conversation to the front in whichever window shows it, and that window with it. Without it the core does this itself through `reveal` in each window (see Notifications) |
 | `stewardOf(sourceId, sessionId)` | With `'stewards'`: this source's answer for the core's `stewardOf()` about that conversation, `{ sourceId, sessionId }` or `null`. Asked about a conversation of any source, and the steward may belong to another source. Synchronous |

@@ -159,6 +159,12 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
    * be in front while this one is the active tab, whatever a source still says. With no conversation tab active, the
    * one a source says is focused.
    */
+  /* Where a conversation found by shows() is: what the source's shownIn says, or '' when it does not say. shows() alone
+     does not tell a sidebar from a tab that sessionForTab could not match, such as one behind another tab. */
+  const placeOf = (shownIn, id) => {
+    if (!shownIn) return '';
+    try { const p = shownIn(id); return p === 'sidebar' || p === 'tab' ? p : ''; } catch (_) { return ''; }
+  };
   function lookNow() {
     const here = new Set(), where = new Map();
     let front = '', tabFront = null;
@@ -173,10 +179,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         if (g === active && t.isActive && !front) { front = k; tabFront = { e, id }; }
       }
       const list = lists.get(e.id);
-      const shows = sources.optional(e.source, 'shows');
+      const shows = sources.optional(e.source, 'shows'), shownIn = sources.optional(e.source, 'shownIn');
       for (const s of (list && list.sessions) || []) {
         const k = keyOf(e.id, s.sessionId);
-        if (shows && !here.has(k)) { try { if (shows(s.sessionId) === true) { here.add(k); where.set(k, 'sidebar'); } } catch (_) { /* not shown */ } }
+        if (shows && !here.has(k)) { try { if (shows(s.sessionId) === true) { here.add(k); where.set(k, placeOf(shownIn, s.sessionId)); } } catch (_) { /* not shown */ } }
         if (!front && sources.call(e.source, 'isFocused', [s.sessionId], false) === true) front = k;
       }
     }
@@ -189,13 +195,13 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return { here, front, where };
   }
 
-  /* Closed here: shown at the last look and not now, at the place it was shown; or as a source that reports its closings
-     (onDidCloseSession) says. */
+  /* Closed here: shown at the last look and not now, at the place it was shown ('' when that was not known, and it then
+     reopens where its source opens first); or as a source that reports its closings (onDidCloseSession) says. */
   function remember(gone, whereOf) {
     if (!gone.length) return;
     const list = (host.memento && host.memento.get(CLOSED_KEY)) || [];
     const at = now();
-    const add = gone.map((k) => { const r = rows.get(k); const [s, id] = JSON.parse(k); return { k, s, id, title: r ? r.title : '', where: whereOf(k) || 'tab', at }; });
+    const add = gone.map((k) => { const r = rows.get(k); const [s, id] = JSON.parse(k); return { k, s, id, title: r ? r.title : '', where: whereOf(k) || '', at }; });
     const keep = add.concat(list.filter((c) => !gone.includes(c.k))).slice(0, CLOSED_KEEP);
     if (host.memento) Promise.resolve(host.memento.update(CLOSED_KEY, keep)).catch(() => {});
     if (host.closed) { try { host.closed(gone); } catch (_) { /* a failing host callback is ignored */ } }
