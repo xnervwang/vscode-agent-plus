@@ -49,8 +49,8 @@ module.exports = async ({ ok, bad, eq, root }) => {
   /* VS Code puts an extension's activity bar containers in the order package.json lists them. */
   eq(pkg.contributes.viewsContainers.activitybar.map((c) => c.id), ['agentPlusSessions', 'agentPlus'],
     'the session list\'s container comes first in the activity bar, above the Work plan\'s');
-  /* A container holding one view titles the side bar with the container's title alone only when the view's name is the
-     same; otherwise it reads "<container>: <view>". */
+  /* When a container holds one view, the side bar's title is "<container>: <view>", unless the two names are the same
+     and it shows the name once. */
   eq([pkg.contributes.viewsContainers.activitybar[0].title, pkg.contributes.views.agentPlusSessions.map((v) => v.name), pkg.contributes.viewsContainers.panel[0].title],
     ['Agent Plus - Conversations', ['Agent Plus - Conversations'], 'Conversations'],
     'the session list\'s container and its one view are both titled Agent Plus - Conversations, so the side bar and the activity bar\'s hover say it once; the panel\'s container stays Conversations');

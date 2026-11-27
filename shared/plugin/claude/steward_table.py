@@ -172,7 +172,7 @@ def stewards_of(table, sid):
 
 
 # The first line that fromLine in src/stewards.js puts on a steward's message. Builds of Claude Code Plus write either
-# "supervisor" or "steward" there, and transcripts keep lines of both, so both are read, in any case.
+# "supervisor" or "steward" there, and transcripts keep lines of both.
 FROM = re.compile(r'^Sent by the (?:supervisor|steward) (?:"(.*)" )?\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)'
                   r' for the user:[ \t]*$', re.IGNORECASE)
 

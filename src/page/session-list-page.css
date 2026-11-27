@@ -6,9 +6,9 @@
    Code's: 28 px rows with 6 px corners, 26 px section headers, capitals for section labels. Each section header has a
    band of the theme's section header colour with a line above and below, to set the sections apart at a glance. Colours
    come from VS Code theme variables, except the five status dots, which keep fixed colours so that they look the same
-   in every theme, and the blue of a conversation open in this window (--sl-here), which is a deeper blue than the
-   dot of a dialog waiting, picked for each kind of theme. The row in front is tinted with it, which sets it apart from
-   the grey section bands. */
+   in every theme, and the blue of a conversation open in this window (--sl-here): one shade for each kind of theme,
+   each deeper than the blue dot of a waiting dialog. The row in front is tinted with it, which sets it apart from the
+   grey section bands. */
 html, body { margin: 0; padding: 0; height: 100%; }
 body { --sl-here: #2563eb; }
 body.vscode-light { --sl-here: #1d4ed8; }
@@ -48,7 +48,7 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-new-half:disabled { opacity: .45; cursor: default; }
 .sl-new-agent:focus-visible, .sl-new-half:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 
-/* The filter chips, with their counts: grey, and the one chosen in the button colour. */
+/* The filter chips, with their counts: grey, except the chosen one in the button colour. */
 .sl-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .sl-chip {
   display: flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: .9em;
@@ -111,7 +111,7 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-open > .sl-accounts { display: flex; flex-direction: column; gap: 10px; padding: 8px 12px 10px; }
 .sl-empty-group.sl-open > .sl-list::after { content: 'Drag conversations here'; padding: 4px 12px; opacity: .55; font-size: .9em; }
 
-/* ACCOUNT & USAGE: one block per agent, with a line between two blocks. */
+/* ACCOUNT & USAGE: one block per agent. */
 .sl-acct { display: flex; flex-direction: column; gap: 3px; }
 .sl-acct + .sl-acct { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 18%, transparent); }
 .sl-acct-head { display: flex; align-items: center; gap: 6px; }
@@ -143,13 +143,12 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
   background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 55%, transparent);
   outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder)); outline-offset: -1px;
 }
-/* The stripe at the start of a row: a solid blue bar for open here, an outlined one of the same blue for open somewhere
-   else, and a solid grey one for closed here lately. */
+/* The stripe at the start of a row: open here, open somewhere else, or closed here lately. */
 .sl-stripe { flex: none; width: 4px; height: 16px; border-radius: 2px; box-sizing: border-box; margin-right: 2px; }
 .sl-stripe.s-here { background: var(--sl-here); }
 .sl-stripe.s-elsewhere { border: 1.5px solid var(--sl-here); }
 .sl-stripe.s-closed { background: color-mix(in srgb, var(--vscode-foreground) 45%, transparent); }
-/* A row open in a terminal or another program does not open from here: clicking it only says where it is. */
+/* Clicking a row that a terminal or another program has open only says where it is. */
 .sl-row[data-away="terminal"] { cursor: not-allowed; }
 .sl-logo { position: relative; flex: none; width: 16px; height: 16px; }
 .sl-dot { position: absolute; top: -3px; right: -4px; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; }

@@ -53,7 +53,7 @@ TITLE_CHARS = 80
 STATE_WORDS = {"busy": "working", "shell": "running a command", "waiting": "waiting for the user", "idle": "idle"}
 STOPPED = "not running"
 RELAY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "steward-relay.py")
-# The skill folder's name is the skill's name, and a plugin may ship the skill under either of these.
+# A skill is named after its folder, and a plugin may ship this one under either name.
 SKILLS = [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", name, "SKILL.md")
           for name in ("supervisor", "steward")]
 SKILL_CHANGED = ("The supervisor skill has changed since your previous turn (it is now version %s): load it again with the "
@@ -189,7 +189,7 @@ def lines_of(ids, names, now, directory, paths=None):
 
 
 def skill_version():
-    """The first 8 hex digits of the SHA-1 of the first of SKILLS that can be read, or '' when none can."""
+    """The first 8 hex digits of the SHA-1 of the first readable file in SKILLS, or '' when none can be read."""
     for path in SKILLS:
         try:
             with open(path, "rb") as fh:

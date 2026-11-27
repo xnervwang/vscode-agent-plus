@@ -263,7 +263,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── Delete... left out of an archived row's menu, said on the output channel ── */
+  /* ── The output channel line for an archived row's menu left without Delete... ── */
   {
     const t = setup();
     const said = [];
@@ -539,7 +539,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── The order of rows that run ── */
+  /* ── Sorting rows that run ── */
   {
     const t = setup();
     const codex = source('codex', [conv('q', { title: 'Quiet', lastActiveAt: now0 - 300e3 }),
@@ -567,7 +567,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     list.dispose();
   }
 
-  /* ── The agent a new conversation starts in ── */
+  /* ── Which agent the New bar starts with ── */
   {
     const firstOf = async (ids, noCreate = []) => {
       const t = setup();

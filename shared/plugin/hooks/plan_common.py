@@ -643,9 +643,9 @@ def turn_began(plan, payload):
     return float(began) if isinstance(began, (int, float)) and not isinstance(began, bool) else None
 
 
-# How a notice Claude Code Plus sends a steward conversation begins. Its builds write either form, and transcripts keep
-# both. Claude Code puts one of its lines for a message from another session before it, with or without a
-# cross-session-message tag.
+# The two ways a notice from Claude Code Plus to a steward conversation starts: the current one and the one older builds
+# wrote, as a transcript can hold both. Claude Code puts one of its lines for a message from another session before it,
+# with or without a cross-session-message tag.
 STEWARD_NOTICES = ("Supervisor notice from Claude Code Plus", "Steward notice from Claude Code Plus")
 PEER_LEAD = (r"(?:Another Claude session sent a message(?: while you were working)?"
              r"|A peer session sent a message while you were working):")

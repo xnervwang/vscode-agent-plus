@@ -18,7 +18,7 @@
  * While the pointer is on the sections, a menu of the list is open, or the arrow keys are on a row, the rows of each
  * section keep the order they are drawn in, so that a row does not move away from under a click; the model's order is
  * drawn once none of these holds, as when the pointer moves up to the New bar or out of the view. A row new to a
- * section still appears where the model puts it.
+ * section still appears where the model puts it, and pinned rows still come first.
  */
 (function () {
   'use strict';
@@ -270,11 +270,8 @@
     t.textContent = '';
     t.append(title.slice(0, at), el('mark', 'sl-mark', title.slice(at, at + q.length)), title.slice(at + q.length));
   }
-  /*
-   * The order to draw `rows` of a section in while rows hold still: the rows drawn already in the order they are drawn
-   * in, the pinned ones first as the model has them, and each new row at its place in the model's order. A sub-agent's
-   * row moves with the row it is under.
-   */
+  /* The order to draw `rows` of a section in while rows hold still (see the top of this file). A sub-agent's row moves
+     with the row it is under. */
   function heldOrder(list, rows) {
     const at = new Map([...list.children].map((r, i) => [r.dataset.key, i]));
     const blocks = [];
@@ -575,7 +572,7 @@
     if (at.left - w + 2 >= EDGE) return at.left - w + 2;
     return null;
   }
-  /* How much of the start of its item, at least, a submenu laid over its menu leaves in view. */
+  /* The least width, in pixels, of an item's start that a submenu laid over the menu must leave in view. */
   const SUB_UNCOVERED = 48;
   /* The left edge of a submenu laid over part of its menu against the window's right edge, so that the start of the
      item, where its label is, stays in view; null when that leaves less than SUB_UNCOVERED pixels of it. */
@@ -629,8 +626,8 @@
     stopTimer();
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
-  /* The pointer left a submenu or its item for somewhere that is neither: the submenu closes after SUB_CLOSE_MS, unless
-     the pointer comes back to one of them first. */
+  /* The pointer moved off a submenu or its item to somewhere outside both: the submenu closes after SUB_CLOSE_MS unless
+     the pointer comes back first. A submenu that took the menu's place is left open. */
   function leaveSub(e, i) {
     if (!cm || !cm.sub || cm.subAt !== i || cm.subInPlace) return;
     const to = e.relatedTarget;
@@ -639,11 +636,11 @@
     cm.timer = setTimeout(() => { if (cm) { cm.timer = 0; closeSub(false); } }, SUB_CLOSE_MS);
   }
   /*
-   * Opens item i's submenu beside it; the pointer opens it by resting on the item, as the keys and a click do. In a list
-   * too narrow for that, the submenu is laid over part of the menu, against the window's right edge, leaving the start
-   * of the item in view. In one too narrow even for that, the submenu takes the menu's place instead, under a first line naming
-   * the item that goes back to the menu; it then opens only on a click or a key, since one opened by the pointer passing
-   * over the item would cover the rest of the menu.
+   * Opens item i's submenu beside it; the pointer opens it by resting on the item, as the keys and a click do. Where
+   * the list is too narrow for that, the submenu is laid over part of the menu, against the window's right edge,
+   * leaving the start of the item in view. Where even that does not fit, it takes the menu's place, under a first line
+   * naming the item that goes back to the menu; it then opens only on a click or a key, since one opened by the pointer
+   * passing over the item would cover the rest of the menu.
    */
   function openSub(i, focus, byPointer = false) {
     stopTimer();

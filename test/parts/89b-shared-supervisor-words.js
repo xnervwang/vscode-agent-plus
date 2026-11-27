@@ -4,10 +4,10 @@
 
 'use strict';
 /*
- * The words Claude Code Plus writes for a supervisor and the shared Python reads back, laid out as Claude Code Plus
- * ships them (hooks/ and skills/<name>/SKILL.md). Its builds write "supervisor" or "steward" in the first line of a
- * relayed message and in a notice, and transcripts keep both, so each reader takes either, and the skill may sit under
- * either folder name.
+ * The shared Python that reads what Claude Code Plus writes for a supervisor, run from a copy laid out as Claude Code
+ * Plus ships it (hooks/ and skills/<name>/SKILL.md). The first line of a relayed message and a notice say "supervisor"
+ * or, from older builds, "steward", and a transcript can hold both, so each reader takes either; the skill may sit
+ * under either folder name.
  */
 const cp = require('child_process');
 const crypto = require('crypto');

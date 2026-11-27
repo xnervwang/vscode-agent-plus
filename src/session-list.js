@@ -50,8 +50,9 @@ const CLOSED_KEY = 'agentPlus.sessions.closed';
 const CLOSED_KEEP = 50;
 /* { where }: the half of the New bar picked last, 'tab' or 'sidebar'. */
 const LAST_NEW_KEY = 'agentPlus.sessions.lastNew';
-/* The agent the New bar starts with: the first of these whose source is registered, then any other source in the
-   registry's order. The ids are those Claude Code Plus, Codex Plus and OpenCode Agent Plus register. */
+/* The agent the New bar starts with: the first of these that is registered and can start conversations, then any other
+   source that can, in the registry's order. The ids are those Claude Code Plus, Codex Plus and OpenCode Agent Plus
+   register. */
 const NEW_ORDER = ['claude-code', 'codex', 'opencode-plus'];
 const KINDS = ['user', 'background', 'subagent', 'empty'];
 /* The theme colour of each title colour, as Claude Code Plus and Codex Plus draw them: VS Code has no chart colour for
@@ -485,8 +486,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return 'done';
   }
 
-  /* The agent picked in the New bar's menu, for the next conversation started, and the half of the bar picked last,
-     without starting a conversation. */
+  /* Keeps the agent picked in the New bar's menu and the half of the bar picked last, without starting a
+     conversation. */
   function chooseNew(sourceId, where) {
     if (!entryOf(sourceId)) return;
     chosenNew = sourceId;
@@ -494,8 +495,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
   }
   /* The agent a new conversation starts in unless one is named: the one picked in the New bar's menu since the last
-     conversation started, or else the first of NEW_ORDER that can start conversations, or else the first other source
-     that can. */
+     conversation started, if it can start conversations, or else the first of NEW_ORDER that can, or else the first
+     other source that can. */
   function newSourceOf(srcs) {
     const can = srcs.filter((x) => (x.create || []).length);
     if (can.some((x) => x.id === chosenNew)) return chosenNew;
