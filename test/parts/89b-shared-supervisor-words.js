@@ -104,7 +104,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
         + 'for you in the Supervisor panel; follow the supervisor skill.")]))',
     ].join('\n'));
     eq(got, [true, [LEAD, 'Lead'], true],
-      'a watched conversation is told of its supervisor with the first line it will see, which the reader takes, and a '
-      + 'supervisor is told it is one');
+      'the note to a watched conversation names its supervisor and gives the first line of its messages, which the reader '
+      + 'parses; the note to a supervisor says it is one');
   }
 };

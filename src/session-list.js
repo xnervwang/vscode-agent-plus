@@ -13,8 +13,8 @@
  * front, imports what each source's own list had the first time the list runs for a project, and archives and deletes
  * on its own once an hour in one window of the project at a time.
  *
- * A row that runs a turn or background work sorts by the lastActiveAt it had when the list first saw it run, so that
- * the messages of a run do not move it while it runs; once it stops it sorts by its lastActiveAt again.
+ * A row that runs a turn or background work sorts by the lastActiveAt it had when the list first saw it running, so its
+ * own messages do not move it until it stops; then it sorts by its lastActiveAt again.
  *
  * A source's list is read again when the source fires onDidChangeSessions, and every RELIST_MS besides. A source
  * whose list could not be read keeps its previous list, and the list says so above its rows; nothing of a source
@@ -50,9 +50,9 @@ const CLOSED_KEY = 'agentPlus.sessions.closed';
 const CLOSED_KEEP = 50;
 /* { where }: the half of the New bar picked last, 'tab' or 'sidebar'. */
 const LAST_NEW_KEY = 'agentPlus.sessions.lastNew';
-/* The agent the New bar starts with: the first of these that is registered and can start conversations, then any other
-   source that can, in the registry's order. The ids are those Claude Code Plus, Codex Plus and OpenCode Agent Plus
-   register. */
+/* The agent the New bar starts with when none is picked in its menu: the first of these that is registered and can
+   start conversations, then any other source that can, in the registry's order. The ids are those Claude Code Plus,
+   Codex Plus and OpenCode Agent Plus register. */
 const NEW_ORDER = ['claude-code', 'codex', 'opencode-plus'];
 const KINDS = ['user', 'background', 'subagent', 'empty'];
 /* The theme colour of each title colour, as Claude Code Plus and Codex Plus draw them: VS Code has no chart colour for
@@ -156,7 +156,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   let pendingGroup = null;
   let elsewhereByKey = new Map();
   const queues = new Map();
-  /* key -> the lastActiveAt of a running row when the list first saw it run. */
+  /* key -> the time a running row sorts by (see the top of this file). */
   const runFrom = new Map();
   /* The agent picked in the New bar's menu, for the next conversation started in this window; starting one clears it. */
   let chosenNew = '';
@@ -486,17 +486,14 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return 'done';
   }
 
-  /* Keeps the agent picked in the New bar's menu and the half of the bar picked last, without starting a
-     conversation. */
   function chooseNew(sourceId, where) {
     if (!entryOf(sourceId)) return;
     chosenNew = sourceId;
     if (!host.globalMemento) { schedule(0); return; }
     Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
   }
-  /* The agent a new conversation starts in unless one is named: the one picked in the New bar's menu since the last
-     conversation started, if it can start conversations, or else the first of NEW_ORDER that can, or else the first
-     other source that can. */
+  /* The agent a new conversation starts in unless one is named: chosenNew if it can start conversations, else the first
+     of NEW_ORDER that can, else the first other source that can. */
   function newSourceOf(srcs) {
     const can = srcs.filter((x) => (x.create || []).length);
     if (can.some((x) => x.id === chosenNew)) return chosenNew;
@@ -851,8 +848,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       else if (groupKey.startsWith('group:') && store.groupKnown(groupKey.slice(6))) store.setGroup(pairs, groupKey.slice(6));
       schedule(0);
     },
-    /* The page left Delete... out of an archived row's menu: the reason it was given, or else the one the list finds now,
-       with what the list holds for the row, which a read since may have changed. */
+    /* The page left Delete... out of an archived row's menu: say why, using the page's reason or else the list's own,
+       and what the list holds for the row now, which may differ from what the page saw. */
     noteNoDelete(items) {
       for (const it of (Array.isArray(items) ? items : []).slice(0, 50)) {
         const r = it && typeof it.key === 'string' ? rows.get(it.key) : null;

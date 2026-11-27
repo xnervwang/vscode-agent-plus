@@ -270,8 +270,7 @@
     t.textContent = '';
     t.append(title.slice(0, at), el('mark', 'sl-mark', title.slice(at, at + q.length)), title.slice(at + q.length));
   }
-  /* The order to draw `rows` of a section in while rows hold still (see the top of this file). A sub-agent's row moves
-     with the row it is under. */
+  /* A sub-agent's row moves with the row it is under. */
   function heldOrder(list, rows) {
     const at = new Map([...list.children].map((r, i) => [r.dataset.key, i]));
     const blocks = [];

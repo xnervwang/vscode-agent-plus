@@ -280,11 +280,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const before = said.length;
     list.noteNoDelete([{ key: key('busy'), why: row('busy').deleteWhy }, { key: key('idle'), why: '' }, { key: 'nothing' }, 'x']);
     const lines = said.slice(before);
-    eq([row('busy').deletable, row('idle').deletable, lines.length], [false, true, 2], 'only the rows the list holds are said');
+    eq([row('busy').deletable, row('idle').deletable, lines.length], [false, true, 2], 'only rows the list holds get a line');
     eq(/^session list: Delete\.\.\. left out of the menu of codex busy: it is running; here false, open elsewhere 0, activity working, running true, pinned false, detail true$/.test(lines[0]),
       true, 'a left-out Delete... is said with the reason the page was given and what the list holds for the row', lines[0]);
     eq(/: nothing the list holds now; .*activity stopped/.test(lines[1]), true,
-      'and one the page left out with no reason, which the list would now allow, says so', lines[1]);
+      'and a row the page left out with no reason, which the list would now allow, gets "nothing the list holds now" as its reason', lines[1]);
     list.dispose();
   }
 
@@ -583,7 +583,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([await firstOf(['other', 'opencode-plus', 'codex', 'claude-code']), await firstOf(['other', 'opencode-plus', 'codex']), await firstOf(['other', 'opencode-plus']),
       await firstOf(['zeta', 'other']), await firstOf(['codex', 'claude-code'], ['claude-code'])],
     ['claude-code', 'codex', 'opencode-plus', 'zeta', 'codex'],
-    'a new conversation starts in Claude Code, else Codex, else OpenCode, else the first other agent registered; an agent that cannot start conversations is passed over');
+    'with no agent picked, a new conversation starts in Claude Code, else Codex, else OpenCode, else the first other agent registered; an agent that cannot start conversations is passed over');
 
     const t = setup();
     const claude = source('claude-code', [conv('c-1')]), codex = source('codex', [conv('x-1')]);

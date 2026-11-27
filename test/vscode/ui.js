@@ -649,7 +649,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(tab === '2', 'the Conversations tab\'s badge counts the two questions', tab);
     const st = await entry('conversations');
     check(!!st && /1 conversation needs you/.test(st.text) && !st.warning && !st.error,
-      'and the status bar entry says 1 conversation needs you, counting only the question asked after the user\'s last message, in the status bar\'s own colours', st);
+      'and the status bar entry, in the status bar\'s own colours, says 1 conversation needs you: only the question asked since the user\'s last message counts', st);
     await look('question-rows', { expect: 'Asked about the release branch has a red dot, needs you · 1 question beside it, and under it the question Release from main or from the hotfix branch? (orange question mark, asked 1m ago) and the doing row 2. Rewrite the parser. Asked days ago has a green dot, not red, with its own question under it. The Conversations tab shows a badge of 2, and the status bar has 1 conversation needs you in the bar\'s own colours, with no yellow or red behind it.' },
       pane('agentPlus.conversations'));
   });
@@ -1654,7 +1654,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const judge = (which, d, { tint = true } = {}) => {
       const here = rgbaOf(d.css.here), away = rgbaOf(d.css.away), dot = rgbaOf(d.css.dot), body = rgbaOf(d.css.body);
       check(!!here && !!dot && !!body && sameList(rgbOf(here), BLUE[which]) && luminance(here) < luminance(dot) && contrast(here, body) >= 3,
-        `${which}: the stripe of the conversation open in this window is a solid blue, deeper than the dot of a dialog waiting, and stands out from the list`,
+        `${which}: the stripe of the conversation open in this window is a solid blue, deeper than the blue dot of a pending approval, and stands out from the list`,
         { stripe: d.css.here, dot: d.css.dot, body: d.css.body, contrast: here && body ? contrast(here, body) : null });
       check(!!away && sameList(rgbOf(away), BLUE[which]) && (rgbaOf(d.css.awayFill) || [0, 0, 0, 0])[3] === 0 && parseFloat(d.css.awayWidth) >= 1,
         `${which}: one open somewhere else has a hollow stripe outlined in the same blue`, d.css);
@@ -1686,7 +1686,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slTheme(THEMES.light);
     d = await drawn();
     judge('light', d);
-    check(Number(d.css.termOpacity) === 0.6, 'in a light theme the faded title is a little less faded, as fading shows more on a light background', d.css);
+    check(Number(d.css.termOpacity) === 0.6, 'in a light theme the title of a row open somewhere else is dimmed a little less, as the same opacity looks fainter on a light background', d.css);
     await look('sessions-stripes-light', { expect: 'The same close view in a light theme: a light grey UNGROUPED band, then Fix the sessions page filter on a pale blue background, clearly apart from the band\'s grey, with a solid deep blue stripe, deeper than the blue dot of Waits for a permission. OpenCode in a terminal and Open in another window have hollow stripes outlined in that blue and faded titles, the first of them in purple.' },
       await box());
     await slTheme(THEMES.hcDark);
@@ -1709,8 +1709,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await slWait((r) => !(slFind(r, SLT.ocTerm) || {}).color);
   });
 
-  /* A row running a turn stays put until the turn ends, and no row moves while the pointer is on the list or the arrow
-     keys are in it. */
+  /* A row running a turn stays put until the turn ends, and no row moves while the pointer is on the sections or the
+     arrow keys are on a row. */
   await step('sessions-order', async () => {
     needs('sessions-rows');
     otherWindow(['sl-other']);
@@ -1736,7 +1736,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const seen = await until(async () => (await timeOf(SLT.weeks)) === 'now', 10000, 300);
     await sleep(500);
     const still = await order();
-    check(!!seen && sameList(still, held), 'while the pointer is on the list, a row with a new message keeps its place', { held, still });
+    check(!!seen && sameList(still, held), 'while the pointer rests on a row, a row with a new message keeps its place', { held, still });
     await src('src.set(src.conversations().concat([arg])); return true;', conv('sl-fresh', FRESH, 'idle', 'stopped', false, { running: false, lastActiveAt: Date.now() }));
     const fresh = await slWait((r) => slFind(r, FRESH, 'ungrouped'));
     const withNew = fresh && fresh.filter((r) => r.section === 'ungrouped').map((r) => r.title);
@@ -1745,7 +1745,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       sidebarBox());
     await slAway();
     const after = await until(async () => { const o = await order(); return o[0] === FRESH && o[1] === SLT.weeks && o; }, 5000, 200);
-    check(!!after, 'once the pointer moves off the sections, up to the top of the list, the rows take the order of their last messages', after || await order());
+    check(!!after, 'once the pointer moves off the sections, to the blank strip above the New bar, the rows take the order of their last messages', after || await order());
     await look('sessions-order-after', { expect: 'The list with the pointer gone from the rows: UNGROUPED starts with A conversation started just now, then Quiet for three weeks (with its feature-x badge and red · 2 processes) saying now, then Asked a question, still working.' },
       sidebarBox());
 
@@ -1756,10 +1756,10 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await patch('sl-other', { lastActiveAt: Date.now() });
     const seen2 = await until(async () => (await timeOf(SLT.other)) === 'now', 10000, 300);
     await sleep(500);
-    check(!!seen2 && sameList(await order(), keyed), 'while the arrow keys are on a row of the list, the rows keep their places too', await order());
+    check(!!seen2 && sameList(await order(), keyed), 'the rows also stay put while the arrow keys are on a row', await order());
     await page.keyboard.press('Escape');
     const let2 = await until(async () => { const o = await order(); return o[0] === SLT.other && o; }, 5000, 200);
-    check(!!let2, 'and once Esc lets go of that row, they take the new order', let2 || await order());
+    check(!!let2, 'and after Esc takes the highlight off that row, they take the new order', let2 || await order());
 
     await src('src.set(src.conversations().filter((c) => c.sessionId !== arg)); return true;', 'sl-fresh');
     await patch('sl-weeks', { lastActiveAt: slAt - 21 * DAY });
@@ -2121,7 +2121,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       const on = await pixelOf(sl.locator('.sl-chip.sl-on'), 4), off = await pixelOf(sl.locator('.sl-chip[data-chip="all"]'), 4);
       return { on, off, contrast: on && off ? contrast(on, off) : 0, grey: off ? Math.max(...off) - Math.min(...off) : 99 };
     };
-    const CHIPS_LOOK = 'under the New bar, the chips All, Open, Running and Needs you with their counts. Running is the chosen one, in the button blue with light text; the other three are a neutral grey with ordinary text, so that the chosen one is told apart at a glance.';
+    const CHIPS_LOOK = 'under the New bar, the chips All, Open, Running and Needs you with their counts. Running is the chosen one, in the button blue with light text; the other three are a neutral grey with ordinary text.';
     let c = await chipsDrawn();
     check(c.contrast >= 1.5 && c.grey <= 12, 'dark: the chips not chosen are grey, and the chosen one stands out against them', c);
     await look('sessions-chips-dark', { expect: `The top of the list in a dark theme: ${CHIPS_LOOK}` }, sl.locator('.sl-top'));
@@ -2179,7 +2179,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     'each agent has a block of its own, with a line between two blocks, none above the first, and none above a block\'s THIS CONVERSATION heading', blocks);
     /* The three blocks are taller than the view, so the list is scrolled to the end of the section for their pictures. */
     const toEnd = () => sl.evaluate(() => { const b = [...document.querySelectorAll('.sl-section[data-key="account"] .sl-acct')].pop(); if (b) b.scrollIntoView({ block: 'end' }); });
-    const LINES_LOOK = 'the end of the Codex block (THIS CONVERSATION, with no line above that heading, Fix the sessions page filter and Tokens 412k), then a thin line across, a Claude Code block with its logo, Plan Max and its own THIS CONVERSATION heading (no line above it) with A Claude Code conversation and Context 38%, then another thin line, and an OpenCode block with its logo and Provider Bedrock. Which lines belong to which agent is clear at a glance. The top of the section may be scrolled out of view.';
+    const LINES_LOOK = 'the end of the Codex block (THIS CONVERSATION, with no line above that heading, Fix the sessions page filter and Tokens 412k), then a thin line across, a Claude Code block with its logo, Plan Max and its own THIS CONVERSATION heading (no line above it) with A Claude Code conversation and Context 38%, then another thin line, and an OpenCode block with its logo and Provider Bedrock. The top of the section may be scrolled out of view.';
     await toEnd();
     await look('sessions-account-lines', { expect: `The ACCOUNT & USAGE section in a dark theme, scrolled to its end: ${LINES_LOOK}` }, sidebarBox());
     await slTheme(THEMES.light);
@@ -2229,13 +2229,13 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sleep(1000);
     h = await hovered();
     check(h.contrast >= 1.25, 'and also in a theme whose button hover colour is the button colour itself', Object.assign({ hoverBackground: hex }, h));
-    await look('sessions-new-hover-same', { pointer: true, expect: 'The New bar in a dark theme whose buttons are set to purple, the same purple under the pointer as without it: the chosen chip All under the bar is that purple, and New in tab, with the pointer on it, is plainly a darker purple than All, its text white and readable.' },
+    await look('sessions-new-hover-same', { pointer: true, expect: 'The New bar in a dark theme with purple buttons that keep the same purple under the pointer. The chosen chip All, under the bar, is that purple; New in tab, with the pointer on it, is plainly a darker purple, its text white and readable.' },
       sl.locator('.sl-top'));
     await setting('workbench.colorCustomizations', null);
     await slTheme(THEMES.light);
     h = await hovered();
     check(h.contrast >= 1.25, 'light: New in tab plainly changes colour under the pointer', h);
-    await look('sessions-new-hover-light', { pointer: true, expect: 'The New bar in a light theme with the pointer on New in tab: its blue is plainly darker than the chosen chip All under it, the text white and readable.' },
+    await look('sessions-new-hover-light', { pointer: true, expect: 'The same in a light theme: New in tab, under the pointer, is a darker blue than the chip All below it, and its white text is still readable.' },
       sl.locator('.sl-top'));
     await slTheme(THEMES.dark);
     await page.mouse.move(5, 5);

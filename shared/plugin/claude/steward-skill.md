@@ -109,9 +109,9 @@ restarted, or the computer slept, use your lists from before the event. Send the
 lists showed were working or running a command or had background work running (background tasks or background
 processes).
 
-Leave out any conversation that had fully stopped before the event, even if its work plan still has a row in progress.
-The user often pauses a conversation on purpose with a row still in progress, and a message would start it again.
-Include the number of conversations you left out in the line where you say what you sent and to whom.
+After a reload, restart, or sleep, a work plan row in progress does not count as work on its own. The user often pauses
+a conversation on purpose with a row still in progress, and a message would start it again. Include the number of
+conversations you left out in the line where you say what you sent and to whom.
 
 Pass things on this way whenever you want a conversation to do something, and whenever the message carries an
 approval. To find out how a conversation is doing, read it with steward-peek.py first (below). If that does not answer
