@@ -166,17 +166,18 @@ module.exports = async ({ eq, note, tmp, root }) => {
   {
     const d = world();
     const dir = path.join(d, 'relay');
-    const [a, b, c] = ['a', 'b', 'c'].map((x) => `${x.repeat(8)}-1111-4111-8111-${x.repeat(12)}`);
+    const [a, b, c, e] = ['a', 'b', 'c', 'e'].map((x) => `${x.repeat(8)}-1111-4111-8111-${x.repeat(12)}`);
     fs.writeFileSync(path.join(dir, `${a}.taken-123`), JSON.stringify({ id: a, to: M, seq: 6 }));
+    fs.writeFileSync(path.join(dir, `${e}.doing-123`), JSON.stringify({ id: e, to: M, seq: 8 }));
     fs.writeFileSync(path.join(dir, `${b}.v4.json`), JSON.stringify({ id: b, to: M, seq: 4 }));
     fs.writeFileSync(path.join(dir, `${c}.v4.json`), JSON.stringify({ id: c, to: M2, seq: 9 }));
     const sent = await relay(d, LEAD, [M], { input: 'Run the tests again.\n', skip: [b, c] });
     const r = sent.asked[0] || {};
     eq([sent.code, sent.out.trim(), sent.asked.length, /^[0-9a-f-]{36}\.v4\.json$/.test(r.file || ''), r.action, r.to, r.steward, r.text, r.term, r.seq],
       [0, 'Sent: it was typed into the conversation\'s message input and sent as the user\'s message.', 1, true, 'send', M, LEAD,
-        'Run the tests again.', 3, 7],
+        'Run the tests again.', 3, 9],
       'the lead\'s message is written as <id>.v4.json with the conversation\'s lead term and one more than the highest sequence '
-      + 'number among the requests for that conversation, taken ones included');
+      + 'number among the requests for that conversation, taken ones and ones being carried out included');
     const first = await relay(world({ noLeads: true }), LEAD, [M2], { input: 'Carry on.' });
     eq([first.asked[0] && first.asked[0].term, first.asked[0] && first.asked[0].seq], [0, 1],
       'a conversation with no lead entry yet is asked with term 0, and the first request for a conversation gets 1');

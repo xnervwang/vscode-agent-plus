@@ -335,15 +335,15 @@ def hand_over_check(table, me, key):
 
 
 def next_seq(directory, target):
-    """One more than the highest sequence number among the requests for `target` still in the relay folder, taken or
-    not. Best effort: a request written at the same moment can get the same number, and the window then orders by time."""
+    """One more than the highest sequence number among the requests for `target` still in the relay folder, taken,
+    being carried out or not. Best effort: a request written at the same moment can get the same number, and the window then orders by time."""
     top = 0
     try:
         names = os.listdir(directory)
     except OSError:
         return 1
     for name in names:
-        if name.endswith(RESULT_SUFFIX) or name.endswith(".tmp") or not (name.endswith(".json") or ".taken-" in name):
+        if name.endswith(RESULT_SUFFIX) or name.endswith(".tmp") or not (name.endswith(".json") or ".taken-" in name or ".doing-" in name):
             continue
         try:
             with open(os.path.join(directory, name), encoding="utf-8") as fh:
