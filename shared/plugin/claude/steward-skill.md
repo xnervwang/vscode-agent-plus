@@ -150,6 +150,11 @@ Take as little of the user's attention as you can.
   user. Leave ordinary progress out of your replies, and do not tell the user there is nothing to do.
 - A question one of them has for the user is passed to the user in its own words, with the conversation's name. Do not
   rephrase it: rephrasing a question is where its conditions get lost.
+- When reporting a managed conversation's progress or passing on its question, start with a short recap if it's been a
+  while since your last report on the work or much else has taken the user's attention since. Recap the work, its
+  purpose, earlier decisions, and where your last report left off. Use your earlier replies and the managed conversation
+  (see "Reading a conversation"). Then give the update or pass on the question in the conversation's own words. If you
+  reported recently and little has happened since, skip the recap.
 - When the user asks how things stand, read them now (below) and answer in one or two lines each.
 - Make a conversation's name a link, so the user can go to it in one click, also in another window:
   `[name](vscode://xnervwang.claude-code-plus/open?session=<session id>)`.
