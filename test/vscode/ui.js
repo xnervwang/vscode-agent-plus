@@ -2427,13 +2427,20 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const first = await until(() => sl.evaluate(() => document.querySelector('.sl-new-agent').title), 5000, 200);
     check(/starts? in Claude Code\b/.test(first || ''), 'the New bar starts with Claude Code, the first of Claude Code, Codex and OpenCode in the order it picks from, though Codex registered earlier', first);
     const half = sl.locator('.sl-new-half.sl-primary');
+    /* The page sometimes misses the first pointer move into the button, so the pointer is moved again, a pixel
+       further each time, until the button itself reports :hover; then the colour is read after the next frame. */
+    const isHovered = () => half.evaluate((e) => e.matches(':hover')).catch(() => false);
     const hovered = async () => {
       await slAway();
       const off = await pixelOf(half, 3, 3);
-      await half.hover({ position: { x: 3, y: 3 } });
-      await sleep(300);
+      let hover = false;
+      for (let i = 0; i < 5 && !hover; i++) {
+        await half.hover({ position: { x: 3 + i, y: 3 } });
+        hover = !!await until(isHovered, 600, 100);
+      }
+      await half.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))).catch(() => {});
       const on = await pixelOf(half, 3, 3);
-      return { off, on, contrast: off && on ? contrast(off, on) : 0 };
+      return { off, on, hover, contrast: off && on ? contrast(off, on) : 0 };
     };
     let h = await hovered();
     check(h.contrast >= 1.25, 'dark: New in tab plainly changes colour under the pointer', h);
