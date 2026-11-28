@@ -26,10 +26,15 @@ ask Agent Plus where it is. A key holds a colon, so no file is named after one.
 import json
 import os
 import re
+import time
 
 from plan_path import SESSION_NAME, listed
+from proc_alive import alive
 
 STEWARDS_FILE = "stewards.json"
+WINDOWS_DIR = "windows"
+# Claude Code Plus rewrites a window's entry once a minute while the window is open.
+WINDOW_STALE_SECONDS = 120
 MAX_MANAGED = 100
 MAX_NAME = 200
 CLAUDE = "claude-code"
@@ -246,6 +251,34 @@ def stewards_of(table, sid):
     if is_other(sid) and not allowed(sid):
         return []
     return [s for s in table if manages(table, s, sid)]
+
+
+def open_windows(directory):
+    """The open windows' entries, as Claude Code Plus writes them: name, folders and the conversations shown."""
+    out = []
+    folder = os.path.join(directory, WINDOWS_DIR)
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return out
+    now = time.time() * 1000
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                w = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(w, dict) or not now - w.get("at", 0) < WINDOW_STALE_SECONDS * 1000 or not alive(w.get("pid")):
+            continue
+        out.append(w)
+    return out
+
+
+def shown(found, sid):
+    """Whether one of the window entries `found` shows conversation `sid`."""
+    return any(sid in [str(s).lower() for s in listed(w.get("sessions"))] for w in found)
 
 
 def on_list(table, steward, key):
