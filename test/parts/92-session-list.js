@@ -605,8 +605,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       'even after another agent was used, the New bar starts with Claude Code, in the half picked last');
     list.chooseNew('codex', 'tab');
     await list.refresh();
-    eq([list.model().newSource, list.model().newWhere, t.host.globalMemento.get(L.LAST_NEW_KEY)], ['codex', 'tab', { where: 'tab' }],
-      'an agent picked in the New bar\'s menu stays the default for this window, and only the tab or sidebar choice is saved');
+    eq([list.model().newSource, list.model().newWhere, t.host.globalMemento.get(L.LAST_NEW_KEY)], ['codex', 'tab', { sourceId: 'codex', where: 'tab', agent: 'codex' }],
+      'an agent picked in the New bar\'s menu becomes the default, and is saved with the tab or sidebar choice');
     const made = await list.groupAct('newGroup');
     await list.groupAct('newInGroup', made.renameGroup);
     eq([codex.calls.filter((c) => c[0] === 'create').length, claude.calls.filter((c) => c[0] === 'create').length], [1, 0],
@@ -614,10 +614,17 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await list.refresh();
     eq(list.model().newSource, 'codex', 'the picked agent is still the default after a conversation starts');
     await list.create('claude-code', 'sidebar');
-    eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { where: 'tab' }, 'starting a conversation saves the half it started in, not its agent');
+    eq(t.host.globalMemento.get(L.LAST_NEW_KEY), { sourceId: 'codex', where: 'tab', agent: 'codex' }, 'starting a conversation saves the half it started in, not its agent');
     const next = L.createSessionList(t.host, { now, since: now0 - 300 * DAY });
     await next.refresh();
-    eq(next.model().newSource, 'claude-code', 'a new window starts with Claude Code');
+    eq(next.model().newSource, 'codex', 'a window opened later, or this one after a reload, starts with the agent picked last');
+    const lone = setup();
+    lone.entries.push({ id: 'claude-code', source: source('claude-code', [conv('c-2')]) });
+    await lone.host.globalMemento.update(L.LAST_NEW_KEY, { where: 'tab', agent: 'codex' });
+    const solo = L.createSessionList(lone.host, { now, since: now0 - 300 * DAY });
+    await solo.refresh();
+    eq(solo.model().newSource, 'claude-code', 'where the agent picked last is not registered, the New bar falls back to the usual order');
+    solo.dispose();
     next.dispose();
     list.dispose();
   }

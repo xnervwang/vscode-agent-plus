@@ -2515,6 +2515,18 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await look('show-status', { expect: 'The Output panel at the bottom with Agent Plus chosen, its last lines naming the Agent Plus version and protocol, Workspace trusted: yes, the extension using it, the token mode, the answers folder, the conversation in front and the source codex with its plans folder.' },
       page.locator('#workbench\\.parts\\.panel'));
   });
+  await step('sessions-new-remembered', async () => {
+    needs('sessions-new');
+    const before = Date.now();
+    await call('setTimeout(() => vscode.commands.executeCommand("workbench.action.reloadWindow"), 200); return true;');
+    await sleep(2000);
+    await page.waitForSelector('.monaco-workbench', { timeout: 90000 });
+    await w.hostUp(before);
+    await src('return src.addOther(arg);', []);
+    await showSessions('agentPlus.sessions');
+    const title = await until(() => sl.evaluate(() => { const b = document.querySelector('.sl-new-agent'); return b && /Claude Code|Codex/.test(b.title) ? b.title : null; }), 15000, 300);
+    check(/start in Codex\b/.test(title || ''), 'after a reload the New bar still starts with Codex, the agent picked before it, not Claude Code', title);
+  });
   await shut();
 
   /* ═══ restricted: the helper and the stand-in source in Restricted Mode ═══ */

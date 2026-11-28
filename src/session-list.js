@@ -161,7 +161,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   const runFrom = new Map();
   /* key -> a fallback pin time for a pinned row whose record has none. */
   const pinSeen = new Map();
-  let chosenNew = '';
+  const lastNew = () => (host.globalMemento && host.globalMemento.get(LAST_NEW_KEY)) || {};
+  /* The agent last picked in the New bar's menu, in any window: kept with the half of the bar in LAST_NEW_KEY. */
+  let chosenNew = typeof lastNew().agent === 'string' ? lastNew().agent : '';
 
   const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
   const entries = () => (registry.entries || []).filter((e) => sources.supports(e.source, 'sessions'));
@@ -562,7 +564,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const caps = capsOf(e.source);
     const at = caps.create.includes(where) ? where : caps.create[0];
     if (!at) return 'nowhere';
-    if (host.globalMemento) Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: at })).catch(() => {});
+    if (host.globalMemento) Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { ...lastNew(), where: at })).catch(() => {});
     const res = await runAction(e, 'create', [], { where: at });
     const made = res.find((x) => x.outcome === 'done');
     if (!made) { warn(`No new conversation: ${(res[0] && res[0].reason) || 'the agent did not start one'}`); return 'failed'; }
@@ -578,7 +580,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     if (!entryOf(sourceId)) return;
     chosenNew = sourceId;
     if (!host.globalMemento) { schedule(0); return; }
-    Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { where: where === 'sidebar' ? 'sidebar' : 'tab' })).then(() => schedule(0), () => schedule(0));
+    Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { ...lastNew(), where: where === 'sidebar' ? 'sidebar' : 'tab', agent: sourceId })).then(() => schedule(0), () => schedule(0));
   }
   function newSourceOf(srcs) {
     const can = srcs.filter((x) => (x.create || []).length);
