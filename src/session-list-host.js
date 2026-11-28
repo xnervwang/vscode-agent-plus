@@ -21,6 +21,7 @@ const rules = require('./session-rules');
 
 const VIEW_ID = 'agentPlus.sessions';
 const SETTINGS = 'agentPlus.sessions';
+const TEMP_SETTINGS = 'agentPlus.temporaryConversations';
 const CLOSED_KEY = 'agentPlus.lastClosedWasConversation';
 const ASKS_DAYS = 14;
 
@@ -38,7 +39,8 @@ function startSessionList(host, opts = {}) {
     const num = (k, d, min, max) => { const v = Number(c.get(k, d)); return Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v))) : d; };
     return { archiveAfterDays: num('archiveAfterDays', 14, 0, 3650), deleteArchived: c.get('deleteArchived', true) !== false,
       deleteAfterDays: num('deleteAfterDays', 90, 1, 3650), recentlyClosed: num('recentlyClosed', 10, 0, 50),
-      hideBackground: c.get('hideBackground', true) !== false };
+      hideBackground: c.get('hideBackground', true) !== false,
+      tempMinutes: (() => { const v = Number(vscode.workspace.getConfiguration(TEMP_SETTINGS).get('deleteAfterMinutes', 10)); return Number.isFinite(v) ? Math.max(1, Math.min(1440, Math.floor(v))) : 10; })() };
   };
   const asksOf = (sourceId, s, { near = false } = {}) => {
     if (!(s.lastUserAt > 0) || (!near && now() - (s.lastActiveAt || 0) > ASKS_DAYS * 86400e3)) return false;
@@ -72,6 +74,7 @@ function startSessionList(host, opts = {}) {
     }));
   }
   keep(vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration(TEMP_SETTINGS) && !e.affectsConfiguration(SETTINGS)) { list.schedule(); return; }
     if (!e.affectsConfiguration(SETTINGS)) return;
     list.schedule();
     /* A new rule for archiving or deleting is applied at once rather than at the next hourly pass. */
@@ -109,6 +112,18 @@ function startSessionList(host, opts = {}) {
       qp.onDidAccept(() => { const it = qp.selectedItems[0]; qp.hide(); if (it) list.open(it.key).catch((e) => say(`find: ${(e && e.message) || e}`)); });
       qp.onDidHide(() => qp.dispose());
       qp.show();
+    },
+    /* New Temporary Conversation: as the New bar would start one, in the agent and place it starts with, temporary. */
+    newTemporaryConversation: async () => {
+      await list.refresh();
+      const m = list.model();
+      const src = (m.sources || []).find((x) => x.id === m.newSource);
+      if (!src || !src.temporary) {
+        const can = (m.sources || []).filter((x) => x.temporary && (x.create || []).length);
+        if (!can.length) { vscode.window.showInformationMessage('No agent that can start temporary conversations is installed in this window.'); return 'nowhere'; }
+        return list.create(can[0].id, m.newWhere, '', { temporary: true });
+      }
+      return list.create(src.id, m.newWhere, '', { temporary: true });
     },
     /* Ctrl+Shift+T after a conversation was closed reopens it; when no closed conversation is left, it reopens the
        editor VS Code would have. */

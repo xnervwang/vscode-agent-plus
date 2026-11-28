@@ -49,7 +49,7 @@ const NOTICE_DELAY_MS = 4000;
 const COMMANDS = ['refreshWorkPlan', 'openWorkPlanFile', 'showWorkPlanDetail', 'showConversations', 'answerQuestion',
   'openConversation', 'showBrief', 'goToConversation', 'showStatus', 'restoreWebviewRequestLimit', 'chooseTokenMode', 'openAttention',
   'showAttention', 'showWorkPlanOf', 'answerQuestionOf', 'writeAboutRow', 'searchSessions', 'filterSessions', 'newSessionGroup',
-  'reopenClosedConversation', 'findConversation'];
+  'reopenClosedConversation', 'findConversation', 'newTemporaryConversation'];
 
 /* The interface returned when start() threw: present, so a dependent extension can tell why it was not taken. */
 function unavailable(error) {
@@ -182,6 +182,15 @@ function start(context, log, opts = {}) {
     if (Array.isArray(disposables)) disposables.push(sub);
     return sub;
   };
+  /* onDidChangeTemporary: the session list's, once the views are built (src/session-list.js). */
+  const tempChanges = sources.emitter();
+  const listenTemporary = (listener, thisArgs, disposables) => {
+    if (typeof listener !== 'function') throw new TypeError('a listener is a function');
+    const d = tempChanges.event(listener, thisArgs);
+    const sub = disposable(() => d.dispose());
+    if (Array.isArray(disposables)) disposables.push(sub);
+    return sub;
+  };
   /* Null in Restricted Mode, where deliver() could not hand anything to a steward either. */
   const stewardQuery = (a, b) => {
     const one = a && typeof a === 'object';
@@ -263,6 +272,7 @@ function start(context, log, opts = {}) {
       if (views) for (const entry of registry.list()) attachSafely(entry);
       if (views && views.sessionList) {
         try { views.sessionList.onDidChangeDeletionDue((e) => { if (!closing) dueChanges.fire(e); }); } catch (_) { /* none told */ }
+        try { views.sessionList.onDidChangeTemporary((e) => { if (!closing) tempChanges.fire(Object.freeze({ sourceId: e.sourceId })); }); } catch (_) { /* none told */ }
       }
     }
     if (views && typeof views.setActive === 'function') { try { views.setActive(on); } catch (_) { /* drawn next time */ } }
@@ -413,7 +423,7 @@ function start(context, log, opts = {}) {
     version: core.version,
     protocol: core.protocol,
     accepts: core.accepts.slice(),
-    features: sources.FEATURES.concat('sessionList', 'archive'),
+    features: sources.FEATURES.concat('sessionList', 'archive', 'temporary'),
     registerSource(source) {
       let r;
       try { r = register(source); } catch (e) { r = { accepted: false, code: sources.REFUSED.failed, reason: String((e && e.message) || e), registration: null }; }
@@ -454,6 +464,23 @@ function start(context, log, opts = {}) {
     },
     /* With 'sessionList': vscode.Event<{ sourceId }>. */
     onDidChangeSessionDeletionDue: listenDeletionDue,
+    /* With 'temporary' (docs/protocol.md, Temporary conversations): whether that conversation is temporary. */
+    isTemporary(sourceId, sessionId) {
+      try { return !closing && !!views && !!views.sessionList && views.sessionList.isTemporary(String(sourceId), String(sessionId)) === true; } catch (_) { return false; }
+    },
+    /* With 'temporary': the temporary session ids of `sourceId`, a frozen array. */
+    temporaryIds(sourceId) {
+      try { return views && views.sessionList ? views.sessionList.temporaryIds(String(sourceId)) : Object.freeze([]); } catch (_) { return Object.freeze([]); }
+    },
+    /* With 'temporary': vscode.Event<{ sourceId }>. */
+    onDidChangeTemporary: listenTemporary,
+    /* With 'temporary': registers a conversation the source has just started as temporary itself. Never rejects. */
+    async addTemporary(sourceId, sessionId, opts) {
+      const by = opts && opts.by === 'supervisor' ? 'supervisor' : 'source';
+      if (closing || !views || !views.sessionList) return Object.freeze({ ok: false, reason: 'this window has no session list' });
+      try { const r = views.sessionList.addTemporary(String(sourceId || ''), String(sessionId || ''), { by }); return Object.freeze({ ok: r.ok === true, reason: String(r.reason || '') }); }
+      catch (e) { return Object.freeze({ ok: false, reason: String((e && e.message) || e) }); }
+    },
     /* With 'archive' (docs/protocol.md). */
     async archive(arg) {
       const sourceId = arg && typeof arg.sourceId === 'string' ? arg.sourceId.trim() : '';
@@ -508,6 +535,7 @@ function start(context, log, opts = {}) {
     summaryChanges.dispose();
     stewardChanges.dispose();
     dueChanges.dispose();
+    tempChanges.dispose();
   } });
   host.api = agentPlus;
   host.views = () => views;

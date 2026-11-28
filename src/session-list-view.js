@@ -118,7 +118,7 @@ class SessionListView {
       case 'rename': return list.rename(str(msg.key), str(msg.title));
       case 'renameGroup': return list.renameGroup(str(msg.groupId), str(msg.name));
       case 'move': return list.moveTo(keys, str(msg.section));
-      case 'create': return list.create(str(msg.sourceId), str(msg.where));
+      case 'create': return list.create(str(msg.sourceId), str(msg.where), '', { temporary: msg.temporary === true });
       case 'newSource': return list.chooseNew(str(msg.sourceId), str(msg.where));
       case 'wantDetail': return list.wantDetail(keys);
       case 'noDelete': return list.noteNoDelete(Array.isArray(msg.rows) ? msg.rows.slice(0, 50) : []);

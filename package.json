@@ -139,6 +139,10 @@
         "command": "agentPlus.findConversation",
         "title": "Agent Plus: Find Conversation by Title or ID...",
         "icon": "$(search-fuzzy)"
+      },
+      {
+        "command": "agentPlus.newTemporaryConversation",
+        "title": "Agent Plus: New Temporary Conversation"
       }
     ],
     "viewsContainers": {
@@ -419,6 +423,13 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Hide background runs, sub-agents and empty conversations in the **Conversations** list."
+        },
+        "agentPlus.temporaryConversations.deleteAfterMinutes": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 1440,
+          "markdownDescription": "Minutes after a temporary conversation is closed until it is deleted from disk, unless you choose **Keep**. A temporary conversation stays out of the **Conversations** list."
         }
       }
     },

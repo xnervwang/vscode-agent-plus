@@ -85,7 +85,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     await say({ kind: 'nothing' });
     eq(asked, [['open', 'k1'], ['act', 'pin', ['k1', 'k2'], undefined], ['act', 'newGroupFrom', ['k1'], undefined], ['groupAct', 'newGroup', '', undefined],
       ['groupAct', 'deleteGroup', 'g1', undefined], ['rename', 'k1', 'New'], ['renameGroup', 'g1', 'Named'], ['moveTo', ['k1'], 'ungrouped'],
-      ['create', 'codex', 'sidebar'], ['chooseNew', 'codex', 'tab'], ['wantDetail', ['k2']], ['accountLink', 'codex', 1], ['noticeAction', 'codex', 0],
+      ['create', 'codex', 'sidebar', '', { temporary: false }], ['chooseNew', 'codex', 'tab'], ['wantDetail', ['k2']], ['accountLink', 'codex', 1], ['noticeAction', 'codex', 0],
       ['noteNoDelete', [{ key: 'k1', why: 'it is running' }]]],
     'each message of the page goes to the list, with only strings among the keys');
     eq([view.sent, v.selection], [[{ type: 'startRenameGroup', groupId: 'g1' }, { type: 'startRenameGroup', groupId: 'g2' }], ['k1']],

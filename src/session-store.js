@@ -18,6 +18,9 @@
  *
  * A conversation is keyed by its source and id. A deleted group leaves a marker so that a window that had not seen
  * the deletion does not bring it back; its conversations read as ungrouped.
+ *
+ * A temporary conversation (docs/protocol.md, Temporary conversations) has the field `t`: { by, addedAt, closedAt,
+ * deleteAt }, or null once it is ordinary again or deleted. `closedAt` and `deleteAt` are 0 while it is open.
  */
 const crypto = require('crypto');
 const fs = require('fs');
@@ -54,6 +57,14 @@ function readFile(file) {
   return empty();
 }
 
+/* A temporary record as kept, or null. */
+const TEMP_BY = ['user', 'source', 'supervisor', 'convert'];
+function tempOf(v) {
+  if (!v || typeof v !== 'object') return null;
+  const ms = (x) => (Number.isFinite(+x) && +x > 0 ? +x : 0);
+  return { by: TEMP_BY.includes(v.by) ? v.by : 'user', addedAt: ms(v.addedAt), closedAt: ms(v.closedAt), deleteAt: ms(v.deleteAt) };
+}
+
 /* Fields are [value, at], and the later change wins. */
 const later = (have, next) => (!Array.isArray(have) || !(have[have.length - 1] > next[next.length - 1]) ? next : have);
 
@@ -80,6 +91,7 @@ function apply(d, op) {
       break;
     }
     case 'unread': for (const k of op.keys) rec(k).u = later(rec(k).u, [!!op.on, op.at]); break;
+    case 'temp': for (const k of op.keys) rec(k).t = later(rec(k).t, [tempOf(op.value), op.at]); break;
     case 'newGroup': if (!d.groups[op.id]) d.groups[op.id] = { n: op.name, o: op.order, at: op.at }; break;
     case 'renameGroup': if (d.groups[op.id] && !d.groups[op.id].del && !(d.groups[op.id].at > op.at)) Object.assign(d.groups[op.id], { n: op.name, at: op.at }); break;
     case 'orderGroup': if (d.groups[op.id] && !d.groups[op.id].del) d.groups[op.id].o = op.order; break;
@@ -164,7 +176,18 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
       const r = read().s[keyOf(sourceId, sessionId)] || {};
       const v = (f, i = 0, d = null) => (Array.isArray(r[f]) ? r[f][i] : d);
       return { group: v('g'), archived: !!v('a'), archivedAt: v('a') ? v('a', 1, 0) : 0, pinned: !!v('p'), pinnedAt: v('p') ? v('p', 1, 0) : 0, color: v('c'),
-        seenAt: +r.r || 0, unreadMark: !!v('u') };
+        seenAt: +r.r || 0, unreadMark: !!v('u'), temp: tempOf(v('t')) };
+    },
+    /* The temporary conversations the store has, as [sourceId, sessionId, temp]. */
+    temps() {
+      const s = read().s;
+      const out = [];
+      for (const k of Object.keys(s)) {
+        const t = Array.isArray(s[k].t) ? tempOf(s[k].t[0]) : null;
+        if (!t) continue;
+        try { const [a, b] = JSON.parse(k); out.push([a, b, t]); } catch (_) { /* not a key this file writes */ }
+      }
+      return out;
     },
     /* Every conversation the store has something for, as [sourceId, sessionId]. */
     keys: () => Object.keys(read().s).map((k) => { try { return JSON.parse(k); } catch (_) { return null; } }).filter(Boolean),
@@ -189,6 +212,8 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
     color: (list, color) => change({ type: 'color', keys: keysOf(list), color: color || null }),
     seen: (sourceId, sessionId, replyAt) => change({ type: 'seen', key: keyOf(sourceId, sessionId), replyAt: +replyAt || 0 }),
     markUnread: (list, on) => change({ type: 'unread', keys: keysOf(list), on: !!on }),
+    /* `value` is a temporary record ({ by, addedAt, closedAt, deleteAt }), or null to make the conversations ordinary. */
+    setTemp: (list, value) => change({ type: 'temp', keys: keysOf(list), value: tempOf(value) }),
     /* A new group, last; resolves to its id, or '' with no room left. */
     newGroup(name) {
       const have = this.groups();
@@ -215,4 +240,4 @@ function createStore({ dir = path.join(sharedHome(), STORE_DIR), key, label = ''
   };
 }
 
-module.exports = { createStore, projectOf, keyOf, cleanName, STORE_DIR, FORMAT, LOCK_STALE_MS, COLORS, NAME_MAX, GROUPS_MAX };
+module.exports = { createStore, projectOf, keyOf, cleanName, tempOf, STORE_DIR, FORMAT, LOCK_STALE_MS, COLORS, NAME_MAX, GROUPS_MAX, TEMP_BY };

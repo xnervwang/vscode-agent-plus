@@ -20,6 +20,11 @@
  * A source's list is read again when the source fires onDidChangeSessions, and every RELIST_MS besides. A source
  * whose list could not be read keeps its previous list, and the list says so above its rows; nothing of a source
  * whose list is not complete is archived or deleted on its own.
+ *
+ * Temporary conversations (docs/protocol.md, Temporary conversations) are kept in the same store and left out of every
+ * section. When one is no longer shown in any window and nothing runs in it, the time is written to the store at once
+ * and its delete falls due the setting's minutes later; every refresh, the first one after a start included, asks its
+ * source to delete the ones past due. The window that closed it tells the user and offers Keep and Delete Now.
  */
 const fs = require('fs');
 const path = require('path');
@@ -61,6 +66,13 @@ const KINDS = ['user', 'background', 'subagent', 'empty'];
 const THEME_COLOR = { red: 'charts.red', blue: 'charts.blue', green: 'charts.green', yellow: 'charts.yellow', purple: 'charts.purple',
   orange: 'charts.orange', pink: 'terminal.ansiBrightMagenta', cyan: 'terminal.ansiCyan' };
 const ELSEWHERE_KINDS = ['vscode', 'terminal', 'desktop', 'exec', 'other'];
+/* After the list starts, how long a temporary conversation that looks closed waits before its grace period starts:
+   restored tabs can take that long to tell which conversation they show. One already past due is deleted at once. */
+const TEMP_SETTLE_MS = 60000;
+/* addTemporary() takes a conversation the user wrote to no longer ago than this. */
+const TEMP_NEW_MS = 120000;
+/* A temporary record whose conversation its source no longer lists is dropped after this long. */
+const TEMP_GONE_MS = 3600e3;
 
 /* A member the protocol gates on a feature of another name ('sessionImport' gives importSessions), bound to its source;
    null when the source does not list the feature or has no such method. */
@@ -165,7 +177,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   /* The agent last picked in the New bar's menu, in any window: kept with the half of the bar in LAST_NEW_KEY. */
   let chosenNew = typeof lastNew().agent === 'string' ? lastNew().agent : '';
 
-  const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true }, host.settings ? host.settings() : {});
+  const settings = () => Object.assign({ archiveAfterDays: 14, deleteArchived: true, deleteAfterDays: 90, recentlyClosed: 10, hideBackground: true,
+    tempMinutes: 10 }, host.settings ? host.settings() : {});
   const entries = () => (registry.entries || []).filter((e) => sources.supports(e.source, 'sessions'));
   const fire = () => { for (const fn of listeners) { try { fn(); } catch (_) { /* a failing listener is ignored */ } } };
 
@@ -214,7 +227,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
 
   /* Closed here: shown at the last look and not now, at the place it was shown ('' when that was not known, and it then
      reopens where its source opens first); or as a source that reports its closings (onDidCloseSession) says. */
-  function remember(gone, whereOf) {
+  function remember(all, whereOf) {
+    /* A temporary conversation is not listed under Recently closed, nor reopened from there. */
+    const gone = all.filter((k) => !(rows.get(k) || {}).temp);
     if (!gone.length) return;
     const list = (host.memento && host.memento.get(CLOSED_KEY)) || [];
     const at = now();
@@ -317,7 +332,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
           group: rec.group, archived: rec.archived, archivedAt: rec.archivedAt, pinned: rec.pinned, color: rec.color,
           pinnedAt: !rec.pinned ? 0 : rec.pinnedAt || pinSeen.get(k) || (pinSeen.set(k, now()), pinSeen.get(k)),
           seenAt: Math.max(rec.seenAt, store.since()), unreadMark: rec.unreadMark, closedAt: look.here.has(k) ? 0 : closedAt.get(k) || 0,
-          hidden: s.hideBackground && x.kind !== 'user' }));
+          temp: rec.temp, hidden: !!rec.temp || (s.hideBackground && x.kind !== 'user') }));
       }
     }
     for (const k of [...runFrom.keys()]) if (!next.has(k) || !rules.runs(next.get(k))) runFrom.delete(k);
@@ -491,7 +506,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
         for (const e of entries()) {
           const st = lists.get(e.id);
           if (!st || !st.complete) continue;
-          const mine = [...rows.values()].filter((r) => r.sourceId === e.id);
+          const mine = [...rows.values()].filter((r) => r.sourceId === e.id && !r.temp);
           const due = mine.filter((r) => rules.archiveDue(r, { days: +s.archiveAfterDays, now: now(), groups: groupIds }));
           if (due.length) { store.archive(due.map((r) => [r.sourceId, r.sessionId]), true, { keepPin: true }); archived.push(...due); }
           const gone = mine.filter((r) => rules.deleteDue(r, { days: +s.deleteAfterDays, on: s.deleteArchived !== false, now: now() }));
@@ -509,6 +524,150 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       } finally { release(); }
     })();
     try { return await sweeping; } finally { sweeping = null; }
+  }
+
+  /* ── temporary conversations ── */
+  const startedAt = now();
+  const tempListeners = new Set();
+  const tempSig = new Map();
+  let tempTimer = null, tempDeleting = null;
+  const graceMs = () => Math.max(1, Math.min(1440, Math.round(+settings().tempMinutes) || 10)) * 60e3;
+  const canTemp = (sourceId) => { const e = entryOf(sourceId); return !!e && sources.supports(e.source, 'temporary'); };
+  /* sourceId -> Set of its temporary session ids, from the store. */
+  function tempIds() {
+    const out = new Map();
+    for (const [sourceId, sessionId] of store.temps()) {
+      if (!out.has(sourceId)) out.set(sourceId, new Set());
+      out.get(sourceId).add(sessionId);
+    }
+    return out;
+  }
+  const isTemporary = (sourceId, sessionId) => !!store.record(String(sourceId), String(sessionId)).temp;
+  const temporaryIds = (sourceId) => Object.freeze([...(tempIds().get(String(sourceId)) || [])].sort());
+  /* onDidChangeTemporary fires for each source whose temporary ids changed since the last look. */
+  function tellTemp() {
+    const ids = tempIds();
+    const seen = new Set([...tempSig.keys(), ...ids.keys()]);
+    for (const sourceId of seen) {
+      const sig = JSON.stringify([...(ids.get(sourceId) || [])].sort());
+      if (tempSig.get(sourceId) === sig) continue;
+      const had = tempSig.has(sourceId) || sig !== '[]';
+      tempSig.set(sourceId, sig);
+      if (had) for (const fn of tempListeners) { try { fn({ sourceId }); } catch (_) { /* a failing listener is ignored */ } }
+    }
+  }
+  const setTemp = (pairs, value) => { store.setTemp(pairs, value); store.flush(); tellTemp(); };
+  /* For a conversation the source started as temporary itself. Only a new one: one the user wrote to before
+     TEMP_NEW_MS ago, as the list has it, is refused. */
+  function addTemporary(sourceId, sessionId, { by = 'source' } = {}) {
+    if (host.trusted && !host.trusted()) return { ok: false, reason: 'this window is in Restricted Mode' };
+    if (!sources.usableId(sourceId) || !sources.usableId(sessionId)) return { ok: false, reason: 'that is not a conversation id' };
+    if (!canTemp(sourceId)) return { ok: false, reason: 'that agent has no temporary conversations' };
+    if (isTemporary(sourceId, sessionId)) return { ok: true, reason: '' };
+    const r = rows.get(keyOf(sourceId, sessionId));
+    if (r && r.lastUserAt > 0 && r.lastUserAt < now() - TEMP_NEW_MS) return { ok: false, reason: 'only a new conversation can be made temporary this way' };
+    setTemp([[sourceId, sessionId]], { by: by === 'supervisor' ? 'supervisor' : 'source', addedAt: now() });
+    schedule(0);
+    return { ok: true, reason: '' };
+  }
+  function keepTemp(key) {
+    const r = rows.get(key);
+    if (!r || !r.temp) return;
+    setTemp([[r.sourceId, r.sessionId]], null);
+    say(`session list: "${r.title || r.sessionId}" is kept as an ordinary conversation`);
+    schedule(0);
+  }
+  function deleteTempNow(key) {
+    const r = rows.get(key);
+    if (!r || !r.temp) return;
+    const at = now();
+    setTemp([[r.sourceId, r.sessionId]], Object.assign({}, r.temp, { closedAt: r.temp.closedAt || at, deleteAt: at }));
+    r.temp = Object.assign({}, r.temp, { closedAt: r.temp.closedAt || at, deleteAt: at });
+    deleteDueTemps().catch((err) => say(`session list: deleting a temporary conversation: ${(err && err.message) || err}`));
+  }
+  function tellTempClosed(r, ms) {
+    const mins = Math.round(ms / 60e3);
+    const title = withoutMarks(r.title) || r.sessionId;
+    Promise.resolve(noticeTime.info(vscode, `Temporary conversation "${title}" was closed. It is deleted in ${mins} minute${mins === 1 ? '' : 's'}.`, 'Keep', 'Delete Now'))
+      .then((pick) => { if (pick === 'Keep') keepTemp(r.key); else if (pick === 'Delete Now') deleteTempNow(r.key); }, () => {});
+  }
+  const openNow = (r) => r.here || r.elsewhere.length > 0 || rules.busy(r);
+  /*
+   * After each build: a temporary row shown again has its grace period cleared; one closed gets its closing time and
+   * due time written to the store at once, and the window that closed it tells the user. `was` is the look before this
+   * refresh. Records whose conversation the source no longer lists, when its list is complete, are dropped after
+   * TEMP_GONE_MS.
+   */
+  function checkTemps(was) {
+    if (closed || (host.trusted && !host.trusted())) return;
+    const ms = graceMs();
+    for (const r of rows.values()) {
+      if (!r.temp) continue;
+      const st = lists.get(r.sourceId);
+      if (!st || !st.complete) continue;
+      const pair = [[r.sourceId, r.sessionId]];
+      if (openNow(r)) {
+        if (r.temp.closedAt) { setTemp(pair, Object.assign({}, r.temp, { closedAt: 0, deleteAt: 0 })); r.temp = Object.assign({}, r.temp, { closedAt: 0, deleteAt: 0 }); }
+        continue;
+      }
+      if (r.temp.closedAt) continue;
+      const closedHere = was.here.has(r.key);
+      if (!closedHere && now() - startedAt < TEMP_SETTLE_MS) continue;
+      const at = now();
+      r.temp = Object.assign({}, r.temp, { closedAt: at, deleteAt: at + ms });
+      setTemp(pair, r.temp);
+      say(`session list: temporary conversation "${r.title || r.sessionId}" closed; deleted at ${stampOf(at + ms)} unless kept`);
+      if (closedHere) tellTempClosed(r, ms);
+    }
+    for (const [sourceId, sessionId, t] of store.temps()) {
+      const st = lists.get(sourceId);
+      if (!st || !st.complete || rows.has(keyOf(sourceId, sessionId))) continue;
+      if (now() - Math.max(t.addedAt, t.closedAt) > TEMP_GONE_MS) setTemp([[sourceId, sessionId]], null);
+    }
+    armTempTimer();
+  }
+  /* A timer for the next due time, so a delete does not wait for the next refresh; the store, not this timer, keeps
+     the time. */
+  function armTempTimer() {
+    if (tempTimer) { clearTimeout(tempTimer); tempTimer = null; }
+    if (closed) return;
+    const next = [...rows.values()].filter((r) => r.temp && r.temp.deleteAt > 0).reduce((m, r) => Math.min(m, r.temp.deleteAt), Infinity);
+    if (!Number.isFinite(next)) return;
+    tempTimer = setTimeout(() => { tempTimer = null; schedule(0); }, Math.min(Math.max(0, next - now()) + 50, 2 ** 31 - 1));
+    if (tempTimer.unref) tempTimer.unref();
+  }
+  /* Asks each source to delete its temporary conversations past due and closed, holding the project's sweep lock so
+     that one window does it. A refused or failed delete keeps the record, for the next try. A call while one runs
+     waits for that one. */
+  function deleteDueTemps() {
+    if (tempDeleting) return tempDeleting;
+    if (closed || (host.trusted && !host.trusted())) return Promise.resolve({ ran: false });
+    const due = [...rows.values()].filter((r) => r.temp && r.temp.deleteAt > 0 && r.temp.deleteAt <= now() && !openNow(r));
+    if (!due.length) return Promise.resolve({ ran: false });
+    const release = sweepLock();
+    if (!release) { schedule(5000); return Promise.resolve({ ran: false }); }
+    tempDeleting = deleteTemps(due, release).finally(() => { tempDeleting = null; });
+    return tempDeleting;
+  }
+  async function deleteTemps(due, release) {
+    const deleted = [], left = [];
+    try {
+      for (const e of entries()) {
+        const mine = due.filter((r) => r.sourceId === e.id);
+        if (!mine.length || !sources.supports(e.source, 'temporary')) continue;
+        for (const res of await runAction(e, 'delete', mine.map((r) => r.sessionId), { temporary: true })) {
+          const r = rows.get(keyOf(e.id, res.sessionId)) || {};
+          if (res.outcome === 'done') { store.setTemp([[e.id, res.sessionId]], null); if (r.temp) r.temp = null; deleted.push(r.title || res.sessionId); }
+          else left.push(`"${r.title || res.sessionId}" (${res.reason || res.outcome})`);
+        }
+      }
+      store.flush();
+      tellTemp();
+    } finally { release(); }
+    if (deleted.length) say(`session list: deleted temporary conversation${deleted.length === 1 ? '' : 's'} ${deleted.map((t) => `"${t}"`).join(', ')}`);
+    if (left.length) say(`session list: temporary conversation${left.length === 1 ? '' : 's'} left for the next try: ${left.join(', ')}`);
+    schedule(0);
+    return { ran: true, deleted: deleted.length, left: left.length };
   }
 
   /* ── actions ── */
@@ -558,16 +717,24 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return res.outcome;
   }
 
-  async function create(sourceId, where, groupId) {
+  /* `temporary` starts a temporary conversation. A source that cannot tell the new id yet answers '' and registers the
+     conversation itself once it knows it (addTemporary), so the list does not guess which new conversation it was. */
+  async function create(sourceId, where, groupId, { temporary = false } = {}) {
     const e = entryOf(sourceId);
     if (!e) return 'gone';
     const caps = capsOf(e.source);
     const at = caps.create.includes(where) ? where : caps.create[0];
     if (!at) return 'nowhere';
+    if (temporary && !sources.supports(e.source, 'temporary')) { warn(`${sources.labelOf(e.source)} cannot start temporary conversations.`); return 'nowhere'; }
     if (host.globalMemento) Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { ...lastNew(), where: at })).catch(() => {});
-    const res = await runAction(e, 'create', [], { where: at });
+    const res = await runAction(e, 'create', [], temporary ? { where: at, temporary: true } : { where: at });
     const made = res.find((x) => x.outcome === 'done');
     if (!made) { warn(`No new conversation: ${(res[0] && res[0].reason) || 'the agent did not start one'}`); return 'failed'; }
+    if (temporary) {
+      if (made.sessionId) setTemp([[sourceId, made.sessionId]], { by: 'user', addedAt: now() });
+      schedule();
+      return 'done';
+    }
     if (groupId) {
       if (made.sessionId) store.setGroup([[sourceId, made.sessionId]], groupId);
       else pendingGroup = { sourceId, groupId, at: now() };
@@ -640,6 +807,23 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return failed.length ? 'partly' : 'done';
   }
 
+  /* The user turns open, ordinary conversations temporary, after saying yes; they leave the list at once. */
+  async function makeTemp(keys) {
+    const go = keys.map((k) => rows.get(k)).filter((r) => r && r.here && !r.temp && !r.archived && canTemp(r.sourceId));
+    if (!go.length) return 'nothing';
+    const mins = Math.round(graceMs() / 60e3);
+    let pick;
+    try {
+      pick = await vscode.window.showWarningMessage(go.length === 1 ? `Make "${withoutMarks(go[0].title) || go[0].sessionId}" temporary?` : `Make ${go.length} conversations temporary?`,
+        { modal: true, detail: `${go.length === 1 ? 'It leaves' : 'They leave'} the session list, and ${go.length === 1 ? 'is' : 'are'} deleted from disk ${mins} minute${mins === 1 ? '' : 's'} after ${go.length === 1 ? 'it is' : 'they are'} closed, unless you choose Keep then.` },
+        'Make Temporary');
+    } catch (_) { pick = undefined; }
+    if (pick !== 'Make Temporary') return 'cancelled';
+    setTemp(go.map((r) => [r.sourceId, r.sessionId]), { by: 'convert', addedAt: now() });
+    schedule(0);
+    return 'done';
+  }
+
   /* What the page asks for, by name. `keys` are the rows it acts on. */
   async function act(name, keys, pick) {
     const list = (keys || []).filter((k) => rows.has(k));
@@ -654,6 +838,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       case 'markUnread': store.markUnread(pairs, true); for (const k of list) if (k === look.front) heldUnread.add(k); tellSeen(list.map((k) => rows.get(k)), false); break;
       case 'markRead': for (const k of list) { const r = rows.get(k); store.seen(r.sourceId, r.sessionId, r.lastReplyAt || 0); } tellSeen(list.map((k) => rows.get(k)), true); break;
       case 'archive': if (!ro) store.archive(pairs, true); break;
+      case 'makeTemp': if (!ro) return makeTemp(list); break;
       case 'unarchive': if (!ro) store.archive(pairs, false); break;
       case 'delete': if (!ro) return remove(list); break;
       case 'addToGroup': if (!ro && pick && store.groupKnown(pick)) store.setGroup(pairs.filter((p) => !store.record(...p).archived), pick); break;
@@ -711,6 +896,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       { name: 'markUnread', title: 'Mark as Unread', group: '5_read', when: 'row && !unread' },
       { name: 'markRead', title: 'Mark as Read', group: '5_read', when: 'row && unread' },
       ...own,
+      { name: 'makeTemp', title: 'Make Temporary...', group: '8_archive', when: 'row && tempable', rows: 'tempable', plural: 'Make {n} Conversations Temporary...' },
       { name: 'archive', title: 'Archive', group: '8_archive', when: 'row && !archived', rows: 'archivable', plural: 'Archive {n} Conversations' },
       { name: 'unarchive', title: 'Unarchive', group: '8_archive', when: 'row && archived', rows: 'archived', plural: 'Unarchive {n} Conversations' },
       { name: 'delete', title: 'Delete...', group: '9_delete', when: 'row && archived', rows: 'deletable', plural: 'Delete {n} Conversations...' },
@@ -746,10 +932,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       badges: r.badges, branch: r.branch, worktree: r.worktree, processes: r.processes, depth: depth || 0, hover: hover.join('\n'),
       archived: r.archived, grouped: !!(r.group && store.groupKnown(r.group) && store.groups().some((g) => g.id === r.group)),
       here: r.here, elsewhere: r.elsewhere.length > 0, away: awayOf(r.elsewhere), runs: rules.runs(r), needs: !!r.detail && rules.needsYou(r),
-      ctx: { row: true, here: r.here, archived: r.archived, pinned: r.pinned, unread, renamable: caps.rename,
+      ctx: { row: true, here: r.here, archived: r.archived, pinned: r.pinned, unread, renamable: caps.rename, tempable: r.here && !r.archived && canTemp(r.sourceId),
         grouped: !!r.group, canTab: caps.open.includes('tab'), canSidebar: caps.open.includes('sidebar'),
         ...Object.fromEntries(r.actions.map((a) => [`own_${a}`, true])) },
-      archivable: !r.archived, pinnable: !r.pinned && !r.archived, groupable: !r.archived,
+      archivable: !r.archived, pinnable: !r.pinned && !r.archived, groupable: !r.archived, tempable: r.here && !r.archived && canTemp(r.sourceId),
       deletable: !why && caps.delete, deleteWhy: why,
     };
   }
@@ -792,7 +978,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       rows: (p.key === 'closed' ? p.rows.map((r) => [r, 0]) : nest(p.rows)).map(([r, d]) => Object.assign(rowView(r, p.label, d),
         p.key === 'closed' ? { time: `closed ${age(r.closedAt, now())}` } : {})),
     }));
-    const srcs = entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), logo: sources.logoOf(e.source), create: capsOf(e.source).create }));
+    const srcs = entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), logo: sources.logoOf(e.source), create: capsOf(e.source).create,
+      temporary: sources.supports(e.source, 'temporary') }));
     const accounts = [];
     for (const e of entries()) {
       const info = accountRaw(e);
@@ -884,13 +1071,16 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       noteClosed(was, look);
       elsewhereByKey = otherWindows(entries().map((e) => ({ sourceId: e.id, planDir: sources.planDirOf(e.source) })), { now: now() });
       build();
+      checkTemps(was);
       publishShown(false);
       tellDue();
+      tellTemp();
       markSeen();
       placeNew();
       modelValue = buildModel();
       fire();
       sweep().catch((err) => say(`session list: sweep: ${(err && err.message) || err}`));
+      deleteDueTemps().catch((err) => say(`session list: deleting temporary conversations: ${(err && err.message) || err}`));
     })();
     try { await refreshing; } finally { refreshing = null; }
     if (again) { again = false; return refresh(); }
@@ -967,6 +1157,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     manages: () => !closed && (host.trusted ? host.trusted() : true),
     deletionDue: dueOf,
     onDidChangeDeletionDue(fn) { dueListeners.add(fn); return { dispose: () => dueListeners.delete(fn) }; },
+    isTemporary, temporaryIds, addTemporary, keepTemp, deleteTempNow, deleteDueTemps,
+    onDidChangeTemporary(fn) { tempListeners.add(fn); return { dispose: () => tempListeners.delete(fn) }; },
     folderChanged() {
       const next = projectOf(folders(), workspaceFile());
       if (next.key === project.key) return;
@@ -985,6 +1177,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       closed = true;
       if (timer) clearTimeout(timer);
       if (seenTimer) clearTimeout(seenTimer);
+      if (tempTimer) clearTimeout(tempTimer);
       clearInterval(shownTimer);
       if (storeWatch) { try { storeWatch.close(); } catch (_) { /* gone */ } storeWatch = null; }
       try { fs.unlinkSync(shownFile()); } catch (_) { /* never written */ }
@@ -995,4 +1188,4 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
 }
 
 module.exports = { createSessionList, sessionOf, capsOf, resultsOf, PAGE, MAX_SESSIONS, PAGE_MS, ACTION_MS, RELIST_MS, SWEEP_EVERY_MS, CLOSED_KEY, LAST_NEW_KEY,
-  NEW_ORDER };
+  NEW_ORDER, TEMP_SETTLE_MS, TEMP_NEW_MS, TEMP_GONE_MS };

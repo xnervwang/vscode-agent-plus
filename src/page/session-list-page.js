@@ -91,7 +91,13 @@
   newTab.dataset.where = 'tab';
   const newSide = button('sl-new-half', 'Start a conversation in the sidebar', icon('plus'), el('span', '', 'New in sidebar'), icon('side', 'sl-icon sl-place'));
   newSide.dataset.where = 'sidebar';
-  newBar.append(newAgent, newTab, newSide);
+  /* While pressed, the next conversation either half starts is temporary; then it lets go. */
+  const newTemp = button('sl-new-temp', 'Make the next new conversation temporary', el('span', 'sl-temp-glyph', '\u23f3'));
+  newTemp.dataset.tool = 'temp';
+  newTemp.setAttribute('aria-pressed', 'false');
+  let tempOn = false;
+  const setTempOn = (on) => { tempOn = !!on && !newTemp.disabled; newTemp.classList.toggle('sl-on', tempOn); newTemp.setAttribute('aria-pressed', String(tempOn)); };
+  newBar.append(newAgent, newTab, newSide, newTemp);
   /* A bar too narrow for both labels keeps the default half's label and shows the other half as an icon, rather than
      as a label cut down to a letter or two. */
   function fitNew() {
@@ -362,6 +368,11 @@
       newSide.disabled = !cur.create.includes('sidebar');
       newTab.classList.toggle('sl-primary', model.newWhere !== 'sidebar' && !newTab.disabled);
       newSide.classList.toggle('sl-primary', model.newWhere === 'sidebar' && !newSide.disabled);
+      newTemp.disabled = !cur.temporary;
+      newTemp.title = cur.temporary ? (tempOn ? 'The next new conversation is temporary: it stays out of this list and is deleted after it is closed. Click to turn off'
+        : 'Make the next new conversation temporary: it stays out of this list and is deleted after it is closed')
+        : `${cur.label} cannot start temporary conversations`;
+      if (newTemp.disabled) setTempOn(false);
       fitNew();
     }
     const lines = (model.problems || []).map((p) => el('div', 'sl-note sl-warn', p.text));
@@ -1007,8 +1018,9 @@
     const link = t.closest('[data-link]');
     if (link) { send({ kind: 'accountLink', sourceId: link.dataset.source, i: Number(link.dataset.link) }); return; }
     if (t.closest('[data-tool="agent"]')) { openAgentMenu(); return; }
+    if (t.closest('[data-tool="temp"]')) { if (!newTemp.disabled) { setTempOn(!tempOn); drawTop(); } return; }
     const half = t.closest('[data-where]');
-    if (half && !half.disabled) { send({ kind: 'create', sourceId: model.newSource, where: half.dataset.where }); return; }
+    if (half && !half.disabled) { send({ kind: 'create', sourceId: model.newSource, where: half.dataset.where, temporary: tempOn }); setTempOn(false); drawTop(); return; }
     const chip = t.closest('[data-chip]');
     if (chip) { const k = chip.dataset.chip; ui.filter = ui.filter === k && k !== 'all' ? 'all' : k; keep(); filter(); return; }
     if (t.closest('[data-tool="clear"]')) { ui.search = ''; keep(); filter(); searchInput.focus(); return; }
