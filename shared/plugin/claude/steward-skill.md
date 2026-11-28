@@ -1,6 +1,6 @@
 ---
 name: supervisor
-description: How to act as the user's supervisor for other Claude Code conversations or OpenCode Agent Plus conversations - the role a Claude Code conversation takes when the user ticks other conversations for it in Claude Code Plus's Supervisor panel. Use it whenever the start of a turn says you are the supervisor of some conversations, when the user asks you to pass something to one of them, rename or close one, open a new conversation or one that no window shows, take or drop a conversation, or turn All or New conversations on or off, asks how they are doing, or names one with @, when a "Supervisor notice from Claude Code Plus" or a "Handoff from" a conversation you manage arrives, and when a conversation you observe should be yours to lead, or you are asked to hand one over to another supervisor.
+description: How to act as the user's supervisor for other Claude Code conversations or OpenCode Agent Plus conversations - the role a Claude Code conversation takes when the user ticks other conversations for it in Claude Code Plus's Supervisor panel. Use it whenever the start of a turn says you are the supervisor of some conversations, when the user asks you to pass something to one of them, rename or close one, open a new conversation or one that no window shows, take or drop a conversation, or turn All or New conversations on or off, asks how they are doing, or names one with @, when a "Supervisor notice from Claude Code Plus" or a "Handoff from" a conversation you manage arrives, and when a conversation you observe should be yours to lead, or you are asked to hand one over to another supervisor, and when you need to decide which conversation should do the work.
 version: 1.0.0
 tags: [supervisor, cross-session, monitoring, relay]
 ---
@@ -27,6 +27,21 @@ something done in a conversation you observe, see "Leading and observing" below.
 The user changes the list in the Supervisor panel or by asking you in this conversation to take or drop a conversation or
 turn All or New conversations on or off (see "Changing your list" below). Claude Code Plus also ticks a conversation
 you open with `--open` or `--resume`, and you are its lead.
+
+## Who does the work
+
+Assign and coordinate work across conversations. Avoid doing the task in the foreground of your own conversation when
+you can. Use these options in order:
+
+1. Give the task to an existing conversation that suits it. Follow "Each message from the user" to pass it on. If you
+   observe that conversation, read "Leading and observing" first.
+2. If no conversation suits the task, arrange to start one in the project where the work belongs. If no VS Code window
+   has the project open, ask the user to open it. Ask the user before opening a new conversation there. Once the user
+   agrees, follow "Renaming, closing and opening conversations".
+3. Assign the task to a background process or a background agent.
+
+Run relay script commands yourself to pass messages or to open, rename, close or archive conversations. Claude Code Plus
+only carries out these commands when you run them. A background agent cannot run them for you.
 
 ## What counts as the user's own words
 
@@ -141,7 +156,7 @@ Take as little of the user's attention as you can.
 
 ## Renaming, closing and opening conversations
 
-Use the script to rename or close a conversation you lead, to open a new one, or to open one that no window shows. Do each only when the user asks. You may give a conversation you have just opened a short title naming its task without asking. Renaming, closing or reopening a conversation you observe is refused, like passing it a message.
+Use the script to rename or close a conversation you lead, to open a new one, or to open one that no window shows. Rename, close or reopen a conversation only when the user asks. Open a new conversation when the user asks for one or agrees to one you propose under "Who does the work". You may give a conversation you have just opened a short title naming its task without asking. Renaming, closing or reopening a conversation you observe is refused, like passing it a message.
 
 To rename a conversation, put the new title in a here-document. Use one line, at most 200 characters:
 
@@ -180,7 +195,7 @@ To open a new conversation:
    python3 <this plugin>/hooks/steward-relay.py --windows
    ```
 
-2. Pick the folder of the project the user named. If no window has it open, tell the user. Do not try to open a window.
+2. Pick the folder of the project the user named or agreed to after you proposed it. If no window has that project open, ask the user to open it in VS Code. Do not try to open a window.
 3. Open the conversation with the first message in a here-document:
 
    ```bash
@@ -455,7 +470,8 @@ alone.
 3. Choose where the words go:
    - A conversation you lead: a plain send. One you observe: see "Leading and observing" first.
    - A conversation that the user's words name and that no window shows: `--resume` with the message (above).
-   - Otherwise, a new conversation, opened with `--open` in the folder of the project the words are about.
+   - Otherwise, open a new conversation with `--open` in the folder of the project the words are about, but only if the user asks for a new
+     conversation or agrees to one you propose.
    - If you are not sure where they go, ask the user, name the places you considered, and pass nothing on until the
      user answers.
 4. Write the message as you would any message you pass on (steps 1 to 3 under "Each message from the user"). Put in
