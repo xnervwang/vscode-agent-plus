@@ -5,20 +5,23 @@
 
 'use strict';
 /*
- * The marks Claude Code Plus and Codex Plus show with a conversation's title, after it: the steward crown (Claude Code
- * Plus only), then the envelope for a reply not read yet, and the bell older builds put after a steward's title. They are drawn, never stored: a title
- * typed in a rename box, written by an older build, or set by Claude Code is stripped of every one of them wherever it
- * stands, and then shown with exactly one crown after the title for a steward and exactly one envelope last while a
- * reply is unread. No dependency on Claude Code or VS Code; withoutEnvelope() and withEnvelope() serve an agent that
+ * The marks Claude Code Plus and Codex Plus show with a conversation's title: the hourglass before it for a temporary
+ * conversation, and after it the steward crown (Claude Code Plus only), then the envelope for a reply not read yet, and
+ * the bell older builds put after a steward's title. They are drawn, never stored: a title typed in a rename box, written
+ * by an older build, or set by Claude Code is stripped of every one of them wherever it stands, and then shown with
+ * exactly one crown after the title for a steward and one envelope last while a reply is unread; withTemporary() puts
+ * one hourglass before a title for a temporary conversation. No dependency on Claude Code or VS Code; withoutEnvelope() and withEnvelope() serve an agent that
  * has no steward. The envelope to draw is passed in (src/envelope.js). The plain envelope that earlier builds drew is
  * taken off in both its forms as well, since titles saved then still carry it.
  */
 
 const CROWN = '\u{1F451}';
+const HOURGLASS = '\u23F3';
 const ENVELOPE = require('./envelope').COLOUR;
 /* Each mark with the emoji or the text variation selector after it, or neither. */
 const ENVELOPES = /(?:\u{1F4E9}|\u2709)[\uFE0E\uFE0F]?/gu;
-const MARKS = /(?:\u{1F451}|\u{1F6CE}|\u{1F4E9}|\u2709)[\uFE0E\uFE0F]?/gu;
+const HOURGLASSES = /\u23F3[\uFE0E\uFE0F]?/gu;
+const MARKS = /(?:\u{1F451}|\u{1F6CE}|\u{1F4E9}|\u2709|\u23F3)[\uFE0E\uFE0F]?/gu;
 
 /* `text` with what `re` matches taken out, each run of spaces left in it joined into one, and the ends trimmed. */
 function strip(text, re) {
@@ -34,7 +37,7 @@ function withoutEnvelope(title) {
   return strip(title, ENVELOPES);
 }
 
-/** `title` without any crown, envelope or bell. */
+/** `title` without any hourglass, crown, envelope or bell. */
 function withoutMarks(title) {
   return strip(title, MARKS);
 }
@@ -50,4 +53,10 @@ function withMarks(title, { steward = false, unseen = false, envelope = ENVELOPE
   return withEnvelope(steward ? (t ? t + ' ' + CROWN : CROWN) : t, unseen, envelope);
 }
 
-module.exports = { CROWN, ENVELOPE, withoutEnvelope, withoutMarks, withEnvelope, withMarks };
+/** `title`, which may already carry the other marks, with one hourglass before it. */
+function withTemporary(title) {
+  const t = strip(title, HOURGLASSES);
+  return t ? HOURGLASS + ' ' + t : HOURGLASS;
+}
+
+module.exports = { CROWN, HOURGLASS, ENVELOPE, withoutEnvelope, withoutMarks, withEnvelope, withMarks, withTemporary };

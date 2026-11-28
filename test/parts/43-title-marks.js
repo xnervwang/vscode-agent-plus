@@ -5,7 +5,7 @@
 'use strict';
 /*
  * The marks drawn with a conversation's title (src/title-marks.js): stripped wherever they stand, then shown with one
- * crown first for a steward and one envelope last for a reply not read.
+ * hourglass first for a temporary conversation, one crown for a steward and one envelope last for a reply not read.
  */
 const path = require('path');
 
@@ -26,4 +26,12 @@ module.exports = async ({ eq, root }) => {
   ['', C, 'Fix it ' + E, 'Fix it', 'Fix it ' + T, C + ' Fix'],
   'the envelope part works on its own, for an agent with no steward, and draws the form it is given');
   eq(tm.ENVELOPE, E, 'the envelope it draws by default is the colour form src/envelope.js gives a dark theme');
+  const H = '\u23F3';
+  eq([H + ' Title', 'Title ' + H, H + '\uFE0F Ti ' + H + ' tle', H + ' ' + C + ' Title ' + E].map(tm.withoutMarks), ['Title', 'Title', 'Ti tle', 'Title'],
+    'an hourglass is taken off wherever it stands, with or without the variation selector');
+  eq([tm.withTemporary('Title'), tm.withTemporary(H + ' Title ' + H), tm.withTemporary(tm.withMarks(H + ' Title', { steward: true, unseen: true })), tm.withTemporary(''),
+    tm.withMarks(H + ' Title', {})],
+  [H + ' Title', H + ' Title', `${H} Title ${C} ${E}`, H, 'Title'],
+  'withTemporary puts one hourglass before the title, keeping the crown and envelope after it, and withMarks alone leaves none');
+  eq(tm.HOURGLASS, H, 'the hourglass it draws is U+23F3');
 };

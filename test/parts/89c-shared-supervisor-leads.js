@@ -365,6 +365,26 @@ module.exports = async ({ eq, note, tmp, root }) => {
       'after --open or --resume the script says this supervisor now leads the conversation');
   }
 
+  /* A temporary conversation: --temp goes with --open only, the request carries it, and the answer says whether the window
+     made the conversation temporary. */
+  {
+    const d = world();
+    const folder = tmp('leads-folder');
+    const made = await relay(d, LEAD, ['--open', folder, '--temp'], { input: 'Check the disk use once.',
+      answer: () => ({ outcome: 'submitted', ticked: true, sessionId: S(6), temporary: true }) });
+    const notMade = await relay(d, LEAD, ['--open', folder, '--temp'], { input: 'Check the disk use once.',
+      answer: () => ({ outcome: 'submitted', ticked: true, sessionId: S(7), temporary: false, temporaryReason: 'Agent Plus has no temporary conversations' }) });
+    const plain = await relay(d, LEAD, ['--open', folder], { input: 'Port the reader.', answer: () => ({ outcome: 'submitted', sessionId: S(8) }) });
+    const misused = await relay(d, LEAD, ['--rename', M, '--temp'], { input: 'A title' });
+    eq([made.code, made.asked.map((r) => r.temp), made.out.split('\n')[0].endsWith('You are its lead supervisor. It is a temporary conversation: the session list '
+      + 'does not show it, and its files are deleted a while after it is closed.'),
+    notMade.out.split('\n')[0].endsWith(' It could not be made temporary (Agent Plus has no temporary conversations), so it is an ordinary conversation.'),
+    plain.asked.map((r) => 'temp' in r), /temporary/.test(plain.out), misused.code, misused.asked.length],
+    [0, [true], true, true, [false], false, 2, 0],
+    '--open --temp asks the window for a temporary conversation and says whether it is one; without --temp the request has no temp, '
+      + 'and --temp with any other action is a usage error that writes no request');
+  }
+
   /* Reading stewards.json while a window writes it: on Windows the file can be missing or unreadable for a moment while
      the window holds its lock directory, and steward_table waits that out instead of taking it for no table. */
   {
