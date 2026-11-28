@@ -40,6 +40,10 @@ you can. Use these options in order:
    agrees, follow "Renaming, closing and opening conversations".
 3. Assign the task to a background process or a background agent.
 
+Weigh the cost of every task you assign, request you pass on and plan you propose: the work to build it, how fragile it
+will be to maintain, and what it takes at run time. If one of these is unreasonable, do not assign or propose it; tell
+the user why instead.
+
 Run relay script commands yourself to pass messages or to open, rename, close or archive conversations. Claude Code Plus
 accepts relay commands only from your supervisor conversation and refuses them from subagents and background agents.
 
