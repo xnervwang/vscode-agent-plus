@@ -256,7 +256,7 @@
     const ro = !!model.restricted;
     r._p.pin.classList.toggle('sl-hidden', ro || !row.pinnable);
     r._p.unpin.classList.toggle('sl-hidden', ro || !row.pinned);
-    r._p.rename.classList.toggle('sl-hidden', ro || !!row.archived || !row.ctx.renamable);
+    r._p.rename.classList.toggle('sl-hidden', ro || !row.ctx.renamable);
     r._p.archive.classList.toggle('sl-hidden', ro || !!row.archived);
     r._p.restore.classList.toggle('sl-hidden', ro || !row.archived);
     if (!r._editing) r.draggable = !row.archived && !ro;
@@ -890,7 +890,7 @@
     return all.find(onScreen) || all[0] || null;
   }
   function startRename(r) {
-    if (!r || r._editing || r._row.archived || model.restricted) return;
+    if (!r || r._editing || model.restricted) return;
     const k = r._row.key;
     expand(r);
     r._editing = true;

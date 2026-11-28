@@ -598,7 +598,9 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const out = r.elsewhere.find((x) => x.running || x.kind !== 'vscode');
     if (out && rules.busy(r)) { tell(`"${r.title}" runs in ${out.label}, which would write its old title back. Rename it there.`); return 'refused'; }
     const [res] = await runAction(e, 'rename', [r.sessionId], { title: clean });
-    if (res.outcome !== 'done') warn(`"${r.title}" was not renamed: ${res.reason || res.outcome}`);
+    /* Until the next listing, so that renaming it again, back to its old title too, compares with the title just set. */
+    if (res.outcome === 'done' && !Object.isFrozen(r)) r.title = clean;
+    else if (res.outcome !== 'done') warn(`"${r.title}" was not renamed: ${res.reason || res.outcome}`);
     schedule();
     return res.outcome;
   }
@@ -698,7 +700,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     return [
       { name: 'openTab', title: 'Open in Tab', group: '1_open', when: 'row && !here && canTab' },
       { name: 'openSidebar', title: 'Open in Sidebar', group: '1_open', when: 'row && !here && canSidebar' },
-      { name: 'rename', title: 'Rename', group: '2_edit', when: 'row && renamable && !archived' },
+      { name: 'rename', title: 'Rename', group: '2_edit', when: 'row && renamable' },
       { name: 'color', title: 'Text Color', group: '2_edit', when: 'row', submenu: 'color' },
       { name: 'pin', title: 'Pin', group: '3_pin', when: 'row && !pinned && !archived', rows: 'pinnable', plural: 'Pin {n} Conversations' },
       { name: 'unpin', title: 'Unpin', group: '3_pin', when: 'row && pinned', rows: 'pinned', plural: 'Unpin {n} Conversations' },

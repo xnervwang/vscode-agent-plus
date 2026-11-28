@@ -1996,7 +1996,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await sl.evaluate(() => { const r = [...document.querySelectorAll('.sl-section[data-key="archived"] .sl-row')]; if (r.length) r[r.length - 1].scrollIntoView({ block: 'nearest' }); });
     await sleep(300);
     await look('sessions-archived', { expect: 'The ARCHIVED section expanded under Ungrouped, listing Nothing going on (green title, no pin) and Archived long ago with the dark OpenCode logo.' }, sidebarBox());
-    const unarchiveSpec = (which) => ({ pointer: true, expect: `The pointer is on Nothing going on in the ARCHIVED section, ${which}. Its only button at the right end is Unarchive, a U-turn arrow pointing left, drawn with lines as thin as the pencil and archive icons elsewhere in the list. It is not an archive box with an arrow.` });
+    const unarchiveSpec = (which) => ({ pointer: true, expect: `The pointer is on Nothing going on in the ARCHIVED section, ${which}. At the right end are two buttons, Rename (a pencil) and Unarchive, a U-turn arrow pointing left drawn with lines as thin as the pencil. Unarchive is not an archive box with an arrow.` });
     await slRowLoc(SLT.quiet, 'archived').hover();
     await sleep(500);
     await look('sessions-unarchive-dark', unarchiveSpec('in a dark theme'), sidebarBox());
@@ -2011,6 +2011,18 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await theme(THEMES.dark);
     await showSessions('agentPlus.sessions');
     await sleep(800);
+    /* An archived conversation is renamed in place like any other and stays in Archived; its title is put back after. */
+    const archivedTitle = `${SLT.quiet}, renamed while archived`;
+    const renameArchived = async (from, to) => {
+      await slAct(from, 'rename', 'archived');
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.type(to);
+      await page.keyboard.press('Enter');
+      return until(async () => (await src('return src.conversations();')).some((c) => c.sessionId === 'sl-quiet' && c.title === to)
+        && !!await slWait((r) => slFind(r, to, 'archived'), 3000), 10000, 300);
+    };
+    check(!!await renameArchived(SLT.quiet, archivedTitle), 'an archived conversation has the Rename button too: the title is edited in place, the agent renames it, and it stays in Archived');
+    check(!!await renameArchived(archivedTitle, SLT.quiet), 'and it can be renamed back the same way');
     await slAct(SLT.quiet, 'unarchive', 'archived');
     check(!!await slWait((r) => slFind(r, SLT.quiet, 'ungrouped')), 'Unarchive puts it back in Ungrouped');
   });

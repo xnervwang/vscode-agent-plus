@@ -401,6 +401,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([rec('b').unreadMark, codex.seen.pop()], [false, [['b'], true]], 'marked read again');
     await list.act('archive', [k('a')]);
     eq([rec('a').archived, rec('a').pinned, rec('a').group], [true, false, null], 'archiving by hand unpins and takes it out of its group');
+    await list.rename(k('a'), 'Renamed while archived');
+    eq([codex.calls.pop(), rec('a').archived, (list.model().menu.find((x) => x.name === 'rename') || {}).when], [['rename', ['a'], { title: 'Renamed while archived' }], true, 'row && renamable'],
+      'an archived conversation is renamed like any other and stays archived; the menu offers Rename whether or not a row is archived');
+    await list.rename(k('a'), 'A');
+    eq(codex.calls.pop(), ['rename', ['a'], { title: 'A' }], 'renamed back to its old title before the list reads the agent again, the rename still goes to the source');
     await list.act('unarchive', [k('a')]);
     await list.rename(k('b'), '  New   name ');
     eq(codex.calls.pop(), ['rename', ['b'], { title: 'New name' }], 'a rename goes to the source, tidied');
