@@ -28,7 +28,7 @@ import os
 import re
 import time
 
-from plan_path import SESSION_NAME, listed
+from plan_path import LOCK_SUFFIX, SESSION_NAME, listed
 from proc_alive import alive
 
 STEWARDS_FILE = "stewards.json"
@@ -240,7 +240,7 @@ def read_whole(path):
                 return json.load(fh)
         except (OSError, ValueError):
             pass
-        if os.path.isdir(path + ".lock"):
+        if os.path.isdir(path + LOCK_SUFFIX):
             free = 0
             if time.monotonic() >= until:
                 return None
