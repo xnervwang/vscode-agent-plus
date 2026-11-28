@@ -13,4 +13,4 @@ EOF
 ```
 
 Keep the title in the command itself. The window checks the request against this command in the conversation's
-transcript, so a title written to a file first and redirected in is not renamed.
+transcript, so a request whose title was written to a file first and redirected in is refused.

@@ -106,15 +106,15 @@ print(json.dumps(out, ensure_ascii=False))
   let got = null;
   try { got = JSON.parse(r.stdout); } catch (_) { got = { status: r.status, err: (r.stderr || '').slice(-600) }; }
   eq(got.done, [{ outcome: 'done', reason: '', title: 'Parser rewrite' }, 1, true, 'Claude Code', SID, '  Parser   rewrite 📩 ', 'command', []],
-    'a request names the agent, the conversation and the title as given, and the answer a window writes comes back; no file is left');
-  eq(got.untaken, ['untaken', []], 'a request no window takes is withdrawn when the wait ends, and says so');
-  eq(got.unclear, ['unclear', [true]], 'a request a window took and never answered says that it is unclear');
+    'request_retitle writes the agent, the conversation and the untouched title, returns the window\'s answer and leaves no file');
+  eq(got.untaken, ['untaken', []], 'a request no window takes is withdrawn when the wait ends');
+  eq(got.unclear, ['unclear', [true]], 'a request that a window took and never answered comes back as unclear');
   eq(got.refused, ['refused', 'refused', 'refused', []], 'an id of the wrong shape, an empty title and an overlong one are refused without writing anything');
   eq(got.command, [0, "Renamed: the conversation is now titled 'Release notes'.", 'Release notes', 'command'],
     'retitle.py reads the title from standard input and the conversation from the agent\'s variable, and says what came of it');
-  eq(got.refusedBack && got.refusedBack.slice(0, 2), [1, 'Not renamed: this conversation did not run that command.'], 'and a refusal comes back with its reason');
+  eq(got.refusedBack && got.refusedBack.slice(0, 2), [1, 'Not renamed: this conversation did not run that command.'], 'a refusal is printed with its reason');
   eq(got.noEnv && got.noEnv.slice(0, 3), [1, 'Not renamed: Claude Code does not say which conversation runs this command (CLAUDE_CODE_SESSION_ID is not set).', null],
     'without the variable it asks nothing');
   eq(got.opencode && got.opencode.slice(0, 3), [1, 'Not renamed: OpenCode does not say which conversation runs a command; use the set_title tool instead.', null],
-    'and in OpenCode, which names no conversation in a command\'s environment, it asks nothing either');
+    'in OpenCode, which names no conversation in a command\'s environment, it asks nothing');
 };

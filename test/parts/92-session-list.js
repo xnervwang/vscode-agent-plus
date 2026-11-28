@@ -649,7 +649,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const recB = (id) => S.createStore({ dir: path.join(shared, 'session-list'), key: lb.project().key }).record('codex', id);
     const recA = (id) => S.createStore({ dir: path.join(shared, 'session-list'), key: la.project().key }).record('codex', id);
     eq(got.map((r) => [r.sessionId, r.outcome]), [['both', 'archived'], ['b-only', 'archived'], ['nowhere', 'notListed']],
-      'archive() takes each conversation some open window lists, and says which none lists');
+      'what archive() answers for each conversation');
     eq([recA('both').archived, recA('both').pinned, recB('both').archived, recB('b-only').archived, recA('b-only').archived, recB('a-only').archived],
       [true, false, true, true, false, false], "it is archived, and unpinned, in each project whose list shows it, and nowhere else");
     const shownB = await wait(0).then(async () => { for (let i = 0; i < 100; i++) { const r = lb.rows().find((x) => x.sessionId === 'b-only'); if (r && r.archived) return true; await wait(20); } return false; });

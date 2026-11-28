@@ -381,7 +381,6 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     pendingGroup = null;
   }
 
-  /* ── another window writing this project's record ── */
   /* archive() from another window, or any other process, writes this project's record; the list reads it again at once
      rather than at its next refresh. */
   let storeWatch = null;
@@ -399,14 +398,14 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
   watchStore();
 
   /* ── which projects the open windows list, for archive() ── */
-  /* Each window writes the project its list is for and the keys of the rows it shows to
-     shared('session-list')/windows/<pid>.json, when they change and every SHOWN_EVERY_MS; an entry older than
-     SHOWN_STALE_MS, or whose process is gone, is a window that closed. */
+  /* Each window writes its list's project and the keys of the rows it shows to
+     shared('session-list')/windows/<pid>.json, when they change and every SHOWN_EVERY_MS. An entry older than
+     SHOWN_STALE_MS, or whose process is gone, counts as closed. */
   const SHOWN_EVERY_MS = 30000, SHOWN_STALE_MS = 120000;
   const shownFile = () => path.join(shared('session-list'), 'windows', `${pid}.json`);
   let shownSig = '', shownAt = 0;
   function publishShown(force) {
-    /* A window in Restricted Mode writes nothing to the folder the windows share. */
+    /* Nothing is written to the shared folder in Restricted Mode. */
     if (closed || (host.trusted && !host.trusted())) return;
     if (!storeWatch) watchStore();
     const keys = [...rows.keys()].sort();
@@ -442,8 +441,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     }
     return out;
   }
-  /* Archives conversations of `sourceId` as Archive on a row does, in the record of every project whose list shows them
-     in an open window on this machine, this window's own included. */
+  /* Archives conversations of `sourceId` the way a row's Archive button does, in the record of every project whose list
+     in any open window on this machine shows them. */
   async function archiveFor(sourceId, ids) {
     const ro = !!(host.trusted && !host.trusted());
     const others = ro ? new Map() : shownElsewhere();
@@ -454,7 +453,7 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       const k = keyOf(sourceId, id);
       const projects = new Set(rows.has(k) ? [project.key] : []);
       for (const [pk, keys] of others) if (keys.has(k)) projects.add(pk);
-      if (!projects.size) { out.push({ sessionId: id, outcome: 'notListed', reason: 'no session list in an open window shows it' }); continue; }
+      if (!projects.size) { out.push({ sessionId: id, outcome: 'notListed', reason: "no open window's session list shows it" }); continue; }
       for (const pk of projects) {
         if (!touched.has(pk)) touched.set(pk, pk === project.key ? store : createStore({ dir: shared('session-list'), key: pk, now, log: say }));
         touched.get(pk).archive([[sourceId, id]], true);

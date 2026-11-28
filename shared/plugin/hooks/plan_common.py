@@ -676,13 +676,12 @@ def peer_turn(plan, payload):
     return bool(turn and turn.get("peer") is True)
 
 
-"""A conversation asking for a title of its own: request_retitle, and retitle.py around it.
+"""Renaming a conversation at its own request: request_retitle here, and retitle.py, which calls it.
 
 The agents give the model no way to rename its own conversation, and a model writing the title into the agent's own
 records is the kind of change the hosts do not take on trust. So the request goes to the VS Code extension hosting the
-conversation, which checks that the conversation itself asked and renames it the agent's own way. docs/protocol.md,
-"Retitle requests", is the format: the request in <data directory>/retitle/<key>.json, the answer in
-<key>.result.json beside it.
+conversation, which renames it with the agent's own method. docs/protocol.md, "Retitle requests", is the format: the
+request in <data directory>/retitle/<key>.json, the answer in <key>.result.json beside it.
 """
 RETITLE_DIR = "retitle"
 RETITLE_KEY = re.compile(r"^[0-9a-z]{12,40}$")
@@ -713,9 +712,9 @@ def _retitle_answer(path):
 def request_retitle(session_id, title, directory=None, via="command", wait=RETITLE_WAIT, claimed_wait=RETITLE_CLAIMED_WAIT):
     """Asks the extension to rename the conversation `session_id` to `title`, and waits for its answer.
 
-    Returns {"outcome", "reason", "title"}. The outcome is the host's ("done", "refused" or "failed", with the title it
-    set), or "untaken" when no window took the request in `wait` seconds, which then withdraws it, or "unclear" when a
-    window took it and gave no answer in `claimed_wait` more.
+    Returns {"outcome", "reason", "title"}. The outcome is the host's: "done" with the title it set, "refused" or
+    "failed". It is "untaken" when no window took the request within `wait` seconds, and the request is then withdrawn;
+    "unclear" when a window took it but gave no answer within `claimed_wait` seconds more.
     """
     def refused(why):
         return {"outcome": "refused", "reason": why, "title": ""}

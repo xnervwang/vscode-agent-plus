@@ -87,7 +87,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
         ['kept-3', 'Third', ['sourceId', 'sessionId', 'title', 'open']], ['kept-4', '', ['sourceId', 'sessionId', 'title', 'open']],
         ['kept-5', 200, ['sourceId', 'sessionId', 'title', 'open']]],
       'entries without two usable ids, with a getter that throws, or that are not objects are left out and the rest kept; '
-        + 'a title is trimmed and cut to 200 characters, one that is not a string is empty, other fields are dropped, and open is added');
+        + 'a title is trimmed and cut to 200 characters, one that is not a string is empty, and other fields are dropped');
     const long = got(Array.from({ length: 30 }, (_, i) => S(`s${i}`)));
     eq([long.length, long[19].sessionId], [20, 's19'], 'at most 20 stewards are given');
     b.close();
@@ -170,7 +170,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.api.registerSource(cc.source);
     fs.writeFileSync(path.join(plans, 'windows', `${process.pid}.json`), JSON.stringify({ at: Date.now(), name: 'w', sessions: ['shown'] }));
     eq(b.api.stewardsOf('opencode-plus', 'ses_A').map((s) => [s.sessionId, s.open]), [['shown', true], ['closed', false]],
-      "a supervisor whose conversation a window's entry lists, this window's own included, is open; one that none lists is not");
+      "open for each supervisor, this window's entry counting like any other");
     b.close();
   }
 };

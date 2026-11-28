@@ -11,8 +11,8 @@
   EOF
 
 The new title is standard input; the conversation is the one the agent names in plan_agent.SELF_ENV, so a
-conversation can rename only itself. The VS Code extension hosting it does the renaming and answers
-(plan_common.request_retitle). Prints what came of it, and exits 0 when the title was changed and 1 when it was not.
+conversation can rename only itself. plan_common.request_retitle asks the window. Prints what came of it, and exits 0
+when the title was changed and 1 when it was not.
 """
 import os
 import sys

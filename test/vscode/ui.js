@@ -1942,8 +1942,8 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     const column = await until(async () => { const p = await pinsAt(); return p.every(Boolean) && /^\d+m$/.test(p[0][0]) && p[1][0] === '4d' && p[2][0] === '21d' && p; }, 8000, 300) || await pinsAt();
     await slAway();
     await sleep(300);
-    await look('sessions-pin-column', { expect: 'The first rows of Ungrouped are three pinned conversations, Quiet for three weeks (21d), Quiet for a month (4d) and Nothing going on (a few minutes, such as 9m), in some order. Their purple pins stand in one column, one above the other, whether the time after the pin is two or three characters wide.' }, sidebarBox());
-    check(column.every(Boolean) && new Set(column.map((x) => x && x[1])).size === 1, 'pinned rows keep their pins in one column whatever the width of the time after them', column);
+    await look('sessions-pin-column', { expect: 'The first rows of Ungrouped are three pinned conversations, Quiet for three weeks (21d), Quiet for a month (4d) and Nothing going on (a few minutes, such as 9m), in some order. Their purple pins stand in one column whether the time after the pin is two or three characters wide.' }, sidebarBox());
+    check(column.every(Boolean) && new Set(column.map((x) => x && x[1])).size === 1, 'the three pins are at the same x', column);
     for (const t of [SLT.month, SLT.weeks]) await slAct(t, 'unpin');
     await patch('sl-month', { lastActiveAt: Date.now() - 30 * DAY });
     await slAct(SLT.unread, 'rename');

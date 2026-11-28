@@ -63,9 +63,9 @@ latest message before this command in the steward conversation is one the user t
 
 --archive <session id> [<session id> ...] [<plugin data directory>] asks the window showing the steward to archive the
 named conversations in Agent Plus's session list. You can also give the session ids one per line in a here-document.
-Give at most 50 per command; run it again for more. The window acts only when the user asked for the archive and the
-latest message before the command is one the user typed in the steward conversation. A message from another session, a
-notice, or a handoff does not count. The window does not act on a subagent's call. It archives only conversations this
+Give at most 50 per command; run it again for more. The window acts only when the user asked for the archive: the
+latest message before the command must be one the user typed in the steward conversation, not a message from another
+session, a notice or a handoff, and the command must not come from a subagent. It archives only conversations this
 steward manages, and skips any that is working, waiting for the user or running background work, or that another process
 runs while the window cannot see its state. Archiving requires an Agent Plus version with the archive interface and
 affects only the session lists of projects open in VS Code windows on this machine. As with Archive on a row, the
@@ -339,11 +339,7 @@ USAGE = ("usage: steward-relay.py [--anyway | --rename | --close [--confirmed] |
 
 
 def archive(args):
-    """--archive: the conversations named, Claude Code session ids on the command line or one a line on standard input,
-    then the plugin data directory if given. The window that shows this steward archives them in Agent Plus's session
-    list, each one only if this steward manages it and it is not working, waiting for the user or running background work,
-    and only when the user asked for it in this steward conversation (the latest message before this command is one the
-    user typed there). Prints a line for each conversation."""
+    """--archive, as the paragraph about it at the top of this file says."""
     rest = [a for a in args if a != "--archive"]
     if any(a in FLAGS + MODIFIERS + VALUED for a in rest):
         print(USAGE)
@@ -354,7 +350,7 @@ def archive(args):
     for n in names:
         sid = steward_table.managed_id(n)
         if not sid or steward_table.is_other(sid):
-            print("Not done: %s is not a Claude Code session id; only Claude Code conversations are archived this way." % n)
+            print("Not done: %s is not a Claude Code session id." % n)
             return 1
         if sid not in ids:
             ids.append(sid)

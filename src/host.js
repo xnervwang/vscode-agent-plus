@@ -16,7 +16,6 @@ const vscode = require('vscode');
 const sources = require('./sources');
 const sessionWindows = require('./session-windows');
 
-/* archive() takes at most this many conversations at a time. */
 const ARCHIVE_MAX = 50;
 const dependents = require('./dependents');
 const compat = require('./compat');
@@ -196,8 +195,8 @@ function start(context, log, opts = {}) {
     }
     return null;
   };
-  /* Which conversations some VS Code window on this machine shows, from the window entries of the sources registered
-     here (src/session-windows.js), this window's own included; read again at most every OPEN_MS. */
+  /* Whether a VS Code window on this machine shows a conversation. Read from the window entries of the sources
+     registered here (src/session-windows.js), at most every OPEN_MS. */
   const OPEN_MS = 2000;
   let shown = { at: 0, keys: new Map() };
   const shownAnywhere = (sourceId, sessionId) => {
@@ -434,9 +433,7 @@ function start(context, log, opts = {}) {
     },
     /* With 'sessionList': vscode.Event<{ sourceId }>. */
     onDidChangeSessionDeletionDue: listenDeletionDue,
-    /* With 'archive': archives conversations of `sourceId` as Archive on a row does, in the session list's record of every
-       project whose list shows them in an open window on this machine (docs/protocol.md). Resolves to a frozen array of
-       frozen { sessionId, outcome, reason }, `outcome` being 'archived', 'refused' or 'notListed'. */
+    /* With 'archive' (docs/protocol.md). */
     async archive(arg) {
       const sourceId = arg && typeof arg.sourceId === 'string' ? arg.sourceId.trim() : '';
       const ids = [...new Set((arg && Array.isArray(arg.sessionIds) ? arg.sessionIds : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()))].slice(0, ARCHIVE_MAX);

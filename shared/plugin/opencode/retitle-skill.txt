@@ -4,4 +4,4 @@
 
 === how
 Call the `set_title` tool with `title`, the new title. The tool knows which conversation it runs in, so it takes no
-id. Where it is not offered, this OpenCode cannot rename the conversation from inside it.
+id. Where the tool is not offered, the conversation cannot rename itself.

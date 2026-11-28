@@ -43,8 +43,9 @@ EXAMPLE_SESSION_ID = "5e000000-0000-0000-0000-000000000000"
 # The field of a hook's input that names the turn: one id from a prompt until the turn ends.
 TURN_FIELD = "turn_id"
 
-# The variable Codex puts in a shell command's environment naming the thread that runs it (retitle.py). The model
-# itself renames through Codex Plus's set_title tool, since a shell command cannot write under CODEX_HOME unasked.
+# Codex names the thread running a shell command in this variable of the command's environment, which retitle.py
+# reads. The model itself renames through Codex Plus's set_title tool, because a shell command cannot write under
+# CODEX_HOME without asking the user.
 SELF_ENV = "CODEX_THREAD_ID"
 NO_GROUPING = "it is grouped by date, not by project"
 
