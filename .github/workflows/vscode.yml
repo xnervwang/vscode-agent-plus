@@ -8,12 +8,17 @@
 #
 # Each platform's results folder is kept as an artifact, passed or not: a screenshot of each step, of any step that
 # failed, VS Code's logs, and for a failed step the window's HTML and text at that point (its state/ folder).
+#
+# It runs in full once a day and once more in release.yml before a release publishes; a push to main runs only check.yml.
 name: vscode
 
 on:
+  schedule:
+    # 09:13 UTC. Off the hour, when the scheduler is busiest and runs are likeliest to be dropped.
+    - cron: '13 9 * * *'
   push:
     # Try a change to this workflow on a ci/ branch first.
-    branches: [main, 'ci/**']
+    branches: ['ci/**']
   pull_request:
   # By hand, for trying a fix on the system where a test failed.
   workflow_dispatch:
@@ -27,6 +32,7 @@ on:
         description: A regular expression of window test step names to run; empty runs them all
         type: string
         default: ''
+  workflow_call:
 
 permissions:
   contents: read

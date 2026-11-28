@@ -18,7 +18,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The window tests on every system, once before each release; nothing is published unless they pass.
+  vscode:
+    uses: ./.github/workflows/vscode.yml
+
   publish:
+    needs: vscode
     runs-on: ubuntu-latest
     permissions:
       contents: read

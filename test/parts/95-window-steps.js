@@ -33,4 +33,10 @@ module.exports = ({ eq, tmp, root }) => {
   eq([/inputs:\s*\n\s+os:[\s\S]*options:\s*\[all,\s*ubuntu-latest,\s*macos-latest,\s*windows-latest\]/.test(yml), /\n\s+steps:\s*\n\s+description:/.test(yml),
     /os:[^\n]*\["ubuntu-latest",\s*"macos-latest",\s*"windows-latest"\]/.test(yml), /AGENT_PLUS_UI_STEPS:\s*\$\{\{\s*inputs\.steps\s*\}\}/.test(yml)],
   [true, true, true, true], 'the workflow runs on all three systems, and by hand on one, with the steps an expression names');
+  const workflow = (name) => fs.readFileSync(path.join(root, '.github', 'workflows', name), 'utf8');
+  const release = workflow('release.yml');
+  eq([/schedule:\n(\s+#.*\n)?\s+- cron: '\d+ \d+ \* \* \*'/.test(yml), /\n  push:\n(\s+#.*\n)?\s+branches: \['ci\/\*\*'\]\n/.test(yml),
+    /\n  workflow_call:\n/.test(yml), /push:\n\s+branches: \[main\]/.test(workflow('check.yml')),
+    /\n  vscode:\n\s+uses: \.\/\.github\/workflows\/vscode\.yml\n/.test(release), /\n  publish:\n\s+needs: vscode\n/.test(release)],
+  [true, true, true, true, true, true], 'the window tests run once a day and before each release publishes, and a push to main runs only check.yml');
 };
