@@ -13,8 +13,9 @@ Prints the conversation's state from Claude Code's session records, its plan's o
 for the user, and the text it wrote after the user's last message, without tool calls, tool output or thinking.
 
 --said prints the user's latest messages in that conversation instead, oldest first, each with its time: what was
-typed into it, also while a turn ran, and not messages from other sessions or notices. A steward checks a handoff
-against them. Read-only.
+typed into it, also while a turn ran, and not messages from other sessions or notices. A message a steward sent there
+is marked with the steward's name: one sent for the user, and a lead's hand-over note or a new lead's first message,
+whose first line Claude Code Plus writes (LEAD_LINE). A steward checks a handoff against them. Read-only.
 
 For another agent's conversation, whose key is "<source id>:<session id>" (steward_table.py), the state comes from
 Agent Plus's attention files (agent_states.py) and the plan from the path the Supervisor panel recorded in stewards.json.
@@ -25,6 +26,7 @@ each turn: { format, at, lastUserAt, said: [{ text, at }], reply }, cut to the l
 import glob
 import json
 import os
+import re
 import sys
 import time
 
@@ -43,6 +45,8 @@ MAX_SAID_CHARS = 2000
 # Text that reaches a conversation as a user message without the user typing it.
 NOT_TYPED = ("<cross-session-message", "<task-notification") + STEWARD_NOTICES + ("Handoff from ",)
 STATE_WORDS = {"busy": "working", "shell": "running a command", "waiting": "waiting for the user", "idle": "idle"}
+# The first line of a lead's hand-over note and of a new lead's first message to the conversation.
+LEAD_LINE = re.compile(r'^From your (?:new )?lead supervisor "(.*)": ')
 REPLY_SUFFIX = ".reply.json"
 REPLY_FORMAT = 1
 
@@ -194,11 +198,19 @@ def utc(ms):
         return ""
 
 
+def sent_by(text):
+    """How --said names the steward that sent `text`, or "" for a message the user typed."""
+    sender = steward_table.sender_of(text)
+    if sender:
+        return '"%s" (%s)' % (sender[1], sender[0]) if sender[1] else sender[0]
+    m = LEAD_LINE.match(str(text or "").lstrip())
+    return '"%s"' % m.group(1).split('"', 1)[0] if m else ""
+
+
 def print_said(found):
     for at, text in found:
-        sender = steward_table.sender_of(text)
-        by = " (sent by the supervisor %s, not typed by the user there)" % (
-            '"%s" (%s)' % (sender[1], sender[0]) if sender[1] else sender[0]) if sender else ""
+        sender = sent_by(text)
+        by = " (sent by the supervisor %s, not typed by the user there)" % sender if sender else ""
         print(("%s UTC" % at if at else "(no time)") + by + ":")
         print("  " + (text if len(text) <= MAX_SAID_CHARS else text[:MAX_SAID_CHARS] + "...").replace("\n", "\n  "))
     if not found:

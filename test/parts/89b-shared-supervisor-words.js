@@ -96,15 +96,15 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const got = py(hooks, [
       'import steward, steward_table',
       `table = {${JSON.stringify(LEAD)}: {"title": "Lead"}}`,
-      `text = steward.watched([${JSON.stringify(LEAD)}], table)`,
+      `text = steward.watched(${JSON.stringify(LEAD)}, table)`,
       'start = text.index("`Sent by") + 1',
       'line = text[start:text.index("`", start)].replace("<title>", "Lead").replace("<session id>", ' + JSON.stringify(LEAD) + ')',
-      `print(json.dumps([text.startswith('A supervisor, "Lead" (${LEAD}), watches'), steward_table.sender_of(line),`,
+      `print(json.dumps([text.startswith('Your lead supervisor is "Lead" (${LEAD}). It watches'), steward_table.sender_of(line),`,
       `                  steward.lead(["${SID}"]).startswith("You are the supervisor of 1 Claude Code conversation the user picked `
         + 'for you in the Supervisor panel; follow the supervisor skill.")]))',
     ].join('\n'));
     eq(got, [true, [LEAD, 'Lead'], true],
-      'the note to a watched conversation names its supervisor and gives the first line of its messages, which the reader '
+      'the note to a watched conversation names its lead and gives the first line of its messages, which the reader '
       + 'parses; the note to a supervisor says it is one');
   }
 };

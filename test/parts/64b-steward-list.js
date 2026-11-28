@@ -4,8 +4,8 @@
 
 'use strict';
 /*
- * stewardsOf() on the interface (src/host.js, src/sources.js): every steward that looks after a conversation, and
- * onDidChangeStewards for a source that lists only 'stewardList'.
+ * stewardsOf() on the interface (src/host.js, src/sources.js): every steward that looks after a conversation, its lead
+ * first and marked, and onDidChangeStewards for a source that lists only 'stewardList'.
  */
 const { boot } = require('../boot');
 
@@ -18,9 +18,12 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       onDidChangeStewards(fn) { heard.add(fn); return { dispose: () => { heard.delete(fn); } }; } }, over);
     return { source, asked, heard, fire: () => { for (const fn of [...heard]) fn(); } };
   };
-  const S = (sessionId, title = '', sourceId = 'claude-code', open = false) => ({ sourceId, sessionId, title, open });
+  const S = (sessionId, title = '', sourceId = 'claude-code', open = false, lead = false) => ({ sourceId, sessionId, title, open, lead });
+  /* A steward the source marks as the conversation's lead. */
+  const L = (sessionId, title = '', sourceId = 'claude-code') => S(sessionId, title, sourceId, false, true);
   const turn = () => wait(5);
   const frozen = (list) => Object.isFrozen(list) && list.every((s) => Object.isFrozen(s));
+  const KEYS = ['sourceId', 'sessionId', 'title', 'open', 'lead'];
 
   /* ── Only a source that lists 'stewardList' is asked ── */
   {
@@ -83,9 +86,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
       S('kept-5', 'y'.repeat(300)),
     ]);
     eq(mixed.map((s) => [s.sessionId, s.title.length > 20 ? s.title.length : s.title, Object.keys(s)]),
-      [['kept-1', 'First', ['sourceId', 'sessionId', 'title', 'open']], ['kept-2', 'Second', ['sourceId', 'sessionId', 'title', 'open']],
-        ['kept-3', 'Third', ['sourceId', 'sessionId', 'title', 'open']], ['kept-4', '', ['sourceId', 'sessionId', 'title', 'open']],
-        ['kept-5', 200, ['sourceId', 'sessionId', 'title', 'open']]],
+      [['kept-1', 'First', KEYS], ['kept-2', 'Second', KEYS], ['kept-3', 'Third', KEYS], ['kept-4', '', KEYS], ['kept-5', 200, KEYS]],
       'entries without two usable ids, with a getter that throws, or that are not objects are left out and the rest kept; '
         + 'a title is trimmed and cut to 200 characters, one that is not a string is empty, and other fields are dropped');
     const long = got(Array.from({ length: 30 }, (_, i) => S(`s${i}`)));
@@ -113,6 +114,81 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.api.registerSource(many.source);
     const all = b.api.stewardsOf('opencode-plus', 'ses_A');
     eq([all.length, all[all.length - 1].sessionId], [20, 'm16'], 'joined, they are cut at 20 too');
+    b.close();
+  }
+
+  /* ── The lead: the one entry a source marks lead: true ── */
+  {
+    const b = boot(root, tmp, { views: false });
+    let answer = [];
+    const cc = keeper('claude-code', () => answer);
+    b.api.registerSource(cc.source);
+    const got = (a) => { answer = a; return b.api.stewardsOf('opencode-plus', 'ses_A').map((s) => [s.sessionId, s.lead]); };
+    eq(b.api.features.includes('stewardLead'), true, 'the core lists \'stewardLead\'');
+    answer = [S('a', 'Observer A'), S('b', 'Observer B'), L('c', 'Lead C')];
+    const whole = b.api.stewardsOf('opencode-plus', 'ses_A');
+    eq([whole, frozen(whole), whole.map((s) => Object.keys(s))], [[L('c', 'Lead C'), S('a', 'Observer A'), S('b', 'Observer B')], true, [KEYS, KEYS, KEYS]],
+      'a lead the source lists last comes back first with lead true, and the others keep the source\'s order with lead false');
+    eq(got([S('a'), S('b'), S('c')]), [['a', false], ['b', false], ['c', false]],
+      'a list with no entry marked, as from a source that knows no leads, keeps its order and has no lead');
+    eq(got([S('a'), L('b'), L('c')]), [['b', true], ['a', false], ['c', false]],
+      'of two entries one source marks, the first is the lead and the second one of the others');
+    eq(got([S('a'), Object.assign(S('b'), { lead: 'true' }), Object.assign(S('c'), { lead: 1 }),
+      { sourceId: 'claude-code', sessionId: 'd', get lead() { throw new Error('getter'); } }]),
+    [['a', false], ['b', false], ['c', false], ['d', false]],
+    'only lead: true marks the lead; a string, a number or a getter that throws do not, and those entries are kept');
+    eq(got([S('a'), L('b'), S('b', 'Again'), S('c')]), [['b', true], ['a', false], ['c', false]],
+      'the lead listed again unmarked comes back once');
+    eq(got([S('a'), { sourceId: 'claude-code', sessionId: '', lead: true }, L('b')]), [['b', true], ['a', false]],
+      'a marked entry without two usable ids is skipped, and a later mark makes the lead');
+    const long = got(Array.from({ length: 30 }, (_, i) => S(`s${i}`)).concat(L('last')));
+    eq([long.length, long[0], long[1], long[19]], [20, ['last', true], ['s0', false], ['s18', false]],
+      'a lead after the 20th entry is kept and comes first, and the cut drops the last of the others instead');
+    eq(got(Array.from({ length: 200 }, (_, i) => S(`s${i}`)).concat(L('too-far'))).map((s) => s[0]).includes('too-far'), false,
+      'a lead after the first 200 entries of an answer is not read');
+    b.close();
+  }
+
+  /* ── Several sources and their leads ── */
+  {
+    const b = boot(root, tmp, { views: false });
+    const answers = { first: [], second: [] };
+    const first = keeper('first', () => answers.first), second = keeper('second', () => answers.second);
+    b.api.registerSource(first.source);
+    b.api.registerSource(second.source);
+    const got = () => b.api.stewardsOf('opencode-plus', 'ses_A').map((s) => [s.sessionId, s.title, s.lead]);
+
+    answers.first = [S('a', 'A'), S('b', 'B')];
+    answers.second = [S('c', 'C'), L('d', 'D')];
+    eq(got(), [['d', 'D', true], ['a', 'A', false], ['b', 'B', false], ['c', 'C', false]],
+      'a lead only the later source marks comes first, ahead of the earlier source\'s stewards');
+
+    /* Each source names a different lead. The core keeps the lead of the source registered first; the other source's
+       lead stays in the list as one of the others. */
+    answers.first = [S('a', 'A'), L('b', 'B')];
+    answers.second = [L('c', 'C'), S('d', 'D')];
+    eq(got(), [['b', 'B', true], ['a', 'A', false], ['c', 'C', false], ['d', 'D', false]],
+      'with two sources each naming a lead, the first source\'s lead is the lead, and the second\'s is listed after the first source\'s other stewards with lead false');
+
+    answers.first = [S('a', 'A'), S('shared', 'Shared from first')];
+    answers.second = [L('shared', 'Shared from second'), S('c', 'C')];
+    eq(got(), [['shared', 'Shared from first', true], ['a', 'A', false], ['c', 'C', false]],
+      'a lead the earlier source lists unmarked and the later one marks comes back once, first, with the title of its first place');
+
+    answers.first = [L('shared', 'Shared from first'), S('a', 'A')];
+    answers.second = [S('shared', 'Shared from second'), S('c', 'C')];
+    eq(got(), [['shared', 'Shared from first', true], ['a', 'A', false], ['c', 'C', false]],
+      'a lead the earlier source marks and the later one lists unmarked comes back once');
+
+    answers.first = Array.from({ length: 20 }, (_, i) => S(`f${i}`));
+    answers.second = [L('lead', 'Lead')];
+    const cut = got();
+    eq([cut.length, cut[0], cut[1][0], cut[19][0]], [20, ['lead', 'Lead', true], 'f0', 'f18'],
+      'when the earlier source fills the 20 places, the lead the later one marks is still given, first, and the last of the others is cut');
+
+    answers.first = [L('lead', 'Lead')].concat(Array.from({ length: 19 }, (_, i) => S(`f${i}`)));
+    const asked = second.asked.length;
+    eq([got().length, second.asked.length - asked], [20, 0], 'once a lead is known and 20 stewards are in, the sources after are not asked');
     b.close();
   }
 

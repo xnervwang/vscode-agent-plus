@@ -4,8 +4,8 @@
 # All rights reserved.
 # Source: vscode-agent-plus shared/plugin/claude/steward.py; sync-shared.js copies it, so edit it there.
 
-"""UserPromptSubmit hook: for a steward, list the conversations it manages and the state of each; for a managed
-conversation, name the stewards that watch it.
+"""UserPromptSubmit hook: for a steward, list the conversations it manages, whether it leads or observes each, and the
+state of each; for a managed conversation, name its lead, the one steward that acts on it.
 
 Claude Code Plus's Supervisor panel keeps who manages whom in stewards.json in this plugin's data directory
 (src/stewards.js in the extension).
@@ -23,8 +23,17 @@ If nothing in the list changed since the steward's previous turn, it gets one se
 in its context, and a steward wakes many times with nothing new. After each compaction the whole list is sent again
 (COMPACTED_SUFFIX, written by resume-work-plan.py).
 
-Both forms start with lead(), which also gives RELAYED: a message passed on with steward-relay.py is the user's own
-in that conversation, approvals included.
+Each line says whether the steward leads the conversation or observes it, and for an observed one which steward leads
+it (steward_table.py). The seen file keeps each conversation's role too, so the turn after one changes says so once.
+
+Both forms start with lead(), which also gives RELAYED: a message the lead passes on with steward-relay.py is the user's
+own in that conversation, approvals included.
+
+A managed conversation is told about its lead only, never the stewards that observe it (watched()). The whole note
+comes on its first turn, after its lead or the lead's term changed, and after each compaction; any other turn gets
+the one line of still_led(). What it was last told is kept in TOLD_DIR/<session id>.json in the plugin's data directory
+({lead, term, title, tell, compacted}, written with an atomic rename): the lead, whose title the line about a change of
+lead names as the one before, the note under "tell" in stewards.json last shown, and the compaction it followed.
 
 A running steward keeps following the steward skill it loaded, even after an update of Claude Code Plus brings a new
 one. The seen file keeps a short hash of the skill the steward was last told about. When the hash differs, or the seen
@@ -62,8 +71,17 @@ WORKING_FILE = "working.json"
 OTHERS_HINT = ("The conversations of other agents above take only plain messages: no `--rename`, `--close` or `--resume`. "
                "While one waits at a prompt for tool approval or an answer to a question, no message reaches it. Ask the "
                "user to answer that prompt in that window; nobody else can.")
-RELAYED = ("A message you pass on with steward-relay.py is the user's own message in that conversation, approvals included. "
-           "Do not ask the user to say it there themselves.")
+RELAYED = ("A message you pass on with steward-relay.py to a conversation you lead is the user's own message there, "
+           "approvals included. Do not ask the user to say it there themselves.")
+OBSERVED = ("A conversation you observe you only read and report on; act on it only after the user agrees that you take it "
+            "over, as the skill says.")
+TOLD_DIR = "stewards-told"
+NO_LEAD = "No supervisor watches this conversation now; put questions for the user in your plan."
+DECISIONS = ("Release, push a tag, approve, merge or speak for the user in public only on the user's own words: what the user "
+             "types here, or what your lead supervisor's messages say apart from sentences marked as the supervisor's "
+             "arrangement.")
+FIRST_LINE = '`Sent by the supervisor "<title>" (<session id>) for the user:`'
+TOLD_NOTE = "This note was left for you while no window had this conversation open:"
 
 
 def claude_dir():
@@ -131,50 +149,119 @@ def plan_summary(path):
     return doing, questions[0]
 
 
-def managed_by(directory, sid):
+def managed_by(table, sid):
     """(keys, names, plan paths) of what this conversation manages."""
-    entry = steward_table.read(directory).get(sid)
+    entry = table.get(sid)
     if not entry:
         return [], {}, {}
     return entry["manages"][:MAX_LISTED], entry["names"], entry["paths"]
 
 
-def stewards_of(directory, sid):
-    """(stewards that manage this conversation, the table)."""
-    table = steward_table.read(directory)
-    return steward_table.stewards_of(table, sid), table
+def lead_open(directory, lead):
+    """Whether a VS Code window shows steward `lead` now."""
+    return steward_table.shown(steward_table.open_windows(directory), lead)
 
 
-def watched(over, table):
-    handoff = " ".join([shlex.quote(w) for w in launcher()] + [shlex.quote(RELAY), "--handoff"])
-    names = [steward_table.name_of(table, s) for s in over]
-    who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
-    several = len(over) > 1
-    return ("%s %s this one for the user through Claude Code Plus: %s %s your work plan and latest reply, and %s for the "
-            "user by typing messages here, which come as the user's own. Each such message starts with the line %s. "
-            "Do not send %s status messages; put questions for the user in your plan as rows waiting on the user, where "
-            "%s %s them. If a message plainly belongs elsewhere (meant for another conversation, "
-            "unrelated to the work here, or better done by another one), do not start background work for it here: run %s "
-            "with a here-document holding the user's words, where it should go (a session id, or a folder for a new "
-            "conversation) and why, and say in one sentence what it answered.%s"
-            % ("Supervisors" if several else "A supervisor,", who + (" watch" if several else ", watches"),
-               "they" if several else "it", "read" if several else "reads", "speak" if several else "speaks",
-               '`Sent by the supervisor "<title>" (<session id>) for the user:`', "them" if several else "it",
-               "they" if several else "it", "see" if several else "sees", handoff,
-               (" It goes to the supervisor whose message started this turn, or else to the one the user last typed to; to "
-                "hand it to another of them, add --to and that supervisor's session id.") if several else ""))
+def handoff_command():
+    return " ".join([shlex.quote(w) for w in launcher()] + [shlex.quote(RELAY), "--handoff"])
 
 
-def lines_of(ids, names, now, directory, paths=None):
+def watched(lead, table, open_now=True):
+    """The whole note for a conversation that `lead` leads."""
+    return ("Your lead supervisor is %s. It watches this conversation for the user through Claude Code Plus: it reads your "
+            "work plan and latest reply, and speaks for the user by typing messages here, which come as the user's own. "
+            "Each such message starts with the line %s. %s %s If a message plainly belongs elsewhere (meant for another "
+            "conversation, unrelated to the work here, or better done by another one), do not start background work for "
+            "it here: run %s with a here-document holding the user's words, where it should go (a session id, or a folder "
+            "for a new conversation) and why; it goes to your lead supervisor. Say in one sentence what it answered."
+            % (steward_table.name_of(table, lead), FIRST_LINE, DECISIONS,
+               "Do not send it status messages; put questions for the user in your plan as rows waiting on the user, where "
+               "it sees them." if open_now else
+               "It is not open in a VS Code window now, so put questions for the user in your plan as rows waiting on the "
+               "user for now.", handoff_command()))
+
+
+def still_led(lead, table, open_now=True):
+    """The one line for a conversation told the whole note before."""
+    return "Your lead supervisor is still %s%s. %s" % (
+        steward_table.name_of(table, lead),
+        "" if open_now else "; it is not open in a VS Code window now, so put questions for the user in your plan", DECISIONS)
+
+
+def told_file(directory, sid):
+    return os.path.join(directory, TOLD_DIR, sid + ".json")
+
+
+def tell_key(tell):
+    return "%s:%s" % (tell["at"], hashlib.sha1(tell["text"].encode("utf-8")).hexdigest()[:8])
+
+
+def managed_note(directory, sid, table, compacted):
+    """What managed conversation `sid` is told this turn about its lead, or "". What it was told is written to its
+    file in TOLD_DIR."""
+    entry = steward_table.lead_entry(table, sid) or {}
+    over = steward_table.stewards_of(table, sid)
+    tell = entry.get("tell")
+    if not over and not tell:
+        return ""
+    path = told_file(directory, sid)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            told = json.load(fh)
+        told = told if isinstance(told, dict) else {}
+        first = False
+    except (OSError, ValueError):
+        told, first = {}, True
+    lead, term = steward_table.lead_of(table, sid), steward_table.term_of(table, sid)
+    title = (table.get(lead) or {}).get("title") or lead
+    changed = not first and (told.get("lead") != lead or told.get("term") != term)
+    lines = []
+    if changed and lead and told.get("lead") and told.get("lead") != lead:
+        lines.append('Your lead supervisor is now "%s" (was "%s").' % (title, told.get("title") or told["lead"]))
+    shown = told.get("tell", "")
+    if tell and tell_key(tell) != shown:
+        lines.append(TOLD_NOTE + "\n" + tell["text"])
+        shown = tell_key(tell)
+    if over and not lead:
+        lines.append(NO_LEAD)
+    elif over:
+        open_now = lead_open(directory, lead)
+        lines.append(watched(lead, table, open_now) if first or changed or told.get("compacted", "") != compacted
+                     else still_led(lead, table, open_now))
+    record = {"lead": lead, "term": term, "title": title if lead else "", "tell": shown, "compacted": compacted}
+    if record != told:
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        except OSError:
+            pass
+        write_quietly(path, json.dumps(record, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+def roles_of(table, sid, ids):
+    """key -> (role, how its line names it): "lead", or "observer" and the steward that leads it."""
+    out = {}
+    for m in ids:
+        head = steward_table.lead_of(table, m)
+        if head == sid:
+            out[m] = ("lead", "lead")
+        else:
+            who = '"%s"' % table[head]["title"] if head and table.get(head, {}).get("title") else head
+            out[m] = ("observer", "observer (lead: %s)" % who if head else "observer (no lead now)")
+    return out
+
+
+def lines_of(ids, names, now, directory, paths=None, roles=None):
     lines = []
     running = background(directory)
     paths = paths or {}
+    roles = roles or {}
     for m in ids:
         name = str(names.get(m) or m)[:TITLE_CHARS]
         other = steward_table.is_other(m)
         plan = paths.get(m) if other else os.path.join(directory, m + ".json")
         doing, questions = plan_summary(plan) if plan else ([], 0)
-        parts = [now.get(m, STOPPED)]
+        parts = ([roles[m][1]] if m in roles else []) + [now.get(m, STOPPED)]
         if other and not plan:
             parts.append("where its plan is was not recorded")
         if m in running:
@@ -198,25 +285,46 @@ def skill_version():
     return ""
 
 
-def lead(ids):
+def lead(ids, roles=None):
+    roles = roles or {}
     others = [steward_table.label_of(m) for m in ids if steward_table.is_other(m)]
+    observed = len([m for m in ids if roles.get(m, ("lead",))[0] == "observer"])
+    if not observed:
+        split = ""
+    elif observed < len(ids):
+        split = " You lead %d of them and observe %d." % (len(ids) - observed, observed)
+    else:
+        split = " You observe %s." % ("it" if observed == 1 else "all of them")
+    after = " %s%s" % (RELAYED, " " + OBSERVED if observed else "")
     if not others:
         return ("You are the supervisor of %d Claude Code conversation%s the user picked for you in the Supervisor panel; "
-                "follow the supervisor skill. %s" % (len(ids), "" if len(ids) == 1 else "s", RELAYED))
+                "follow the supervisor skill.%s%s" % (len(ids), "" if len(ids) == 1 else "s", split, after))
     counts = ["%d Claude Code" % (len(ids) - len(others))] if len(ids) > len(others) else []
     counts += ["%d %s" % (others.count(label), label) for label in sorted(set(others))]
     return ("You are the supervisor of %d conversation%s the user picked for you in the Supervisor panel (%s); "
-            "follow the supervisor skill. %s" % (len(ids), "" if len(ids) == 1 else "s", ", ".join(counts), RELAYED))
+            "follow the supervisor skill.%s%s" % (len(ids), "" if len(ids) == 1 else "s", ", ".join(counts), split, after))
 
 
-def block(ids, names, now, seen, lines):
+def block(ids, names, now, seen, lines, roles=None, was=None, table=None):
+    roles, was = roles or {}, was or {}
     changed = ['"%s": %s -> %s' % (str(names.get(m) or m)[:TITLE_CHARS], seen[m], now.get(m, STOPPED))
                for m in ids if m in seen and seen[m] != now.get(m, STOPPED)]
-    text = lead(ids) + " Where they stand now:\n" + "\n".join(lines)
+    text = lead(ids, roles) + " Where they stand now:\n" + "\n".join(lines)
     if any(steward_table.is_other(m) for m in ids):
         text += "\n" + OTHERS_HINT
     if changed:
         text += "\nChanged since your previous turn: " + "; ".join(changed) + "."
+    moved = []
+    for m in ids:
+        name = str(names.get(m) or m)[:TITLE_CHARS]
+        if was.get(m) == "observer" and roles.get(m, ("",))[0] == "lead":
+            moved.append('you now lead "%s"' % name)
+        elif was.get(m) == "lead" and roles.get(m, ("",))[0] == "observer":
+            now_lead = steward_table.lead_of(table, m) if table is not None else ""
+            moved.append('you no longer lead "%s"%s and observe it now' % (
+                name, " (%s does)" % steward_table.name_of(table, now_lead) if now_lead else ""))
+    if moved:
+        text += "\nLead changes since your previous turn: " + "; ".join(moved) + "."
     return text
 
 
@@ -229,12 +337,18 @@ def main():
     if not SESSION_NAME.match(sid):
         return 0
     directory = data_dir()
-    ids, names, paths = managed_by(directory, sid)
-    over, table = stewards_of(directory, sid)
+    table = steward_table.read(directory)
+    ids, names, paths = managed_by(table, sid)
+    try:
+        with open(side_file(os.path.join(directory, sid + ".json"), COMPACTED_SUFFIX), encoding="utf-8") as fh:
+            compacted = fh.read().strip()
+    except OSError:
+        compacted = ""
     if not ids:
-        if over:
+        note = managed_note(directory, sid, table, compacted)
+        if note:
             print(json.dumps({"hookSpecificOutput": {
-                "hookEventName": payload.get("hook_event_name", "UserPromptSubmit"), "additionalContext": watched(over, table)}}))
+                "hookEventName": payload.get("hook_event_name", "UserPromptSubmit"), "additionalContext": note}}))
         return 0
     now = states()
     if any(steward_table.is_other(m) for m in ids):
@@ -252,25 +366,23 @@ def main():
         last, known = {}, False
     # Older builds stored the states map on its own.
     seen = last.get("states") if isinstance(last.get("states"), dict) else ({} if "digest" in last else last)
-    try:
-        with open(side_file(os.path.join(directory, sid + ".json"), COMPACTED_SUFFIX), encoding="utf-8") as fh:
-            compacted = fh.read().strip()
-    except OSError:
-        compacted = ""
-    lines = lines_of(ids, names, now, directory, paths)
+    was = last.get("roles") if isinstance(last.get("roles"), dict) else {}
+    roles = roles_of(table, sid, ids)
+    lines = lines_of(ids, names, now, directory, paths, roles)
     digest = hashlib.sha1("\n".join(lines).encode("utf-8")).hexdigest()
     if last.get("digest") == digest and last.get("compacted", "") == compacted:
-        text = lead(ids) + " Nothing has changed since the list you were given at your previous turn."
+        text = lead(ids, roles) + " Nothing has changed since the list you were given at your previous turn."
     else:
-        text = block(ids, names, now, seen, lines)
+        text = block(ids, names, now, seen, lines, roles, was, table)
     # Without a seen file this is the steward's first turn, which reads the skill anyway.
     version = skill_version()
     if version and known and last.get("skill") != version:
         text += "\n" + SKILL_CHANGED % version
-    if over:
-        text += "\n" + watched(over, table)
+    note = managed_note(directory, sid, table, compacted)
+    if note:
+        text += "\n" + note
     write_quietly(seen_path, json.dumps({"states": {m: now.get(m, STOPPED) for m in ids}, "digest": digest, "compacted": compacted,
-                                         "skill": version}))
+                                         "skill": version, "roles": {m: roles[m][0] for m in ids}}))
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": payload.get("hook_event_name", "UserPromptSubmit"), "additionalContext": text}}))
     return 0

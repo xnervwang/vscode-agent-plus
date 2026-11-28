@@ -154,8 +154,9 @@ function start(context, log, opts = {}) {
 
   /*
    * stewardOf(), stewardsOf() and onDidChangeStewards (docs/protocol.md): the stewards that look after a conversation.
-   * stewardOf() takes the first answer from the sources registered here that list 'stewards'; stewardsOf() joins what
-   * every source with 'stewardList' gives. However many things change the answers in one turn, the event fires once.
+   * stewardsOf() joins what every source with 'stewardList' gives, the conversation's lead first; stewardOf() is that
+   * lead, or when no source marks one, the first answer from the sources registered here that list 'stewards'.
+   * However many things change the answers in one turn, the event fires once.
    */
   const stewardChanges = sources.emitter();
   let stewardsDue = false;
@@ -186,9 +187,33 @@ function start(context, log, opts = {}) {
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
     return host.trusted() && sources.usableId(sourceId) && sources.usableId(sessionId) ? { sourceId, sessionId } : null;
   };
+  /* The sources' lists in registration order, each steward once with the title of its first place, cut at
+     sources.MAX_STEWARDS. The lead is the first one a source marks; it comes first, and a later source's lead is one
+     of the others. */
+  const joinedStewards = (q) => {
+    const all = new Map();
+    let lead = '';
+    for (const entry of registry.list()) {
+      if (lead && all.size >= sources.MAX_STEWARDS) break;
+      for (const s of sources.stewardsOf(entry.source, q.sourceId, q.sessionId)) {
+        const key = sources.keyPart(s.sourceId) + '/' + sources.keyPart(s.sessionId);
+        if (!lead && s.lead) lead = key;
+        if (!all.has(key)) all.set(key, s);
+      }
+    }
+    const out = [];
+    if (lead) out.push({ ...all.get(lead), lead: true });
+    for (const [key, s] of all) {
+      if (out.length >= sources.MAX_STEWARDS) break;
+      if (key !== lead) out.push({ ...s, lead: false });
+    }
+    return out;
+  };
   const stewardOf = (a, b) => {
     const q = stewardQuery(a, b);
     if (!q) return null;
+    const first = joinedStewards(q)[0];
+    if (first && first.lead) return Object.freeze({ sourceId: first.sourceId, sessionId: first.sessionId });
     for (const entry of registry.list()) {
       const steward = sources.stewardOf(entry.source, q.sourceId, q.sessionId);
       if (steward) return steward;
@@ -207,17 +232,11 @@ function start(context, log, opts = {}) {
     return shown.keys.has(JSON.stringify([String(sourceId), String(sessionId)]));
   };
   const stewardsOf = (a, b) => {
-    const q = stewardQuery(a, b), out = [], seen = new Set();
-    for (const entry of q ? registry.list() : []) {
-      for (const s of sources.stewardsOf(entry.source, q.sourceId, q.sessionId)) {
-        const key = sources.keyPart(s.sourceId) + '/' + sources.keyPart(s.sessionId);
-        if (seen.has(key) || out.length >= sources.MAX_STEWARDS) continue;
-        seen.add(key);
-        out.push(Object.freeze({ ...s, open: shownAnywhere(s.sourceId, s.sessionId) }));
-      }
-      if (out.length >= sources.MAX_STEWARDS) break;
-    }
-    return Object.freeze(out);
+    const q = stewardQuery(a, b);
+    const out = q ? joinedStewards(q) : [];
+    return Object.freeze(out.map((s) => Object.freeze({
+      sourceId: s.sourceId, sessionId: s.sessionId, title: s.title, open: shownAnywhere(s.sourceId, s.sessionId), lead: s.lead,
+    })));
   };
   const anyStewards = () => registry.list().some((entry) => sources.keepsStewards(entry.source));
 
@@ -411,10 +430,11 @@ function start(context, log, opts = {}) {
     deliver: deliverTo,
     /* With 'planPathOf'. */
     planPathOf,
-    /* With 'stewards': the steward of that conversation as a frozen { sourceId, sessionId }, or null. */
+    /* With 'stewards': the steward of that conversation, its lead when a source marks one, as a frozen
+       { sourceId, sessionId }, or null. */
     stewardOf,
     /* With 'stewardList': the stewards of that conversation, at most sources.MAX_STEWARDS, as a frozen array of frozen
-       { sourceId, sessionId, title }. */
+       { sourceId, sessionId, title, open, lead }; with 'stewardLead', `lead` is true on the lead alone, which comes first. */
     stewardsOf,
     /* With 'stewards' or 'stewardList': vscode.Event<void>, stewardOf() or stewardsOf() may answer differently. */
     onDidChangeStewards: listenStewards,
