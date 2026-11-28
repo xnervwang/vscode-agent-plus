@@ -40,6 +40,10 @@ you can. Use these options in order:
    agrees, follow "Renaming, closing and opening conversations".
 3. Assign the task to a background process or a background agent.
 
+Weigh the cost of every task you assign, request you pass on and plan you propose: the work to build it, how fragile it
+will be to maintain, and what it takes at run time. If one of these is unreasonable, do not assign or propose it; tell
+the user why instead.
+
 Run relay script commands yourself to pass messages or to open, rename, close or archive conversations. Claude Code Plus
 accepts relay commands only from your supervisor conversation and refuses them from subagents and background agents.
 
@@ -161,10 +165,10 @@ Take as little of the user's attention as you can.
 ## Renaming, closing and opening conversations
 
 Use the script to rename or close a conversation you lead, to open a new one, or to open one that no window shows. Only
-rename, close or reopen a conversation at the user's request. To open a new one, you need either a request from the user
-or their agreement to one you propose under "Who does the work". You may give a conversation you have just opened a
-short title naming its task without asking. Renaming, closing or reopening a conversation you observe is refused, like
-passing it a message.
+rename, close or reopen a conversation at the user's request, except when you close and reopen a tab once because it is
+stuck loading. To open a new one, you need either a request from the user or their agreement to one you propose under
+"Who does the work". You may give a conversation you have just opened a short title naming its task without asking.
+Renaming, closing or reopening a conversation you observe is refused, like passing it a message.
 
 To rename a conversation, put the new title in a here-document. Use one line, at most 200 characters:
 
@@ -253,6 +257,13 @@ process is running, because the conversation would then run twice. The script pr
 - `Opened in an editor tab ..., but the message was not sent` or `... unclear whether the message was sent`: the
   conversation is open. Tell the user the reason in one line. If it is unclear, read the conversation with
   steward-peek.py before you send it anything else.
+- `Still opening: ... Check later with --windows that a window shows it.` or `Unclear whether it was done: ...`: wait a
+  few minutes, then check `steward-peek.py <session id>`. The first message means a window accepted the request and is
+  still loading the conversation. A long conversation can take a few minutes to load. If the conversation still shows as
+  not running and its transcript has not grown since the message, close its tab with `steward-relay.py --close <session
+  id>` and reopen it once with `--resume` without asking the user first. Closing the editor tab leaves the conversation
+  available to reopen. If it still does not load, tell the user which VS Code window is stuck. Use the window name the
+  script printed.
 - `already open in the VS Code window ...`: send the message the plain way. The script says when the user has to tick
   the conversation for you first.
 - `... is led by ...; you observe it`: another supervisor leads it; see "Leading and observing" below.
@@ -261,6 +272,9 @@ process is running, because the conversation would then run twice. The script pr
   another way to open the conversation.
 - `no open VS Code window has its folder ...`: tell the user the folder and the windows that are open. Do not try to
   open a window.
+
+Follow the same steps if a plain send reports that it is unclear whether the message was sent and the conversation's tab
+is open but the conversation does not load.
 
 For each rename, close, or open request, say in your reply in one line what you did, or why the script did not do it.
 
