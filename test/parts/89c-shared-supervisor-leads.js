@@ -86,6 +86,22 @@ module.exports = async ({ eq, note, tmp, root }) => {
     return { code, out, err, asked };
   };
 
+  /* The skill: the steps of a take-over and a hand-over, and none of what is gone. */
+  {
+    const skill = fs.readFileSync(path.join(shared, 'claude', 'steward-skill.md'), 'utf8');
+    const script = fs.readFileSync(path.join(shared, 'claude', 'steward-relay.py'), 'utf8');
+    const used = [...new Set([...skill.matchAll(/steward-relay\.py((?: --[a-z-]+)+)/g)].flatMap((m) => m[1].trim().split(' ')))];
+    eq([/--anyway|--to\b|last 30 minutes|the user last typed to/.test(skill),
+      ['--take-lead <session id> --ask', '--take-lead <session id>\n', '--hand-over <session id> <<\'EOF\'', 'word for word',
+        'Only a clear yes', 'Never use `SendMessage` with a conversation you observe', 'A handoff goes to the conversation\'s lead']
+        .filter((x) => !skill.includes(x)),
+      used.filter((o) => !script.includes(`"${o}"`))],
+    [false, [], []],
+    'the supervisor skill has an observer ask the user with --take-lead --ask, word for word, and take over only on a clear yes, has a lead '
+      + 'hand over with a note, sends hand-offs to the lead, keeps SendMessage from observers, names only options the script takes, and '
+      + 'says nothing of --anyway, --to or the 30-minute hold');
+  }
+
   /* Reading the table. */
   {
     const read = (file) => {
