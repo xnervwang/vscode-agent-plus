@@ -71,7 +71,7 @@ class SessionListView {
     const m = this.list.model();
     const out = Object.assign({}, m, { logos: {} });
     for (const s of m.sources || []) out.logos[s.id] = s.logo ? { light: logoUri(s.logo.light), dark: logoUri(s.logo.dark) } : null;
-    out.sources = (m.sources || []).map((s) => ({ id: s.id, label: s.label, create: s.create }));
+    out.sources = (m.sources || []).map((s) => ({ id: s.id, label: s.label, create: s.create, temporary: s.temporary === true, temporaryAt: s.temporaryAt || [] }));
     return out;
   }
 

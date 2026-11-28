@@ -57,7 +57,7 @@ svg.sl-icon { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: cur
 .sl-new-temp.sl-on { background: var(--vscode-inputOption-activeBackground); box-shadow: inset 0 0 0 1px var(--vscode-inputOption-activeBorder, var(--vscode-focusBorder)); }
 .sl-new-temp:disabled { opacity: .45; cursor: default; }
 .sl-new-temp:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-.sl-temp-glyph { line-height: 1; }
+.sl-new-temp svg.sl-icon { width: 14px; height: 14px; }
 
 /* The filter chips, with their counts. */
 .sl-chips { display: flex; flex-wrap: wrap; gap: 4px; }

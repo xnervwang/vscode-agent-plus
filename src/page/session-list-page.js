@@ -62,6 +62,8 @@
     terminal: ['M2.5 3.5h11v9h-11z', 'M5 6.5l2 1.5-2 1.5', 'M8.5 10h3'],
     tab: ['M2.5 12.5v-8h4l1 1.5h6v6.5z'],
     side: ['M2.5 3.5h11v9h-11z', 'M6.5 3.5v9'],
+    /* An hourglass, drawn rather than the emoji, which a machine without a colour emoji font shows as a box. */
+    hourglass: ['M4 2.5h8', 'M4 13.5h8', 'M5 2.5c0 3 3 3.5 3 5.5s-3 2.5-3 5.5', 'M11 2.5c0 3-3 3.5-3 5.5s3 2.5 3 5.5'],
   };
   const icon = (name, cls = 'sl-icon') => {
     const s = document.createElementNS(SVG, 'svg');
@@ -92,7 +94,7 @@
   const newSide = button('sl-new-half', 'Start a conversation in the sidebar', icon('plus'), el('span', '', 'New in sidebar'), icon('side', 'sl-icon sl-place'));
   newSide.dataset.where = 'sidebar';
   /* While pressed, the next conversation either half starts is temporary; then it lets go. */
-  const newTemp = button('sl-new-temp', 'Make the next new conversation temporary', el('span', 'sl-temp-glyph', '\u23f3'));
+  const newTemp = button('sl-new-temp', 'Make the next new conversation temporary', icon('hourglass'));
   newTemp.dataset.tool = 'temp';
   newTemp.setAttribute('aria-pressed', 'false');
   let tempOn = false;

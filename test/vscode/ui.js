@@ -2475,6 +2475,88 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     check(/Codex/.test(kept), 'after the Codex conversation starts, the New bar still shows Codex', kept);
   });
 
+  await step('sessions-temporary', async () => {
+    needs('sessions-rows');
+    await showSessions('agentPlus.sessions');
+    await slAway();
+    /* The stand-in Codex starts temporary conversations; the stand-in Claude Code does not. */
+    const pickAgent = async (label) => {
+      await sl.locator('.sl-new-agent').click();
+      await slItem(label).click();
+      return until(() => sl.evaluate((l) => document.querySelector('.sl-new-agent').title.includes(`start in ${l}`), label), 5000, 200);
+    };
+    const agentBefore = await sl.evaluate(() => document.querySelector('.sl-new-agent').title);
+    const toggle = sl.locator('.sl-new-temp');
+    if (!/start in Codex/.test(agentBefore)) {
+      check(await toggle.isDisabled(), 'with an agent that starts no temporary conversations, the toggle is greyed out', agentBefore);
+      await pickAgent('Codex');
+    }
+    const inTab = sl.locator('.sl-new-half[data-where="tab"]');
+    check(await toggle.isEnabled(), 'the New bar has a temporary toggle for an agent that starts temporary conversations');
+    await toggle.click();
+    check(await toggle.getAttribute('aria-pressed') === 'true', 'clicking the toggle turns it on');
+    await look('sessions-temp-toggle', { expect: 'The New bar with its hourglass toggle at the right end pressed: drawn like VS Code\'s option toggles, with a highlighted background and a thin border, next to New in tab and New in sidebar.' },
+      sl.locator('.sl-top'));
+    const startTemp = async () => {
+      const n = (await calls('codex')).filter((c) => c[0] === 'create').length;
+      await inTab.click();
+      const made = await until(async () => { const c = (await calls('codex')).filter((x) => x[0] === 'create'); return c.length > n ? c[c.length - 1] : null; }, 10000, 300);
+      const conv = await until(async () => (await src('return src.conversations();')).filter((c) => c.temp).pop() || null, 10000, 300);
+      return { made, conv };
+    };
+    const first = await startTemp();
+    check(!!first.made && !!first.made[2] && first.made[2].temporary === true, 'New in tab with the toggle on asks the agent for a temporary conversation', first.made);
+    check(await toggle.getAttribute('aria-pressed') === 'false', 'and the toggle lets go after one');
+    const title1 = first.conv ? first.conv.title : '';
+    const tab1 = await until(async () => (await tabs()).find((t) => t.label === `⏳ ${title1}`) || null, 10000, 300);
+    check(!!tab1, 'the new conversation\'s tab title starts with the hourglass', await tabs());
+    await sleep(1500);
+    check(!(await slRows()).some((r) => r.title === title1), 'the list does not show it, though it is open in this window', title1);
+    await look('sessions-temp-open', { expect: `The window with a tab titled with an hourglass and "${title1}" in front, and the Conversations list beside it with no row for that conversation.` });
+    await src('return src.close(arg);', first.conv.sessionId);
+    const t1 = await toastWith('was closed', 20000);
+    check(!!t1 && new RegExp(`Temporary conversation "${escapeRe(title1)}" was closed\\. It is deleted in 10 minutes\\.`).test(t1.text) && sameList(t1.buttons, ['Keep', 'Delete Now']),
+      'closing it shows a notification that it is deleted in 10 minutes, with Keep and Delete Now', t1);
+    await look('sessions-temp-closed', { toasts: true, expect: `A notification at the bottom right: Temporary conversation "${title1}" was closed. It is deleted in 10 minutes., with the buttons Keep and Delete Now.` }, toastLoc('was closed'));
+    await press('was closed', 'Delete Now');
+    const gone = await until(async () => (await calls('codex')).some((c) => c[0] === 'delete' && sameList(c[1], [first.conv.sessionId]) && c[2] && c[2].temporary === true), 15000, 300);
+    check(!!gone, 'Delete Now has its agent delete it, with temporary set');
+    await clearToasts();
+    await setting('agentPlus.temporaryConversations.deleteAfterMinutes', 2);
+    const n2 = (await calls('codex')).filter((c) => c[0] === 'create').length;
+    await exec('agentPlus.newTemporaryConversation');
+    const made2 = await until(async () => { const c = (await calls('codex')).filter((x) => x[0] === 'create'); return c.length > n2 ? c[c.length - 1] : null; }, 10000, 300);
+    check(!!made2 && !!made2[2] && made2[2].temporary === true, 'New Temporary Conversation starts one in the New bar\'s agent', made2);
+    const second = { conv: await until(async () => (await src('return src.conversations();')).filter((c) => c.temp && c.sessionId !== first.conv.sessionId).pop() || null, 10000, 300) };
+    const title2 = second.conv ? second.conv.title : '';
+    await src('return src.close(arg);', second.conv.sessionId);
+    const t2 = await toastWith(`"${title2}" was closed`, 20000);
+    check(!!t2 && /It is deleted in 2 minutes\./.test(t2.text), 'the notification follows the deleteAfterMinutes setting', t2);
+    await press(`"${title2}" was closed`, 'Keep');
+    check(!!await slWait((r) => slFind(r, title2)), 'Keep makes it an ordinary conversation, back in the list', title2);
+    check(!(await calls('codex')).some((c) => c[0] === 'delete' && sameList(c[1], [second.conv.sessionId])), 'and nothing deletes it');
+    await clearToasts();
+    await src('return src.open(arg);', second.conv.sessionId);
+    await slWait((r) => { const x = slFind(r, title2); return x && x.here; });
+    await slRowLoc(title2).click({ button: 'right' });
+    const m = await slMenu();
+    check(!!m && m.includes('Make Temporary...'), 'an ordinary conversation open here offers Make Temporary in its menu', m);
+    await slItem('Make Temporary...').click();
+    const d = await until(dialog, 8000, 200);
+    check(!!d && new RegExp(`Make "${escapeRe(title2)}" temporary\\?`).test(d.text) && /deleted from disk 2 minutes after it is closed/.test(d.text), 'making it temporary asks first, saying when it is deleted', d);
+    await page.locator('.monaco-dialog-box .dialog-buttons .monaco-button').filter({ hasText: /^Make Temporary$/ }).first().click();
+    check(!!await slWait((r) => !slFind(r, title2)), 'and on Make Temporary it leaves the list');
+    check(!!await until(async () => (await tabs()).find((t) => t.label === `⏳ ${title2}`) || null, 10000, 300), 'and its tab gets the hourglass');
+    await src('return src.close(arg);', second.conv.sessionId);
+    await toastWith(`"${title2}" was closed`, 20000);
+    await press(`"${title2}" was closed`, 'Delete Now');
+    check(!!await until(async () => (await calls('codex')).some((c) => c[0] === 'delete' && sameList(c[1], [second.conv.sessionId])), 15000, 300), 'and Delete Now deletes it once closed');
+    await clearToasts();
+    await setting('agentPlus.temporaryConversations.deleteAfterMinutes', null);
+    const was = /start in ([A-Za-z ]+?)\./.exec(agentBefore);
+    if (was && was[1] !== 'Codex') await pickAgent(was[1]);
+  });
+
   await step('sessions-rules', async () => {
     needs('sessions-rows');
     await showSessions('agentPlus.sessions');

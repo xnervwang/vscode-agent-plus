@@ -419,11 +419,44 @@ The list and the core's other views draw one of five dots, or none, worked out f
 
 | Member of the interface | Meaning |
 | --- | --- |
-| `features` | `'sessionList'` while the core has the session list; `'archive'` when it has `archive()` (below) |
+| `features` | `'sessionList'` while the core has the session list; `'archive'` when it has `archive()` (below); `'temporary'` when it has the members of Temporary conversations (below) |
 | `sessionListManages()` | Whether the session list archives and deletes conversations on its own in this window now: `true` while it is on. A source with its own archiving or deleting on its own leaves it off while this is `true`, and asks again each time, so that turning the list off, or the core going, brings it back |
 | `sessionDeletionDue(sourceId)` | A frozen object from session id to when the list will delete that conversation (epoch milliseconds), or `null` for one it will not delete (not archived, pinned, or deleting on its own off). For a source whose agent deletes old conversations by a rule of its own, such as Claude Code's `cleanupPeriodDays`, to keep them until then |
 | `onDidChangeSessionDeletionDue` | `vscode.Event<{ sourceId }>` |
 | `archive({ sourceId, sessionIds })` | With `'archive'`. Archives conversations of `sourceId` (at most 50 ids) as Archive on a row does: out of its group, unpinned. It changes the list's own state (see Session list) in every project whose list has a row for the conversation in any open VS Code window on this machine. Each window's list writes its project and its rows to `~/.agent-work-plan/session-list/windows/<pid>.json`, `<pid>` its extension host's process id (`{ format: 1, at, project, label, keys: [[sourceId, sessionId], ...] }`, `project` the key of the project the list is for and `label` its name), when they change and every 30 seconds. A window removes its entry when it closes, and an entry older than 2 minutes, or whose process is gone, does not count. Resolves to a frozen array of frozen `{ sessionId, outcome, reason }`: `archived`, `notListed` when no list in an open window has a row for it, or `refused` (Restricted Mode, no session list, no `sourceId` given). The caller decides whether the conversation may be archived; this does not look at whether it runs |
+
+### Temporary conversations
+
+A temporary conversation is one the user means to throw away. The session list hides it. After it closes and its grace period ends, its source deletes its files.
+
+The core lists `'temporary'` in its features when it provides these members:
+
+| Member | Meaning |
+|---|---|
+| `isTemporary(sourceId, sessionId)` | Returns synchronously whether the conversation is temporary. |
+| `temporaryIds(sourceId)` | Returns a frozen array of that source's temporary session ids synchronously. |
+| `onDidChangeTemporary` | A `vscode.Event<{ sourceId }>` that fires when an id for that source becomes temporary or stops being temporary because the conversation was kept or deleted. |
+| `addTemporary(sourceId, sessionId, { by })` | Registers a conversation the source started as temporary outside the core's `create` (as a supervisor's `steward-relay.py --open --temp` does), or whose id the source learned after answering `create` with `''`. `by` is `'source'` or `'supervisor'`. Returns a `Promise<{ ok, reason }>` that never rejects. An id already temporary gives `{ ok: true }`. The core refuses the call if the list shows that the user wrote to the conversation more than 2 minutes before the call, if the source does not list `'temporary'`, or if Restricted Mode is active. |
+
+No member removes an id or turns an existing ordinary conversation into a temporary one. Only the user can do either, in the session list.
+
+A source lists `'temporary'` in its features when it accepts `temporary: true` in `create`, accepts `{ temporary: true }` in `delete`, and marks its temporary tabs. Without that feature, the New bar's hourglass toggle is off for that source, and the core makes none of its conversations temporary.
+
+| Member | Meaning |
+|---|---|
+| `sessionActions.temporary` | Optional subset of the `create` places (`'tab'`, `'sidebar'`) where the source starts temporary conversations. If omitted, the `create` places apply. |
+| `runSessionAction('create', [], { where, temporary: true })` | Starts the conversation as for `create`, already temporary and with its tab marked. If the source knows the id, it returns it and the core registers it. If the source returns `''`, the core does not guess which conversation it started. The source calls `addTemporary` once it knows the id. |
+| `runSessionAction('delete', [sessionId], { temporary: true })` | First checks that `isTemporary` is true and that no window or process has the conversation open. If either check fails, returns `'refused'` with a reason. Deletes only the conversation's record, the agent's storage for it, and its work plan file. Leaves project files, worktrees, and detached agents the conversation started alone. |
+| Tab title | Prefix the title with `⏳ ` (U+23F3 and a space) while `isTemporary` is true. Update it on `onDidChangeTemporary`. |
+| `listSessions` | Keep listing the temporary conversation like any other conversation. |
+
+What the core does:
+
+- **Hidden**: the core excludes temporary conversations from all list sections, including Recently closed, and from list search, the Needs you filter, and list counts. Notifications and counts outside the list (status bar and badges) treat them like any other conversation.
+- **New bar**: the hourglass toggle is at the end of the bar. When it is on, the next conversation started from either half is temporary, then the toggle turns off. While it is on, the core greys out a half if the source cannot start temporary conversations in that place. `agentPlus.newTemporaryConversation` (New Temporary Conversation) starts one with the bar's agent and place.
+- **Make Temporary**: the row menu for an ordinary conversation open in this window offers Make Temporary... and asks for confirmation before making it temporary.
+- **Closing**: once no window shows the conversation and nothing runs in it, the core immediately writes the closing time and due time to the list's store. Deletion is due `agentPlus.temporaryConversations.deleteAfterMinutes` minutes after closing (default 10, range 1 to 1440). The window that closed the conversation shows a notification with the number of minutes until deletion and offers Keep and Delete Now. Keep makes the conversation ordinary and returns it to the list. If a window shows it again before deletion, the core treats it as open and clears the due time.
+- **Deleting**: on each list refresh, the core holds the project's sweep lock while it asks the source to delete past-due conversations, so only one window does this. The due time is on disk, so after a restart the first refresh picks up conversations whose time ran out. If a conversation looks closed when the list starts, the core waits a minute before starting its grace period because restored tabs may not yet have reported which conversation they show. If the source refuses deletion or deletion fails, the core keeps the record for the next try.
 
 ### Title colours
 

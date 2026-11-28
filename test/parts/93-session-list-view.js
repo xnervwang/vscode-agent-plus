@@ -52,7 +52,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const logo = first.model.logos.codex.dark;
     const decoded = Buffer.from(logo.replace(/^data:image\/svg\+xml;base64,/, ''), 'base64').toString('utf8');
     eq([first.type, /^data:image\/svg\+xml;base64,/.test(logo), /script/i.test(decoded), /<circle/.test(decoded), first.model.sources, view.badge],
-      ['model', true, false, true, [{ id: 'codex', label: 'Codex', create: ['tab'] }], { value: 2, tooltip: '2 conversations need you' }],
+      ['model', true, false, true, [{ id: 'codex', label: 'Codex', create: ['tab'], temporary: false, temporaryAt: [] }], { value: 2, tooltip: '2 conversations need you' }],
       'the page gets the model with each agent\'s logo as a script-free data: URI; the badge counts the conversations that need the user');
     changes.fire();
     eq(view.sent.length, 0, 'an unchanged model is not sent again');

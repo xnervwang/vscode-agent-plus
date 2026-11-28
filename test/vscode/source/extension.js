@@ -54,10 +54,14 @@ function activate(context) {
     + `<h2>${String(title).replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</h2><p>A stand-in conversation of the Agent Plus window test.</p></body></html>`;
   const sessionOfPanel = (panel) => { for (const [id, p] of panels) if (p === panel) return id; return null; };
   const frontTab = () => { const g = vscode.window.tabGroups.activeTabGroup; return g && g.activeTab; };
+  /* A temporary conversation's tab title starts with this mark, as the agents' own extensions draw it. */
+  const TEMP_MARK = '\u23f3 ';
+  const isTemp = (id) => { const c = list.get(id); return !!c && (c.temp === true || (!!core && typeof core.isTemporary === 'function' && core.isTemporary('codex', id))); };
+  const tabTitle = (id, c) => (id && isTemp(id) ? TEMP_MARK : '') + c.title;
   const tabSession = (tab) => {
     if (!tab || !(tab.input instanceof vscode.TabInputWebview) || !String(tab.input.viewType).endsWith(VIEW)) return undefined;
     if (tab.label === NEW_TITLE) return '';
-    for (const [id, c] of list) if (c.title === tab.label && panels.has(id)) return state.unknownTabs.includes(id) ? '' : id;
+    for (const [id, c] of list) if ((c.title === tab.label || TEMP_MARK + c.title === tab.label) && panels.has(id)) return state.unknownTabs.includes(id) ? '' : id;
     return undefined;
   };
   const markSeen = (id) => {
@@ -72,7 +76,7 @@ function activate(context) {
     if (id && !c) return false;
     const had = panels.get(id);
     if (had) { had.reveal(had.viewColumn, preserveFocus); return true; }
-    const panel = vscode.window.createWebviewPanel(VIEW, c ? c.title : NEW_TITLE, { viewColumn: vscode.ViewColumn.Active, preserveFocus }, {});
+    const panel = vscode.window.createWebviewPanel(VIEW, c ? tabTitle(id, c) : NEW_TITLE, { viewColumn: vscode.ViewColumn.Active, preserveFocus }, {});
     panel.webview.html = html(c ? c.title : NEW_TITLE);
     panels.set(id, panel);
     panel.onDidChangeViewState((e) => {
@@ -91,7 +95,7 @@ function activate(context) {
     id: 'codex',
     label: 'Codex',
     extensionId: 'xnervwang.codex-plus',
-    features: ['brief', 'prefill', 'sessions', 'sessionImport', 'sessionSeen', 'sessionClose', 'accountInfo', 'sessionsNotice'],
+    features: ['brief', 'prefill', 'sessions', 'sessionImport', 'sessionSeen', 'sessionClose', 'accountInfo', 'sessionsNotice', 'temporary'],
     logo: { light: vscode.Uri.file(path.join(__dirname, 'logo-codex.svg')), dark: vscode.Uri.file(path.join(__dirname, 'logo-codex.svg')) },
     planPath: (id) => path.join(plans, `${id}.json`),
     planDir: () => plans,
@@ -124,7 +128,8 @@ function activate(context) {
       state.calls.push([action, ids, args]);
       if (action === 'create') {
         const id = `made-${++state.made}`;
-        list.set(id, { sessionId: id, title: `New conversation ${state.made}`, state: 'idle', activity: 'stopped', running: false, lastActiveAt: Date.now() });
+        list.set(id, { sessionId: id, title: `New conversation ${state.made}`, state: 'idle', activity: 'stopped', running: false, lastActiveAt: Date.now(),
+          ...(args && args.temporary === true ? { temp: true, lastUserAt: Date.now() } : {}) });
         openTab(id);
         changed.fire();
         return { results: [{ sessionId: id, outcome: 'done' }] };
@@ -134,7 +139,11 @@ function activate(context) {
         if (!c) return { sessionId: id, outcome: 'failed', reason: 'no such conversation' };
         if (action === 'open') openTab(id);
         else if (action === 'rename') { c.title = String(args.title); const p = panels.get(id); if (p) p.title = c.title; }
-        else if (action === 'delete') { const p = panels.get(id); if (p) p.dispose(); list.delete(id); }
+        else if (action === 'delete' && args && args.temporary === true) {
+          if (!core.isTemporary('codex', id)) return { sessionId: id, outcome: 'refused', reason: 'it is not temporary' };
+          if (panels.has(id)) return { sessionId: id, outcome: 'refused', reason: 'it is open in a tab' };
+          list.delete(id);
+        } else if (action === 'delete') { const p = panels.get(id); if (p) p.dispose(); list.delete(id); }
         return { sessionId: id, outcome: 'done' };
       });
       changed.fire();
@@ -161,6 +170,12 @@ function activate(context) {
   const core = ((api && api.exports) || {}).agentPlus;
   const result = core ? core.registerSource(source) : { accepted: false, reason: 'Agent Plus gave no interface' };
   if (result.registration) context.subscriptions.push(result.registration);
+  /* A conversation kept as ordinary loses the mark on its tab. */
+  if (core && typeof core.onDidChangeTemporary === 'function') {
+    context.subscriptions.push(core.onDidChangeTemporary(() => {
+      for (const [id, p] of panels) { const c = id && list.get(id); if (!c) continue; if (c.temp && !core.isTemporary('codex', id)) delete c.temp; p.title = tabTitle(id, c); }
+    }));
+  }
   context.subscriptions.push(vscode.commands.registerCommand('agentPlusTest.installPlugin', () => { state.ran.push('installPlugin'); }));
 
   /* A second source: once two are registered, Agent Plus draws each row with its agent's logo. */
