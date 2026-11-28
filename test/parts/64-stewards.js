@@ -5,7 +5,7 @@
 'use strict';
 /*
  * stewardOf() and onDidChangeStewards on the interface (src/host.js, src/sources.js): the steward that looks after a
- * conversation.
+ * conversation, its lead when a source marks one.
  */
 const { boot } = require('../boot');
 
@@ -77,8 +77,8 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     ];
     eq(wrong.map(got), Array(wrong.length).fill(null),
       'an id missing, empty, padded, too long, not a string or with a lone surrogate, a getter that throws, a string, a promise, a number, or a stewardOf() that throws: null');
-    const extra = got(Object.assign({ title: 'Steward' }, CC));
-    eq([extra, Object.keys(extra)], [CC, ['sourceId', 'sessionId']], 'other fields in an answer are left out of the result');
+    const extra = got(Object.assign({ title: 'Steward', lead: true, open: true }, CC));
+    eq([extra, Object.keys(extra)], [CC, ['sourceId', 'sessionId']], 'other fields in an answer, lead among them, are left out of the result');
     b.close();
   }
 
@@ -109,6 +109,39 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     answers.first = answers.second = null;
     eq([b.api.stewardOf('claude-code', 'x'), third.asked[third.asked.length - 1]], [{ sourceId: 'third', sessionId: 'T' }, ['claude-code', 'x']],
       'a source is asked about a conversation of any source, not only its own');
+    b.close();
+  }
+
+  /* ── The lead a source marks in its stewardsOf() answer ── */
+  {
+    const b = boot(root, tmp, { views: false });
+    const E = (sessionId, title, lead) => ({ sourceId: 'claude-code', sessionId, title, ...(lead ? { lead: true } : {}) });
+    let list = [], own = null;
+    const both = keeper('claude-code', () => own, { features: ['stewards', 'stewardList'], stewardsOf: () => list });
+    b.api.registerSource(both.source);
+    const of = () => b.api.stewardOf('opencode-plus', 'ses_A');
+    list = [E('observer', 'Observer'), E('lead', 'Lead', true)];
+    own = { sourceId: 'claude-code', sessionId: 'observer' };
+    const lead = of();
+    eq([lead, Object.isFrozen(lead), Object.keys(lead), b.api.stewardsOf('opencode-plus', 'ses_A')[0].sessionId],
+      [{ sourceId: 'claude-code', sessionId: 'lead' }, true, ['sourceId', 'sessionId'], 'lead'],
+      'stewardOf() is the entry the source marks as lead in its stewardsOf() answer, the first of stewardsOf(), even where its own stewardOf() says another');
+    list = [E('observer', 'Observer'), E('other', 'Other')];
+    eq(of(), own, 'with no entry marked, as from a source that knows no leads, stewardOf() is the source\'s own answer');
+    own = null;
+    eq(of(), null, 'a source that marks no lead and answers null has no lead for the conversation: null');
+    b.close();
+  }
+  {
+    const b = boot(root, tmp, { views: false });
+    const old = keeper('old', () => ({ sourceId: 'old', sessionId: 'speaker' }));
+    const listOnly = { protocol: 1, id: 'list-only', features: ['stewardList'],
+      stewardsOf: () => [{ sourceId: 'list-only', sessionId: 'observer', title: '' }, { sourceId: 'list-only', sessionId: 'lead', title: '', lead: true }] };
+    b.api.registerSource(old.source);
+    eq(b.api.stewardOf('opencode-plus', 'ses_A'), { sourceId: 'old', sessionId: 'speaker' }, 'a source that lists only \'stewards\' answers as before');
+    b.api.registerSource(listOnly);
+    eq(b.api.stewardOf('opencode-plus', 'ses_A'), { sourceId: 'list-only', sessionId: 'lead' },
+      'a lead marked by a source that lists only \'stewardList\' is stewardOf(), ahead of an earlier source\'s own answer, so that stewardOf() and stewardsOf() agree');
     b.close();
   }
 
