@@ -13,7 +13,7 @@
     <the new title>
     EOF
     python3 steward-relay.py --close [--confirmed] <session id> [<plugin data directory>]
-    python3 steward-relay.py --open <folder> [<plugin data directory>] <<'EOF'
+    python3 steward-relay.py --open <folder> [--temp] [<plugin data directory>] <<'EOF'
     <the new conversation's first message>
     EOF
     python3 steward-relay.py --resume <session id> [<plugin data directory>] [<<'EOF'
@@ -58,7 +58,9 @@ its own, and the other steward leads the conversation from then on.
 opened again from the session list. A conversation that is working, waiting for an answer or running background work is
 closed only with --confirmed. --open starts a new conversation in the VS Code window whose first folder is <folder>,
 sends it the message and prints its session id, or says that no window has the folder open. This steward leads the
-conversation it opens.
+conversation it opens. With --temp the new conversation is temporary: the session list does not show it, and once it is
+closed Agent Plus deletes its files after a grace period. Use it for work done once; a conversation that exists already
+cannot be made temporary from here.
 --windows prints the open windows and their folders.
 
 --resume opens a conversation that no window shows, in an editor tab of the VS Code window whose first folder is the one
@@ -145,7 +147,7 @@ LIST = ("--take", "--drop", "--all", "--new")
 SWITCHES = ("--all", "--new")
 # Each takes the next argument.
 VALUED = SWITCHES
-MODIFIERS = ("--confirmed", "--windows", "--ask")
+MODIFIERS = ("--confirmed", "--windows", "--ask", "--temp")
 # Flags this script no longer takes, without their "--", each with the reason printed when one is passed.
 GONE = {
     "anyway": "only a conversation's lead sends it messages",
@@ -155,6 +157,8 @@ GONE = {
 REQUEST_SUFFIX = ".v4.json"
 RESULT_SUFFIX = ".result.json"
 TICKED = " It is now ticked for you in the Supervisor panel."
+TEMPORARY = " It is a temporary conversation: the session list does not show it, and its files are deleted a while after it is closed."
+NOT_TEMPORARY = " It could not be made temporary (%s), so it is an ordinary conversation."
 LEADS = " You are its lead supervisor."
 DONE = {
     "--rename": "Renamed.",
@@ -398,7 +402,7 @@ def read_input():
         return raw.decode("utf-8", "replace").strip()
 
 
-USAGE = ("usage: steward-relay.py [--rename | --close [--confirmed] | --open | --resume]"
+USAGE = ("usage: steward-relay.py [--rename | --close [--confirmed] | --open [--temp] | --resume]"
          " <session id or folder> [<plugin data directory>] < text\n"
          "       steward-relay.py --handoff [<plugin data directory>] < text\n"
          "       steward-relay.py --take-lead <session id or key> [--ask] [<plugin data directory>]\n"
@@ -548,6 +552,7 @@ def main(argv):
     confirmed = "--confirmed" in args
     listing = "--windows" in args
     asking = "--ask" in args
+    temporary = "--temp" in args
     valued, rest, i, bad = {}, [], 0, False
     while i < len(args):
         a = args[i]
@@ -579,7 +584,8 @@ def main(argv):
     opening = action == "--open"
     if bad or (opening and not os.path.isabs(target)) \
             or (not opening and not handing and not switching and not naming and not steward_table.managed_id(target)) \
-            or (confirmed and action != "--close") or (asking and not taking) or len([a for a in args if a in FLAGS]) > 1 \
+            or (confirmed and action != "--close") or (asking and not taking) or (temporary and not opening) \
+            or len([a for a in args if a in FLAGS]) > 1 \
             or len(rest) > 2 or (switching and valued.get(action) not in ("on", "off")):
         print(USAGE)
         return 2
@@ -650,6 +656,8 @@ def main(argv):
         request["ask"] = asking
     if confirmed:
         request["confirmed"] = True
+    if temporary:
+        request["temp"] = True
     directory = os.path.join(data, RELAY_DIR)
     request_file, result = write_request(directory, request)
     # An open also waits for the new tab to send its first message, and a resume for the panel to show the conversation.
@@ -689,8 +697,10 @@ def main(argv):
                 print("%s: %s" % ("Done" if outcome == "submitted" else "Not done", end(reason or outcome)))
                 return 0 if outcome == "submitted" else 1
             if outcome == "submitted":
+                made = "" if not temporary else TEMPORARY if r.get("temporary") is True \
+                    else NOT_TEMPORARY % (r.get("temporaryReason") or "the window did not say why")
                 print(DONE.get(action, SENT_OTHER if other else SAID["submitted"]) + (TICKED if r.get("ticked") is True else "")
-                      + (LEADS if opening else ""))
+                      + (LEADS if opening else "") + made)
                 if opening:
                     sid = r.get("sessionId") or ""
                     print("Session id: %s" % sid if sid else "Its session id was not known yet; it is in the Supervisor panel.")
