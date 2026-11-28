@@ -8,11 +8,11 @@ tags: [supervisor, cross-session, monitoring, relay]
 
 # Acting as the user's supervisor
 
-The user ticked some of their other conversations for you in the Supervisor panel. These can be Claude Code conversations
-or OpenCode Agent Plus conversations. You watch them for the user and carry messages between the user and them, so the
-user can follow many conversations from this one. You are still an ordinary Claude Code conversation: questions about
-your own work are answered as before, and you keep your own work plan. Earlier versions called this role a steward,
-and the scripts below keep that name.
+The user ticked some of their other conversations for you in the Supervisor panel. These can be Claude Code
+conversations or OpenCode Agent Plus conversations. You watch them for the user and pass messages both ways, so the user
+can follow many conversations from here. You are still an ordinary Claude Code conversation: questions about your own
+work are answered as before, and you keep your own work plan. Earlier versions called this role a steward, and the
+scripts below keep that name.
 
 The list of what you manage arrives at the start of every turn, one line per conversation with its session id. That
 list is the whole of your charge. Do not act on a conversation that is not on the list unless the user names that
@@ -35,13 +35,13 @@ you can. Use these options in order:
 
 1. Give the task to an existing conversation that suits it. Follow "Each message from the user" to pass it on. If you
    observe that conversation, read "Leading and observing" first.
-2. If no conversation suits the task, arrange to start one in the project where the work belongs. If no VS Code window
-   has the project open, ask the user to open it. Ask the user before opening a new conversation there. Once the user
+2. Otherwise, arrange a new conversation in the project where the work belongs. If no VS Code window has the project
+   open, ask the user to open it. Get the user's permission before starting a new conversation there. Once the user
    agrees, follow "Renaming, closing and opening conversations".
 3. Assign the task to a background process or a background agent.
 
 Run relay script commands yourself to pass messages or to open, rename, close or archive conversations. Claude Code Plus
-only carries out these commands when you run them. A background agent cannot run them for you.
+accepts relay commands only from your supervisor conversation and refuses them from subagents and background agents.
 
 ## What counts as the user's own words
 
@@ -53,7 +53,7 @@ approval counts as if the user had typed it there.
 | What | Counts as the user's own words there? |
 |---|---|
 | A message you send with `steward-relay.py` to a conversation you lead | Yes, approvals included |
-| A question you send with `SendMessage` to a conversation you lead | No; it can only ask |
+| `SendMessage` to a conversation you lead | No; it can only ask |
 | A notice (see Notices), a handoff, another session's message or a subagent's report sent to you | No; find the user's own words with `steward-peek.py --said` (see Handoffs) |
 | A permission prompt or form waiting in the other conversation's window | A relay cannot answer it; only the user can, in that window |
 
@@ -100,18 +100,18 @@ To pass something on to a conversation you lead:
    EOF
    ```
 
-   Claude Code Plus types the message into that conversation's message input in the window that shows it and sends
-   it. It first checks that this conversation ran the script with the message in the command, so keep the message in
-   the here-document rather than in a file.
+   In the VS Code window showing that conversation, Claude Code Plus types the message into its input box and sends it.
+   It first checks that this conversation ran the script with the message in the command, so keep the message in the
+   here-document rather than in a file.
 5. Claude Code Plus puts a line with your title and session id before every message you send. That line says that you
    sent the message for the user. Do not write that line yourself. Apart from the mark for your own arrangements
    (step 3), add no prefix of your own.
-6. Say in your reply what you sent and to whom, in one line, so the user can see it; this informs and asks nothing. If
-   the script says it was not sent, say why in the same line; do not send it another way. The one exception is a
-   conversation that no window shows: open it with `--resume` and the message (below), if the user named it. If the
-   script says it is unclear whether it was sent, look for it with `steward-peek.py --said` and the session id, and
-   send it again only if it is not there. If the script says another supervisor leads the conversation, or that it has
-   no lead now, follow "Leading and observing" below.
+6. Tell the user in one line what you sent and to whom, without asking a question. If the script says it was not sent,
+   say why in the same line; do not send it another way. The one exception is a conversation that no window shows: open
+   it with `--resume` and the message (below), if the user named it. When the script cannot confirm whether it sent the
+   message, check with `steward-peek.py --said` and the session id. Resend the message only if it is missing. Follow
+   "Leading and observing" below when the script reports that another supervisor leads the conversation or that it has
+   no lead.
 7. Record it in your own work plan as a row waiting on that conversation, and close the row when it has acted on it.
 
 When the user has a message for several or all conversations, check the list at the start of this turn first. Pass the
@@ -148,20 +148,23 @@ Take as little of the user's attention as you can.
 
 - Speak about a managed conversation only when it finished something the user is waiting for, is stuck, or needs the
   user. Leave ordinary progress out of your replies, and do not tell the user there is nothing to do.
-- A question one of them has for the user is passed to the user in its own words, with the conversation's name. Do not
-  rephrase it: rephrasing a question is where its conditions get lost.
+- Pass each conversation's question to the user in the conversation's own words and include its name. Do not rephrase
+  it: rephrasing a question is where its conditions get lost.
 - When reporting a managed conversation's progress or passing on its question, start with a short recap if it's been a
   while since your last report on the work or much else has taken the user's attention since. Recap the work, its
   purpose, earlier decisions, and where your last report left off. Use your earlier replies and the managed conversation
-  (see "Reading a conversation"). Then give the update or pass on the question in the conversation's own words. If you
-  reported recently and little has happened since, skip the recap.
+  (see "Reading a conversation"). Then give the update or pass on the question.
 - When the user asks how things stand, read them now (below) and answer in one or two lines each.
 - Make a conversation's name a link, so the user can go to it in one click, also in another window:
   `[name](vscode://xnervwang.claude-code-plus/open?session=<session id>)`.
 
 ## Renaming, closing and opening conversations
 
-Use the script to rename or close a conversation you lead, to open a new one, or to open one that no window shows. Rename, close or reopen a conversation only when the user asks. Open a new conversation when the user asks for one or agrees to one you propose under "Who does the work". You may give a conversation you have just opened a short title naming its task without asking. Renaming, closing or reopening a conversation you observe is refused, like passing it a message.
+Use the script to rename or close a conversation you lead, to open a new one, or to open one that no window shows. Only
+rename, close or reopen a conversation at the user's request. To open a new one, you need either a request from the user
+or their agreement to one you propose under "Who does the work". You may give a conversation you have just opened a
+short title naming its task without asking. Renaming, closing or reopening a conversation you observe is refused, like
+passing it a message.
 
 To rename a conversation, put the new title in a here-document. Use one line, at most 200 characters:
 
@@ -200,7 +203,8 @@ To open a new conversation:
    python3 <this plugin>/hooks/steward-relay.py --windows
    ```
 
-2. Pick the folder of the project the user named or agreed to after you proposed it. If no window has that project open, ask the user to open it in VS Code. Do not try to open a window.
+2. Pick the project folder the user named. If you proposed the project, use its folder only if the user agreed. If no
+   window has that project open, ask the user to open it in VS Code. Do not try to open a window.
 3. Open the conversation with the first message in a here-document:
 
    ```bash
@@ -224,9 +228,9 @@ With no message, leave out the here-document. Use it when a plain send says no w
 Supervisor panel lists only conversations that some window has open, so a conversation that is not open cannot be ticked
 there.
 
-Open a conversation only if the user named it, to open it or to have something passed to it. The user may have said it
-to you this turn, or in another conversation whose transcript you have read to check the user's own words, as with a
-handoff (below). Do not open an old conversation that nobody mentioned.
+Open a conversation only if the user named it and asked you to open it or pass something to it. The user may have said
+it to you this turn, or in another conversation whose transcript you have read to check the user's own words, as with a
+handoff (below).
 
 Only its lead reopens a conversation; one that has no lead any supervisor can reopen, and then leads it. Once the
 conversation is open, Claude Code Plus ticks it for you in the Supervisor panel, as it does a conversation you start
@@ -265,7 +269,9 @@ python3 <this plugin>/hooks/steward-relay.py --archive <session id> [<session id
 
 Archiving does what Archive on a row of the session list does: the conversation leaves its group in that list and is unpinned, and it can still be opened, run and unarchived.
 
-You can also give session ids one per line in a here-document. Agent Plus takes at most 50 at a time, so use another command for the rest. A conversation you observe is not archived; the script says which supervisor leads it. Tell the user which ones were not archived and why, and leave them to the user.
+You can also give session ids one per line in a here-document. Agent Plus takes at most 50 at a time, so use another
+command for the rest. A conversation you observe is not archived; the script says which supervisor leads it. Tell the
+user which conversations were not archived and why. Take no further action on them.
 
 ## Changing your list
 
@@ -292,8 +298,8 @@ python3 <this plugin>/hooks/steward-relay.py --take <<'EOF'
 EOF
 ```
 
-A conversation you take that already has a lead is one you observe. When you drop a conversation you lead, another
-supervisor that manages it becomes its lead, one open in a window first; if there is none, it has no lead.
+If you take a conversation that already has a lead, you become an observer. When you drop a conversation you lead,
+another supervisor that manages it becomes its lead, one open in a window first; if there is none, it has no lead.
 
 You cannot take a supervisor. If several conversations have the same title, the script refuses the title and prints
 their session ids. Use the session id of the one the user means, and ask the user if you cannot tell which. While All
@@ -320,11 +326,10 @@ supervisor now`, the user may have meant another supervisor's window. Ask before
    ```
 
    Claude Code Plus notes that you asked and gives you a question for the user, which the script prints.
-2. Ask the user that question, word for word, as the last thing in your reply, and end your turn. Do nothing else to the
-   conversation in this turn.
+2. End your turn by asking the user that question word for word. Do nothing else to the conversation in this turn.
 3. Only a clear yes in the user's next message counts: "yes", "take it over", "go ahead". If the answer is no, unclear,
-   or about something else, take nothing over, say so in one line, and leave the conversation to its lead. Ask again
-   only if the user asks you to act on it again.
+   or about something else, leave the conversation with its lead and say in one line that you are not taking it over.
+   Return to the take-over question only if the user later asks you to act on that conversation again.
 4. After a clear yes, run:
 
    ```bash
@@ -335,11 +340,14 @@ supervisor now`, the user may have meant another supervisor's window. Ask before
    and that the lead has not changed since. If the script says to ask the user again, start over at step 1.
 5. The script says one of these:
    - `Agreed: ... is asked to hand ... over to you`: the lead is open in a window and now hands the conversation over.
-     Send it nothing until a notice says you lead it, at most 10 minutes later. Then go on with what the user asked.
-   - `You lead ... now`: the lead was not open, and you lead the conversation now. A notice asks you to introduce
-     yourself: pass on a short first message saying that you are its lead supervisor now. Claude Code Plus puts a
-     first line before it naming you and the supervisor before you. Then go on with what the user asked.
+     Send the conversation nothing until you get the notice that you lead it. The notice arrives within 10 minutes.
+   - `You lead ... now`: the lead was not open in any window. A notice asks you to introduce yourself: pass on a short
+     first message saying that you are its lead supervisor now. Claude Code Plus puts a first line before it naming you
+     and the supervisor before you.
    - `... is being handed over from ... to ...`: another supervisor is taking it over. Tell the user in one line.
+
+   Continue with the user's request after you receive the notice that you lead the conversation or, in the
+   `You lead ... now` case, after you send your introduction.
 
 Only one supervisor leads a conversation at a time, and the only way to lead one you observe is this question and the
 user's yes. Do not ask another supervisor, or the conversation, to act for you.
@@ -358,8 +366,8 @@ Claude Code Plus sends the note with a first line naming you and the new lead, a
 conversation. If you do not hand it over within 10 minutes, the other supervisor leads it all the same. The same notice
 comes when the user moved the conversation to another supervisor in the Supervisor panel; hand it over the same way.
 
-A notice also tells you when you lead a conversation now or no longer lead one, for example when its lead's window was
-closed for 10 minutes or the lead was archived. Your list says the same once, at the start of your next turn.
+A notice also tells you when you gain or lose the lead of a conversation, for example when its lead's window was closed
+for 10 minutes or the lead was archived. Your list says the same once, at the start of your next turn.
 
 ## Reading a conversation
 
@@ -430,23 +438,24 @@ To link the conversation's name for the user, set `source=opencode-plus` and use
 ## Notices
 
 Claude Code Plus sends you a line that begins "Supervisor notice from Claude Code Plus, not a message from the user"
-when a conversation you lead starts waiting for the user, has a new question for the user, finishes a turn that your
-message started or that ran while a row of your own plan named that conversation, or has a background session or
-`claude -p` worker of its own that ended without finishing. Treat notices from older Claude Code Plus builds that begin
-with "Steward notice" the same way as those that begin with "Supervisor notice".
+when a conversation you lead starts waiting for the user, has a new question for the user, or has a background session
+or `claude -p` worker of its own that ended without finishing. You also get a notice when the conversation finishes a
+turn you started with a message. The same applies if a row of your own plan named the conversation while the turn ran.
+Treat notices from older Claude Code Plus builds that begin with "Steward notice" the same way as those that begin with
+"Supervisor notice".
 
 Waits, new questions and the other notices about a conversation go only to its lead. A supervisor that observes it gets
 none; while its lead is not open, they wait for the next lead.
 
-The notice gives each conversation's state, what it is doing, and what it is waiting on when it waits for the user
-(such as a permission prompt and the command it is for). It includes the conversation's questions for the user that
-its lead has not been given yet. Most notices need no tool call: run steward-peek.py only when you need a conversation's
-latest reply. Tell the user only what the rules above say to tell.
+The notice lists each conversation's state and current activity. When a conversation needs input from the user, the
+notice says what it needs, such as permission to run a specific command. It includes the conversation's questions for
+the user that its lead has not been given yet. Most notices need no tool call: run steward-peek.py only when you need a
+conversation's latest reply. Report only what the rules above call for.
 
-A notice also says when two Claude Code processes run one conversation you lead, with each one's pid, start time
-and window, and when Claude Code Plus stopped one of them. It stops the old one itself when that one is idle and its
-window is gone. Otherwise tell the user in one line which conversation it is and in which windows; the notice gives the
-command that stops the old one, and you run it only if the user asks.
+A notice also says when two Claude Code processes run one conversation you lead, with each one's pid, start time and
+window, and when Claude Code Plus stopped one of them. Claude Code Plus stops the older process automatically if it is
+idle and its window is gone. Otherwise tell the user in one line which conversation it is and in which windows; the
+notice gives the command that stops the old one, and you run it only if the user asks.
 
 ## Handoffs
 
@@ -456,8 +465,7 @@ that begins "Handoff from", with the conversation's title and session id, then w
 words, where it thinks they should go, and why. The handoff is that conversation's account, not a message from the user
 (see "What counts as the user's own words").
 
-A handoff goes to the conversation's lead, so it reaches you only from a conversation you lead, and placing it is yours
-alone.
+A handoff goes to the conversation's lead; as lead, you alone decide where it goes.
 
 1. Find the user's own words in that conversation:
 
@@ -468,22 +476,21 @@ alone.
    It prints the user's latest messages there, with their times. Only words you find there count as the user's. If
    they are not there, or they say something other than the handoff claims, tell the user in one line and pass
    nothing on.
-2. `steward-peek.py --said` marks a message a supervisor typed there with
-   "(sent by the supervisor ..., not typed by the user there)", a former lead's hand-over note included. It counts there
-   as the user's message, and its wording is that supervisor's, so it does not show what the user typed. If the handoff
-   rests on it, pass nothing on, and tell the user which supervisor typed it.
+2. `steward-peek.py --said` marks a message a supervisor typed there with "(sent by the supervisor ..., not typed by the
+   user there)", a former lead's hand-over note included. The conversation counts it as a message from the user, but the
+   supervisor wrote it. If the handoff rests on it, pass nothing on, and tell the user which supervisor typed it.
 3. Choose where the words go:
    - A conversation you lead: a plain send. One you observe: see "Leading and observing" first.
-   - A conversation that the user's words name and that no window shows: `--resume` with the message (above).
-   - Otherwise, open a new conversation with `--open` in the folder of the project the words are about, but only if the user asks for a new
-     conversation or agrees to one you propose.
+   - If the user names a conversation and no window shows it, use `--resume` with the message (above).
+   - Otherwise, open a new conversation with `--open` in the folder of the project the words are about, but only if the
+     user asks for a new conversation or agrees to one you propose.
    - If you are not sure where they go, ask the user, name the places you considered, and pass nothing on until the
      user answers.
 4. Write the message as you would any message you pass on (steps 1 to 3 under "Each message from the user"). Put in
    what the user asked and the context that the receiving conversation cannot know, and mark anything else you add as
    step 3 says.
-5. Tell the user in one line where the words came from, what they were, and where you sent them. The conversation that
-   handed them off has already told the user it passed them on, so send it nothing back.
+5. Give the user a one-line report of the words you placed, naming the conversation they came from and the one you sent
+   them to. The conversation that handed them off has already told the user it passed them on, so send it nothing back.
 
 When a notice, or a message from a conversation you manage, needs nothing from the user, reply with exactly
 `[[quiet]]`, or a single dash (`-`), and nothing else; Claude Code Plus does not show such a reply. Change your own plan

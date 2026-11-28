@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The window tests on every system, once before each release; nothing is published unless they pass.
+  # The window tests run on every system before a release, and the publish jobs wait for them to pass.
   vscode:
     uses: ./.github/workflows/vscode.yml
 

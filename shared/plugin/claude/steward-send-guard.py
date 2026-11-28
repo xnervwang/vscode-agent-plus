@@ -4,17 +4,16 @@
 # All rights reserved.
 # Source: vscode-agent-plus shared/plugin/claude/steward-send-guard.py; sync-shared.js copies it, so edit it there.
 
-"""PreToolUse hook on SendMessage: a steward does not send a message with SendMessage to a conversation that another
-steward leads, or that has no lead. steward-relay.py is refused at the window for the same reason; SendMessage reaches
+"""PreToolUse hook on SendMessage: refuses a steward's message to a conversation that another steward leads, or that
+has no lead. steward-relay.py is refused at the window for the same reason; SendMessage reaches
 the other session directly, so it is refused here, before the call.
 
-SendMessage names its recipient with the name a running Claude Code session goes by, with " [ref]" after it when two
-share the name, or with a session id. Each running session keeps a record in ~/.claude/sessions/<pid>.json with its
+SendMessage takes as its recipient the name of a running Claude Code session, with " [ref]" after it when two share
+the name, or a session id. Each running session keeps a record in ~/.claude/sessions/<pid>.json with its
 "name", "sessionId" and "messagingSocketPath". The call is denied only when this conversation is a steward and every
-record of a live session that the recipient names is a conversation some steward has on its list (steward_table.py)
-and that this steward does not lead. Any other recipient - a subagent, a teammate, "main", a session on another
-machine, a name no record has, or one of two sessions of the same name that are not both managed - is let through, as
-is a call from a conversation that is no steward.
+live session the recipient names is on some steward's list (steward_table.py) and is not led by this steward. Any
+other recipient is let through: a subagent, a teammate, "main", a session on another machine, a name that no record
+has, or a name two sessions share when not both are managed. So is any call from a conversation that is not a steward.
 """
 
 import json
@@ -28,7 +27,7 @@ from plan_common import data_dir, read_payload  # noqa: E402
 from proc_alive import alive  # noqa: E402
 import steward_table  # noqa: E402
 
-# A recipient with the reference SendMessage adds after a name two sessions share.
+# A name two sessions share, followed by the " [ref]" that SendMessage adds to tell them apart.
 REF = re.compile(r"^(.*\S)\s*\[[0-9a-f]{6,12}\]$")
 
 

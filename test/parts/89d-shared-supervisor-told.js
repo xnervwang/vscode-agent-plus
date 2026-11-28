@@ -5,7 +5,7 @@
 'use strict';
 /*
  * What the shared Python tells each side about leads: steward.py names only the lead to a managed conversation, in full
- * on its first turn, after a change of lead and after a compaction and in one line otherwise, and marks each line of a
+ * on its first turn, after a change of lead and after a compaction, in one line on other turns, and marks each line of a
  * supervisor's list as led or observed; steward-peek.py --said marks a lead's hand-over note and a new lead's first
  * message; steward-send-guard.py refuses a supervisor's SendMessage to a conversation it does not lead.
  */
@@ -23,7 +23,7 @@ const NO_LEAD = 'No supervisor watches this conversation now; put questions for 
 
 module.exports = async ({ eq, note, tmp, root }) => {
   const python = ['python3', 'python'].find((p) => cp.spawnSync(p, ['-c', 'import sys; assert sys.version_info >= (3, 7)']).status === 0);
-  if (!python) { note('no Python 3.7 or later here: the checks of what supervisors and their conversations are told were not run'); return; }
+  if (!python) { note('no Python 3.7 or later here: the supervisor note checks were not run'); return; }
   const shared = path.join(root, 'shared', 'plugin');
   const hooks = path.join(tmp('told-plugin'), 'hooks');
   fs.mkdirSync(hooks, { recursive: true });
@@ -71,8 +71,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
       full.includes(DECISIONS), full.includes('--handoff with a here-document') && full.includes('it goes to your lead supervisor'),
       full.includes('Do not send it status messages'), observers(full), / and |Supervisors|they /.test(full.slice(0, 120))],
     [true, true, true, true, [], false],
-    'a managed conversation\'s first turn names its lead with its title and session id, in the singular, never an observer, and says that '
-      + 'decisions count only from the user\'s own words and that a hand-off goes to the lead');
+    'a managed conversation\'s first turn names only its lead, by title and session id, and says that decisions count only from the '
+      + 'user\'s own words and that hand-offs go to the lead');
     eq([short, observers(short), told], [`Your lead supervisor is still ${NAME(LEAD)}. ${DECISIONS}`, [],
       { lead: LEAD, term: 3, title: TITLES[LEAD], tell: '', compacted: '' }],
     'the next turn gets one line that still names the lead and says decisions count only from the user\'s own words; what was told is kept '
@@ -81,14 +81,14 @@ module.exports = async ({ eq, note, tmp, root }) => {
     fs.writeFileSync(path.join(d, `${M}.compacted`), '2026-11-28T10:00:00.000Z\n');
     const compacted = turn(d, M), afterCompact = turn(d, M);
     eq([compacted.startsWith(`Your lead supervisor is ${NAME(LEAD)}. It watches`), afterCompact.startsWith('Your lead supervisor is still')],
-      [true, true], 'after a compaction the whole note comes once more, then the one line again');
+      [true, true], 'a compaction brings back the whole note for one turn');
 
     write(d, { lead: { lead: OBS, term: 4, why: 'takeover', was: LEAD } });
     const changed = turn(d, M).split('\n'), next = turn(d, M);
     eq([changed[0], changed[1].startsWith(`Your lead supervisor is ${NAME(OBS)}. It watches`), changed.slice(1).join('\n').includes(TITLES[LEAD]),
       changed.slice(1).join('\n').includes(LEAD), next],
     ['Your lead supervisor is now "Night supervisor" (was "Release supervisor").', true, false, false, `Your lead supervisor is still ${NAME(OBS)}. ${DECISIONS}`],
-    'the turn after the lead changed says once from whom to whom, then gives the whole note naming the new lead only; the next turn has the one line');
+    'after a change of lead the next turn says once who the lead was and is, then gets the whole note; the turn after that gets one line');
 
     write(d, { lead: { lead: OBS, term: 6, why: 'takeover', was: LEAD } });
     const sameLead = turn(d, M);
@@ -102,16 +102,16 @@ module.exports = async ({ eq, note, tmp, root }) => {
       full.includes('Do not send it status messages'), observers(full),
       short === `Your lead supervisor is still ${NAME(LEAD)}; it is not open in a VS Code window now, so put questions for the user in your plan. ${DECISIONS}`],
     [true, false, [], true],
-    'while no window shows the lead, the note and the one line say so and put questions in the plan for now, and still name no observer');
+    'when no window shows the lead, the whole note and the one line both say so and send questions to the plan; observers are still not named');
     eq([turn(world({ lead: { lead: '' } }), M), turn(world({ version: 3, noLeads: true }), M), turn(world(), NOBODY)], [NO_LEAD, NO_LEAD, ''],
-      'a managed conversation with no lead, or a table without leads, is told no supervisor watches it; a conversation nobody manages is told nothing');
+      'a managed conversation with no lead, or a table without leads, gets the line that no supervisor watches it; one nobody manages gets nothing');
 
     const text = 'From your lead supervisor "Release supervisor": from now on your lead supervisor is "Night supervisor".\nYou were fixing the flaky build test.';
     const d = world({ lead: { lead: OBS, term: 4, why: 'takeover', was: LEAD, tell: { kind: 'handover', from: LEAD, text, at: 50 } } });
     const first = turn(d, M), second = turn(d, M);
     eq([first.startsWith(`This note was left for you while no window had this conversation open:\n${text}\nYour lead supervisor is ${NAME(OBS)}.`),
       second.includes(text), second.startsWith('Your lead supervisor is still')], [true, false, true],
-    'a note the window could not send is shown once, before the note about the lead, and not again');
+    'a note the window could not send is shown once, before the note about the lead');
   }
 
   /* A supervisor's list. */
@@ -120,7 +120,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const obs = turn(d, OBS), lead = turn(d, LEAD), docs = turn(d, OBS2);
     const line = (text, name) => (text.split('\n').find((l) => l.startsWith(`- "${name}"`)) || '');
     eq([line(obs, 'Fix the build'), line(obs, 'Port the parser'), line(lead, 'Fix the build'), line(lead, 'Port the parser'),
-      obs.includes(' You lead 1 of them and observe 1. '), obs.includes('A conversation you observe you only read and report on'),
+      obs.includes(' You lead 1 of them and observe 1. '), obs.includes('Read and report on a conversation you observe'),
       docs.includes(' You observe it. '), lead.includes(' You lead 1 of them and observe 1. ')],
     [`- "Fix the build" (${M}): observer (lead: "Release supervisor"); not running`, `- "Port the parser" (${M2}): lead; not running`,
       `- "Fix the build" (${M}): lead; not running`, `- "Port the parser" (${M2}): observer (lead: "Night supervisor"); not running`,
@@ -134,8 +134,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
       [won, lost].some((t) => t.includes('Nothing has changed')), [wonAgain, lostAgain].map((t) => t.includes('Lead changes')),
       [wonAgain, lostAgain].every((t) => t.includes('Nothing has changed'))],
     [true, true, false, [false, false], true],
-    'a change of lead makes the list differ from the one before, and the turn after it says once which conversations the supervisor '
-      + 'now leads or no longer leads');
+    'a change of lead counts as a change of the list, and the next turn says once which conversations the supervisor gained or lost '
+      + 'the lead of');
   }
 
   /* --said marks a lead's hand-over note and a new lead's first message. */
@@ -183,8 +183,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
       eq([send(OBS, 'fix-build'), send(OBS, 'fix-build [a1b2c3]'), send(OBS, M.toUpperCase()), send(OTHER, 'fix-build'),
         send(LEAD, 'port-parser').startsWith(`Not sent: "Port the parser" is led by ${NAME(OBS)}; you observe it.`)],
       [observed, observed, observed, `Not sent: "Fix the build" is led by ${NAME(LEAD)}.${tail}`, true],
-      'a supervisor\'s SendMessage to a conversation another supervisor leads is refused, the recipient found by its session name, with or '
-        + 'without a reference after it, or by its session id, also when the supervisor does not manage it');
+      'SendMessage to a conversation another supervisor leads is refused whether the recipient is given by session name, with or '
+        + 'without a reference, or by session id, and also when the sender does not manage it');
       eq([send(LEAD, 'fix-build'), send(OBS, 'port-parser'), send(OBS, 'scratch'), send(OBS, 'main'), send(OBS, 'twin'), send(OBS, 'gone'),
         send(M, 'port-parser'), send(NOBODY, 'fix-build'), send(OBS, 'fix-build', d, 'Bash')],
       ['allowed', 'allowed', 'allowed', 'allowed', 'allowed', 'allowed', 'allowed', 'allowed', 'allowed'],

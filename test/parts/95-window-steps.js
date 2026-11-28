@@ -38,5 +38,5 @@ module.exports = ({ eq, tmp, root }) => {
   eq([/schedule:\n(\s+#.*\n)?\s+- cron: '\d+ \d+ \* \* \*'/.test(yml), /\n  push:\n(\s+#.*\n)?\s+branches: \['ci\/\*\*'\]\n/.test(yml),
     /\n  workflow_call:\n/.test(yml), /push:\n\s+branches: \[main\]/.test(workflow('check.yml')),
     /\n  vscode:\n\s+uses: \.\/\.github\/workflows\/vscode\.yml\n/.test(release), /\n  publish:\n\s+needs: vscode\n/.test(release)],
-  [true, true, true, true, true, true], 'the window tests run once a day and before each release publishes, and a push to main runs only check.yml');
+  [true, true, true, true, true, true], 'the window tests run daily and before each release is published; pushes to main run check.yml instead');
 };

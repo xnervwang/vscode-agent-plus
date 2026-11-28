@@ -45,7 +45,6 @@ UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 WHY = ("first", "opened", "new", "migrated", "takeover", "panel", "dead", "dropped", "archived", "none")
 TELL_KINDS = ("handover", "intro", "farewell")
 MAX_TELL = 4000
-# The window takes a take-over question as asked for this long.
 TICKET_SECONDS = 30 * 60
 
 
@@ -138,7 +137,7 @@ def entries_of(data):
 
 
 def leads_of(data):
-    """The "leads" of a parsed file, each entry checked as leadsOf in src/steward-leads.js checks it."""
+    """The "leads" of a parsed file, each entry checked by the rules of leadsOf in src/steward-leads.js."""
     found = data.get("leads") if isinstance(data, dict) else None
     out = {}
     for k, v in (found.items() if isinstance(found, dict) else []):
@@ -160,7 +159,7 @@ def leads_of(data):
 
 
 def tickets_of(data):
-    """The take-over questions of a parsed file: "<steward> <key>" -> {at, term}."""
+    """"<steward> <key>" -> {at, term} for each take-over question in a parsed file."""
     found = data.get("tickets") if isinstance(data, dict) else None
     out = {}
     for k, v in (found.items() if isinstance(found, dict) else []):
@@ -172,7 +171,7 @@ def tickets_of(data):
 
 
 class Table(dict):
-    """The settled stewards, steward id -> entry, with the file's leads, tickets and version beside them."""
+    """The settled stewards, steward id -> entry, and the file's leads, tickets and version."""
 
     def __init__(self, stewards=None, leads=None, tickets=None, version=0):
         dict.__init__(self, stewards or {})
@@ -228,7 +227,7 @@ READ_WAIT_SECONDS = 0.2
 
 
 def read_whole(path):
-    """The JSON in `path`, or None when there is none. On Windows a read can fail, or find no file at all, at the moment
+    """Parse `path` as JSON; None when it is missing or does not parse. On Windows a read can fail, or find no file at all, at the moment
     a window renames the new file over the old one, and the window holds the lock directory <path>.lock all through it
     (src/file-lock.js in Claude Code Plus); so a read that fails is tried again while the lock is there, for up to
     READ_WAIT_SECONDS, and once more after it goes."""
@@ -303,7 +302,7 @@ def open_windows(directory):
 
 
 def shown(found, sid):
-    """Whether one of the window entries `found` shows conversation `sid`."""
+    """True when a window in `found` shows `sid`."""
     return any(sid in [str(s).lower() for s in listed(w.get("sessions"))] for w in found)
 
 
@@ -320,8 +319,8 @@ def lead_entry(table, key):
 
 
 def lead_of(table, key):
-    """The lead of `key`: the one its entry names while that one is a steward with `key` on its list and `key` is no
-    steward itself; otherwise "" (leadOf in src/steward-leads.js). A window assigns a lead where this gives ""."""
+    """The lead of `key`, or "": the steward its entry names, if that steward has `key` on its list and `key` is not a
+    steward itself (leadOf in src/steward-leads.js). A window assigns a lead where this gives ""."""
     e = lead_entry(table, key)
     if not e or not e["lead"] or key in table:
         return ""

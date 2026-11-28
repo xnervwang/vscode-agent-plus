@@ -24,10 +24,9 @@ const ACCEPTS = [1];
    announcesWaits(). 'planSummary' adds planSummary(), onDidChangePlanSummary and the commands agentPlus.showWorkPlanOf
    and agentPlus.answerQuestionOf, for the plan bar a feature extension draws; 'deliver' and 'planPathOf' add the
    methods of those names. 'stewards' adds stewardOf() and onDidChangeStewards; a source that answers them lists it
-   too. 'stewardList' adds stewardsOf(); the same onDidChangeStewards serves it. 'stewardLead' says the core reads the
-   `lead` a source marks in its stewardsOf() answer: stewardsOf() gives every entry `lead`, the lead first, and
-   stewardOf() answers that lead. A source marks its lead whatever the core lists, since a core without 'stewardLead'
-   drops the field and keeps the order. */
+   too. 'stewardList' adds stewardsOf(); the same onDidChangeStewards serves it. With 'stewardLead' the core keeps the
+   `lead` mark of a source's stewardsOf() answer and puts the marked entry first. Sources
+   mark their lead either way: a core without the feature drops the mark and keeps the order. */
 const FEATURES = ['allConversations', 'waitingFor', 'planSummary', 'deliver', 'planPathOf', 'stewards', 'stewardList', 'stewardLead', 'prefill'];
 /* A source never reports `needs`; the host derives it from the questions in the plan. */
 const STATES = ['prompt', 'working', 'unread', 'idle'];
@@ -190,8 +189,8 @@ function noticeOf(source) {
   };
 }
 
-/* The steward the source gives for (sourceId, sessionId), frozen: its lead, for a source that marks leads. Null when
-   the source does not list 'stewards' or its answer lacks two usable ids. */
+/* The source's stewardOf() answer for (sourceId, sessionId), frozen; a source that marks leads answers with its lead.
+   Null when the source does not list 'stewards' or its answer lacks two usable ids. */
 function stewardOf(source, sourceId, sessionId) {
   if (!supports(source, 'stewards')) return null;
   const s = call(source, 'stewardOf', [sourceId, sessionId], null);
@@ -200,10 +199,10 @@ function stewardOf(source, sourceId, sessionId) {
   return usableId(by) && usableId(id) ? Object.freeze({ sourceId: by, sessionId: id }) : null;
 }
 
-/* The stewards the source gives for (sourceId, sessionId), each a frozen { sourceId, sessionId, title, lead }, at most
-   `max`. An entry without two usable ids is skipped and the others are kept. `lead` is true on the first entry the
-   source marks `lead: true`, and only there; that entry comes first even when the source lists it after `max` others,
-   and the source's other entries for the same steward are dropped. The rest keep the source's order. */
+/* The source's stewardsOf() list for (sourceId, sessionId) as frozen { sourceId, sessionId, title, lead }, at most
+   `max`, leaving out entries without two usable ids. Only the first entry the source marks `lead: true` keeps `lead`;
+   it moves to the front even from beyond `max`, and the source's other entries for that steward are dropped. The
+   others keep the source's order. */
 function stewardsOf(source, sourceId, sessionId, max = MAX_STEWARDS) {
   if (!supports(source, 'stewardList')) return [];
   const list = call(source, 'stewardsOf', [sourceId, sessionId], null);
@@ -211,7 +210,6 @@ function stewardsOf(source, sourceId, sessionId, max = MAX_STEWARDS) {
   try { n = Array.isArray(list) ? Math.min(list.length, MAX_STEWARD_ENTRIES) : 0; } catch (_) { n = 0; }
   const out = [];
   let lead = null;
-  /* Past `max`, entries are still read for a lead the source marks further down. */
   for (let i = 0; i < n && (out.length < max || !lead); i++) {
     const s = get(list, i);
     if (!s || typeof s !== 'object') continue;

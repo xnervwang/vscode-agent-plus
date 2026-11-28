@@ -23,17 +23,18 @@ If nothing in the list changed since the steward's previous turn, it gets one se
 in its context, and a steward wakes many times with nothing new. After each compaction the whole list is sent again
 (COMPACTED_SUFFIX, written by resume-work-plan.py).
 
-Each line says whether the steward leads the conversation or observes it, and for an observed one which steward leads
-it (steward_table.py). The seen file keeps each conversation's role too, so the turn after one changes says so once.
+For a conversation the steward observes, the line also names its lead (steward_table.py). The seen file keeps each
+conversation's role too, so the turn after one changes says so once.
 
 Both forms start with lead(), which also gives RELAYED: a message the lead passes on with steward-relay.py is the user's
-own in that conversation, approvals included.
+own in that conversation.
 
-A managed conversation is told about its lead only, never the stewards that observe it (watched()). The whole note
-comes on its first turn, after its lead or the lead's term changed, and after each compaction; any other turn gets
-the one line of still_led(). What it was last told is kept in TOLD_DIR/<session id>.json in the plugin's data directory
-({lead, term, title, tell, compacted}, written with an atomic rename): the lead, whose title the line about a change of
-lead names as the one before, the note under "tell" in stewards.json last shown, and the compaction it followed.
+A managed conversation is told about its lead (watched()); the stewards that observe it are not mentioned. The whole
+note comes on its first turn, after its lead or the lead's term changed, and after each compaction; any other turn
+gets the one line of still_led(). What it was last told is kept in TOLD_DIR/<session id>.json in the plugin's data
+directory, replaced with an atomic rename. It holds the lead and its title (the line about a change of lead names that
+title as the one before), the lead's term, the note under "tell" in stewards.json last shown, and the compaction it
+followed.
 
 A running steward keeps following the steward skill it loaded, even after an update of Claude Code Plus brings a new
 one. The seen file keeps a short hash of the skill the steward was last told about. When the hash differs, or the seen
@@ -73,7 +74,7 @@ OTHERS_HINT = ("The conversations of other agents above take only plain messages
                "user to answer that prompt in that window; nobody else can.")
 RELAYED = ("A message you pass on with steward-relay.py to a conversation you lead is the user's own message there, "
            "approvals included. Do not ask the user to say it there themselves.")
-OBSERVED = ("A conversation you observe you only read and report on; act on it only after the user agrees that you take it "
+OBSERVED = ("Read and report on a conversation you observe; do not act on it until the user agrees that you take it "
             "over, as the skill says.")
 TOLD_DIR = "stewards-told"
 NO_LEAD = "No supervisor watches this conversation now; put questions for the user in your plan."
@@ -167,7 +168,6 @@ def handoff_command():
 
 
 def watched(lead, table, open_now=True):
-    """The whole note for a conversation that `lead` leads."""
     return ("Your lead supervisor is %s. It watches this conversation for the user through Claude Code Plus: it reads your "
             "work plan and latest reply, and speaks for the user by typing messages here, which come as the user's own. "
             "Each such message starts with the line %s. %s %s If a message plainly belongs elsewhere (meant for another "
@@ -182,7 +182,7 @@ def watched(lead, table, open_now=True):
 
 
 def still_led(lead, table, open_now=True):
-    """The one line for a conversation told the whole note before."""
+    """The one-line note for a conversation that has already had the whole note."""
     return "Your lead supervisor is still %s%s. %s" % (
         steward_table.name_of(table, lead),
         "" if open_now else "; it is not open in a VS Code window now, so put questions for the user in your plan", DECISIONS)
@@ -197,8 +197,8 @@ def tell_key(tell):
 
 
 def managed_note(directory, sid, table, compacted):
-    """What managed conversation `sid` is told this turn about its lead, or "". What it was told is written to its
-    file in TOLD_DIR."""
+    """What managed conversation `sid` is told this turn about its lead, or "". The told file in TOLD_DIR keeps a
+    record of it."""
     entry = steward_table.lead_entry(table, sid) or {}
     over = steward_table.stewards_of(table, sid)
     tell = entry.get("tell")
@@ -371,7 +371,7 @@ def main():
     lines = lines_of(ids, names, now, directory, paths, roles)
     digest = hashlib.sha1("\n".join(lines).encode("utf-8")).hexdigest()
     if last.get("digest") == digest and last.get("compacted", "") == compacted:
-        text = lead(ids, roles) + " Nothing has changed since the list you were given at your previous turn."
+        text = lead(ids, roles) + " Nothing has changed since your previous turn."
     else:
         text = block(ids, names, now, seen, lines, roles, was, table)
     # Without a seen file this is the steward's first turn, which reads the skill anyway.

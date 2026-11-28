@@ -125,11 +125,11 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     const lead = of();
     eq([lead, Object.isFrozen(lead), Object.keys(lead), b.api.stewardsOf('opencode-plus', 'ses_A')[0].sessionId],
       [{ sourceId: 'claude-code', sessionId: 'lead' }, true, ['sourceId', 'sessionId'], 'lead'],
-      'stewardOf() is the entry the source marks as lead in its stewardsOf() answer, the first of stewardsOf(), even where its own stewardOf() says another');
+      'stewardOf() answers the marked lead, which stewardsOf() lists first, over the source\'s own stewardOf()');
     list = [E('observer', 'Observer'), E('other', 'Other')];
-    eq(of(), own, 'with no entry marked, as from a source that knows no leads, stewardOf() is the source\'s own answer');
+    eq(of(), own, 'with no entry marked, stewardOf() is the source\'s own answer');
     own = null;
-    eq(of(), null, 'a source that marks no lead and answers null has no lead for the conversation: null');
+    eq(of(), null, 'a source that marks none and answers null: null');
     b.close();
   }
   {
@@ -141,7 +141,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq(b.api.stewardOf('opencode-plus', 'ses_A'), { sourceId: 'old', sessionId: 'speaker' }, 'a source that lists only \'stewards\' answers as before');
     b.api.registerSource(listOnly);
     eq(b.api.stewardOf('opencode-plus', 'ses_A'), { sourceId: 'list-only', sessionId: 'lead' },
-      'a lead marked by a source that lists only \'stewardList\' is stewardOf(), ahead of an earlier source\'s own answer, so that stewardOf() and stewardsOf() agree');
+      'a lead marked by a source that lists only \'stewardList\' is stewardOf(), ahead of an earlier source\'s own answer');
     b.close();
   }
 

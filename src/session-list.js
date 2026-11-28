@@ -598,7 +598,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const out = r.elsewhere.find((x) => x.running || x.kind !== 'vscode');
     if (out && rules.busy(r)) { tell(`"${r.title}" runs in ${out.label}, which would write its old title back. Rename it there.`); return 'refused'; }
     const [res] = await runAction(e, 'rename', [r.sessionId], { title: clean });
-    /* Until the next listing, so that renaming it again, back to its old title too, compares with the title just set. */
+    /* The new title stands until the next listing, so that a rename right after it, even back to the old title, is
+       compared with the new one. */
     if (res.outcome === 'done' && !Object.isFrozen(r)) r.title = clean;
     else if (res.outcome !== 'done') warn(`"${r.title}" was not renamed: ${res.reason || res.outcome}`);
     schedule();

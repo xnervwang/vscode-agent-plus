@@ -26,7 +26,7 @@
     python3 steward-relay.py --take-lead <session id or key> --ask [<plugin data directory>]
     python3 steward-relay.py --take-lead <session id or key> [<plugin data directory>]
     python3 steward-relay.py --hand-over <session id or key> [<plugin data directory>] <<'EOF'
-    <a short note for it: what you had asked it to do, and that the other supervisor takes over>
+    <a short note for it: what you had asked of it, and who takes over>
     EOF
     python3 steward-relay.py --take <session id, key or exact title> [<plugin data directory>]
     python3 steward-relay.py --drop <session id, key or exact title> [<plugin data directory>]
@@ -40,15 +40,15 @@ user's own message, approvals included, after a first line naming this steward. 
 command in the steward's transcript, so give the message in a here-document as above.
 
 Of the stewards that manage a conversation, only its lead acts on it: sends it messages, renames, closes, resumes or
-archives it. The others observe it. Each request carries the conversation's lead term as stewards.json gives it now
-(steward_table.py) and a sequence number one above the highest of the requests for it in the relay folder, and it is
-written as <id>.v4.json, a name that windows of older builds do not take. Right before it acts, the window refuses a
-request when this steward does not lead the conversation or the lead changed after the request was written; the
-script prints its reason as it is. When another steward leads the conversation, the script prints that reason itself
-and writes no request.
+archives it. The others observe it. Each request carries the conversation's current lead term from stewards.json
+(steward_table.py) and a sequence number that follows the requests for it already in the relay folder. It is written
+as <id>.v4.json, which windows of older builds ignore. The window checks again right before it acts, and refuses a
+request when this steward does not lead the conversation or the lead changed after the request was written; the script
+prints the window's reason. When another steward already leads the conversation, the script refuses before it writes a
+request.
 
---take-lead <key> --ask is for an observer the window refused: the window notes the question and answers with one for
-the user, which the script prints with what to do: ask the user exactly that and end the turn. Only when the user's
+--take-lead <key> --ask is for an observer the window refused: the window records the request and replies with a question for
+the user. The script prints it and tells this steward to ask the user exactly that and end the turn. Only when the user's
 next message clearly agrees, run --take-lead <key> without --ask. If the lead is open in a window, the window asks it
 to hand the conversation over; otherwise this steward leads it at once. --hand-over <key> is run by the lead the user
 agreed to replace, with a short note on standard input: the window sends it to the conversation after a first line of
@@ -64,13 +64,14 @@ conversation it opens.
 --resume opens a conversation that no window shows, in an editor tab of the VS Code window whose first folder is the one
 Claude Code keeps the conversation under, since Claude Code finds a window's stored conversations only there, and then
 sends it the message, if one is given. It is not done while a window shows the conversation or another process runs it;
-it says which. Only the lead resumes a conversation, or any steward when it has none, which then leads it. A
+it says which. Only its lead resumes a conversation; one with no lead any steward may resume, and then leads it. A
 conversation opened with --open or --resume is ticked for this steward in the Supervisor panel; the printed answer
 mentions the tick.
 
 --handoff is run from a conversation a steward manages, not from the steward: it gives its lead something the
-conversation thinks belongs elsewhere, as a notice that is not the user's message. It is refused when no steward leads
-the conversation or its lead is not open in a VS Code window. --to and --anyway are gone; the script says so.
+conversation thinks belongs elsewhere, and the lead gets it as a notice, not as the user's words. It is refused when no
+steward leads the conversation or its lead is not open in a VS Code window. --to and --anyway are gone; the script says
+so.
 
 --take and --drop tick or untick one conversation for this steward in the Supervisor panel, named by its session id, its
 key, or its exact title (in a here-document instead, when it is awkward in a command line). --all turns "All, including
@@ -145,9 +146,9 @@ SWITCHES = ("--all", "--new")
 # Each takes the next argument.
 VALUED = SWITCHES
 MODIFIERS = ("--confirmed", "--windows", "--ask")
-# Flags this script no longer takes, after their "--", and what passing one is told.
+# Flags this script no longer takes, without their "--", each with the reason printed when one is passed.
 GONE = {
-    "anyway": "only a conversation's lead sends it messages, so no other supervisor's message holds yours back",
+    "anyway": "only a conversation's lead sends it messages",
     "to": "a hand-off always goes to the conversation's lead supervisor",
 }
 # Windows of older builds take only <id>.json, so they never run a request that carries a lead term.
@@ -160,8 +161,8 @@ DONE = {
     "--close": "Closed: the conversation's tab was closed; it is not deleted and can be opened again from the session list.",
     "--open": "Opened: a new conversation was started and its first message sent.",
 }
-HANDED = ("Handed off to your lead supervisor %s: it was told, in a notice that is not the user's message. Say so in one "
-          "sentence in your reply and leave it to the supervisor.")
+HANDED = ("Handed off to your lead supervisor %s, marked as not from the user. Tell the user so in one sentence and leave "
+          "the rest to the supervisor.")
 NOT_HANDED = " Say in your reply where it seems to belong, so the user decides."
 # A window of an older build shows the conversation but leaves a <id>.v4.json request alone.
 OLD_BUILD = (' The VS Code window "%s" shows it but took no request; it may run an older build of Claude Code Plus, which does '
@@ -250,14 +251,14 @@ def title(table, key):
 
 def not_lead(table, me, key):
     """The window's reason for refusing what steward `me` asks of `key` when another steward leads it and `me` only
-    observes it, or "" when `me` leads it, manages it not at all, or nobody leads it in the table read now."""
+    observes it; "" when `me` leads it or does not manage it, or when the table as read now gives it no lead."""
     lead = steward_table.lead_of(table, key)
     if steward_table.role_of(table, me, key) != "observer" or not lead:
         return ""
     pending = (steward_table.lead_entry(table, key) or {}).get("pending") or {}
     old = steward_table.name_of(table, lead)
     if pending.get("to") == me:
-        return '"%s" is being handed over from %s to you; wait for %s\'s hand-over.' % (title(table, key), old, old)
+        return '"%s" is being handed over from %s to you; send it nothing until a notice says you lead it.' % (title(table, key), old)
     return ('"%s" is led by %s; you observe it. To act on it, run steward-relay.py --take-lead %s --ask and ask the user.'
             % (title(table, key), old, key))
 
@@ -290,17 +291,17 @@ def handoff_check(data, me):
     """(why the hand-off cannot be made, or "", the lead it goes to)."""
     table = stewards_table(data)
     if not steward_table.stewards_of(table, me):
-        return "Not done: no supervisor manages this conversation, so it cannot be handed off." + NOT_HANDED, ""
+        return "Not done: no supervisor manages this conversation." + NOT_HANDED, ""
     lead = steward_table.lead_of(table, me)
     if not lead:
-        return "Not done: no supervisor leads this conversation now, so it cannot be handed off." + NOT_HANDED, ""
+        return "Not done: the supervisors of this conversation only observe it now." + NOT_HANDED, ""
     if not any(shows(w, lead) for w in windows(data)):
-        return "Not done: its lead supervisor is not open in a VS Code window, so it cannot be told." + NOT_HANDED, lead
+        return "Not done: its lead supervisor is not open in a VS Code window." + NOT_HANDED, lead
     return "", lead
 
 
 def take_lead_check(table, me, key, asking):
-    """Why --take-lead cannot go ahead as the table stands, as (line, exit code), or None to ask the window."""
+    """Why --take-lead cannot go ahead with the table as it is now, as (line, exit code); None when the window decides."""
     t = title(table, key)
     if steward_table.lead_of(table, key) == me:
         return 'You already lead "%s"; act on it as the user asked.' % t, 0
@@ -312,7 +313,7 @@ def take_lead_check(table, me, key, asking):
     if pending and lead:
         old = steward_table.name_of(table, lead)
         if pending.get("to") == me:
-            return '"%s" is being handed over from %s to you; wait for %s\'s hand-over.' % (t, old, old), 0
+            return '"%s" is being handed over from %s to you; send it nothing until a notice says you lead it.' % (t, old), 0
         return 'Not done: "%s" is being handed over from %s to %s.' % (t, old, steward_table.name_of(table, pending.get("to"))), 1
     ticket = getattr(table, "tickets", {}).get(me + " " + key)
     if not ticket:
@@ -331,7 +332,7 @@ def hand_over_check(table, me, key):
     lead = steward_table.lead_of(table, key)
     if not e.get("pending") or not lead or lead == me:
         return ""
-    return "Only %s, the lead handing \"%s\" over, can send its hand-over." % (steward_table.name_of(table, lead), title(table, key))
+    return "Only %s, the lead handing \"%s\" over, can run --hand-over." % (steward_table.name_of(table, lead), title(table, key))
 
 
 def next_seq(directory, target):
@@ -363,7 +364,7 @@ def old_build(data, sid):
 
 
 def taken_by(directory, rid):
-    """The pid of the window that took request `rid`, from the name it renamed the request to, or ""."""
+    """The pid of the window that took request `rid`, read from the request's new file name, or ""."""
     try:
         names = os.listdir(directory)
     except OSError:
@@ -491,7 +492,7 @@ def archive(args):
         time.sleep(0.25)
     try:
         os.remove(request_file)
-        print("Not done: no VS Code window that shows this supervisor conversation took the request."
+        print("Not done: no VS Code window showing this supervisor conversation took the request."
               + old_build(data, steward.lower()))
     except OSError:
         print("Unclear whether it was done: a window took the request but gave no answer in time.")
@@ -505,25 +506,23 @@ def end(reason):
 
 
 def take_lead_said(r, table, key):
-    """What the window's answer to --take-lead says, and whether it was done."""
     outcome, t = r.get("outcome", ""), title(table, key)
     if outcome == "ask" and isinstance(r.get("question"), str) and r["question"].strip():
-        return ("Ask the user exactly this, word for word, and end your turn without acting on the conversation:\n\n%s\n\n"
+        return ("Ask the user this, word for word, and end your turn without acting on the conversation:\n\n%s\n\n"
                 "Only a clear yes in the user's next message counts. Then run steward-relay.py --take-lead %s, without "
-                "--ask. If the answer is no, or unclear, take nothing over and say so in one line." % (r["question"].strip(), key)), True
+                "--ask. Otherwise take nothing over, and say so in one line." % (r["question"].strip(), key)), True
     if outcome == "pending":
         lead = str(r.get("lead") or "").lower()
         who = '"%s" (%s)' % (r.get("leadTitle"), lead) if r.get("leadTitle") else steward_table.name_of(table, lead) if lead else "its lead"
         return ('Agreed: %s is asked to hand "%s" over to you, and leads it until then, at most 10 minutes. A notice tells '
                 "you when you lead it; send it nothing before that." % (who, t)), True
     if outcome == "lead":
-        return ('You lead "%s" now. A notice asks you to send it a first message saying so; send that first, then go on '
-                "with what the user asked." % t), True
+        return ('You lead "%s" now. A notice asks you to tell the conversation so; do that before you go on with what '
+                "the user asked." % t), True
     return "Not done: %s" % end(r.get("reason") or outcome or "no answer"), False
 
 
 def hand_over_said(r, table, key):
-    """What the window's answer to --hand-over says, and whether it was done."""
     outcome, t = r.get("outcome", ""), title(table, key)
     to = str(r.get("lead") or ((steward_table.lead_entry(table, key) or {}).get("pending") or {}).get("to") or "").lower()
     who = '"%s" (%s)' % (r.get("leadTitle"), to) if r.get("leadTitle") else steward_table.name_of(table, to) if to else "the other supervisor"
@@ -713,10 +712,10 @@ def main(argv):
             for line in window_lines(windows(data)):
                 print("  " + line)
         elif handing:
-            print("Not done: no VS Code window that shows its lead supervisor took the request." + old_build(data, target)
+            print("Not done: no VS Code window showing its lead supervisor took the request." + old_build(data, target)
                   + NOT_HANDED)
         elif action in LIST or other or taking or giving:
-            print("Not done: no VS Code window that shows this supervisor conversation took the request." + old_build(data, me))
+            print("Not done: no VS Code window showing this supervisor conversation took the request." + old_build(data, me))
         else:
             older = old_build(data, target)
             print("Not done: no VS Code window that shows that conversation took the request."

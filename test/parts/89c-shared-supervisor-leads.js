@@ -22,7 +22,7 @@ const NOT_HANDED = ' Say in your reply where it seems to belong, so the user dec
 
 module.exports = async ({ eq, note, tmp, root }) => {
   const python = ['python3', 'python'].find((p) => cp.spawnSync(p, ['-c', 'import sys; assert sys.version_info >= (3, 7)']).status === 0);
-  if (!python) { note('no Python 3.7 or later here: the checks of the supervisor leads were not run'); return; }
+  if (!python) { note('no Python 3.7 or later here, so the supervisor lead checks were skipped'); return; }
   const shared = path.join(root, 'shared', 'plugin');
   const hooks = path.join(tmp('leads-plugin'), 'hooks');
   fs.mkdirSync(hooks, { recursive: true });
@@ -45,7 +45,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
   });
   const leads = (over = {}) => ({ [M]: Object.assign({ lead: LEAD, term: 3, at: 1, why: 'first' }, over),
     [M2]: { lead: OBS, term: 1, at: 1, why: 'first' } });
-  /* A data directory with a table and one window entry, from this process, that shows `showing`. */
+  /* A data directory with a table, and a window entry of this process listing the conversations in `showing`. */
   const world = ({ version = 4, lead = {}, tickets, showing = [LEAD, OBS, OBS2], noLeads = false } = {}) => {
     const d = tmp('leads-data');
     const t = { version, stewards: stewards() };
@@ -58,7 +58,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     fs.mkdirSync(path.join(d, 'relay'), { recursive: true });
     return d;
   };
-  /* Runs steward-relay.py as `as`, answering each request it writes like a window, with `answer(request)`. */
+  /* Runs steward-relay.py as `as`; `answer(request)` plays the window and answers each request it writes. */
   const relay = async (data, as, args, { input = '', answer, skip = [] } = {}) => {
     const dir = path.join(data, 'relay');
     const kid = cp.spawn(python, ['-B', path.join(hooks, 'steward-relay.py'), ...args, data],
@@ -86,7 +86,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     return { code, out, err, asked };
   };
 
-  /* The skill: the steps of a take-over and a hand-over, and none of what is gone. */
+  /* The skill describes taking over and handing over, and no longer mentions --anyway, --to or the 30-minute hold. */
   {
     const skill = fs.readFileSync(path.join(shared, 'claude', 'steward-skill.md'), 'utf8');
     const script = fs.readFileSync(path.join(shared, 'claude', 'steward-relay.py'), 'utf8');
@@ -97,9 +97,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
         .filter((x) => !skill.includes(x)),
       used.filter((o) => !script.includes(`"${o}"`))],
     [false, [], []],
-    'the supervisor skill has an observer ask the user with --take-lead --ask, word for word, and take over only on a clear yes, has a lead '
-      + 'hand over with a note, sends hand-offs to the lead, keeps SendMessage from observers, names only options the script takes, and '
-      + 'says nothing of --anyway, --to or the 30-minute hold');
+    'the supervisor skill has the take-over question, the hand-over note, hand-offs to the lead and no SendMessage from observers, '
+      + 'and names no option the script does not take');
   }
 
   /* Reading the table. */
@@ -123,16 +122,16 @@ module.exports = async ({ eq, note, tmp, root }) => {
       { lead: LEAD, term: 3, at: 10, why: 'takeover', was: OBS, pending: { to: OBS2, at: 20, by: 'consent' },
         tell: { kind: 'handover', from: OBS, text: 'Keep the tests running.', at: 30 } },
       { [`${OBS} ${M}`]: { at: 40, term: 3 } }, 4, [LEAD, OBS, OBS2].sort(), ''],
-    'a version 4 table gives each conversation its lead, in lower case, its term, a pending hand-over and an untold note; '
-      + 'its other supervisors observe it, one that does not manage it has no role, and only well-formed take-over questions are read');
+    'a version 4 table gives each conversation its lead (in lower case), term, pending hand-over and note not yet shown; '
+      + 'the other supervisors observe it, a supervisor that does not manage it has no role, and malformed take-over questions are skipped');
 
     const v3 = read({ version: 3, stewards: stewards() });
     eq(v3.slice(0, 8), ['', 'observer', 'observer', '', 0, null, {}, 3],
-      'a version 3 table has no lead for any conversation and no term: every supervisor that manages one observes it until a window assigns a lead');
+      'a version 3 table has no leads or terms, so every supervisor observes the conversations it manages until a window assigns a lead');
 
     const v5 = read({ version: 5, stewards: stewards(), leads: { [M]: { lead: OBS, term: 9, at: 1, why: 'something new', extra: 1 } } });
     eq([v5[0], v5[2], v5[4], v5[5].why, v5[7]], [OBS, 'lead', 9, 'first', 5],
-      'a table of a later version is read for what this build understands: its leads, with a reason this build does not know read as "first"');
+      'a table of a later version still gives its leads, and a reason this build does not know reads as "first"');
 
     const settle = (people, lead) => read({ version: 4, stewards: people, leads: { [M]: { lead, term: 2, at: 1, why: 'first' } } })[0];
     const gone = stewards(); gone[LEAD].manages = [M2];
@@ -141,14 +140,14 @@ module.exports = async ({ eq, note, tmp, root }) => {
     eq([settle(gone, LEAD), settle(notOne, LEAD), settle(managedNow, LEAD), settle(stewards(), 'not-an-id'), settle(stewards(), OBS)],
       ['', '', '', '', OBS],
       'a lead that no longer has the conversation on its list, is no supervisor, or is now itself a managed conversation, '
-      + 'and a lead that is no session id, all read as no lead');
+      + 'and a lead that is not a session id: none of them counts as a lead');
 
     const odd = read({ version: 4, stewards: stewards(),
       leads: { [M]: { lead: LEAD, term: '3', at: -1, why: 7, pending: { to: 'x', at: 1 }, tell: { kind: 'shout', text: 'x' } },
         [OBS]: { lead: LEAD, term: 1 } } });
     eq([odd[0], odd[4], odd[5], odd[9]], [LEAD, 0, { lead: LEAD, term: 0, at: 0, why: 'first', was: '' }, ''],
-      'malformed fields of a lead entry are dropped or read as nothing: a term or time that is no positive number, an unknown '
-      + 'reason, a pending hand-over to no session, a note of an unknown kind; and a supervisor has no lead, whatever the table says');
+      'a lead entry\'s bad fields are dropped (a term or time that is not a positive number, an unknown reason, a hand-over to no '
+      + 'session, a note of an unknown kind), and a supervisor has no lead, whatever the table says');
   }
 
   /* Flags that are gone. */
@@ -157,9 +156,9 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const anyway = await relay(d, LEAD, ['--anyway', M], { input: 'Ship it.' });
     const to = await relay(d, M, ['--handoff', '--to', OBS], { input: 'This belongs to the docs work.' });
     eq([anyway.code, anyway.out.split('\n')[0], anyway.asked.length, to.code, to.out.split('\n')[0], to.asked.length],
-      [2, 'usage error: --anyway is gone: only a conversation\'s lead sends it messages, so no other supervisor\'s message holds yours back.', 0,
+      [2, 'usage error: --anyway is gone: only a conversation\'s lead sends it messages.', 0,
         2, 'usage error: --to is gone: a hand-off always goes to the conversation\'s lead supervisor.', 0],
-      '--anyway and --to are usage errors that say the flag is gone, and nothing is asked of a window');
+      '--anyway and --to fail with a usage error saying the flag is gone, before any request reaches a window');
   }
 
   /* A lead's request: the new file name, its lead term and its sequence number. */
@@ -176,11 +175,11 @@ module.exports = async ({ eq, note, tmp, root }) => {
     eq([sent.code, sent.out.trim(), sent.asked.length, /^[0-9a-f-]{36}\.v4\.json$/.test(r.file || ''), r.action, r.to, r.steward, r.text, r.term, r.seq],
       [0, 'Sent: it was typed into the conversation\'s message input and sent as the user\'s message.', 1, true, 'send', M, LEAD,
         'Run the tests again.', 3, 9],
-      'the lead\'s message is written as <id>.v4.json with the conversation\'s lead term and one more than the highest sequence '
-      + 'number among the requests for that conversation, taken ones and ones being carried out included');
+      'the lead\'s message is written as <id>.v4.json with the conversation\'s lead term and a sequence number above every '
+      + 'request for that conversation, including those already taken or being carried out');
     const first = await relay(world({ noLeads: true }), LEAD, [M2], { input: 'Carry on.' });
     eq([first.asked[0] && first.asked[0].term, first.asked[0] && first.asked[0].seq], [0, 1],
-      'a conversation with no lead entry yet is asked with term 0, and the first request for a conversation gets 1');
+      'a request for a conversation with no lead entry yet carries term 0, and the first request for a conversation gets sequence number 1');
   }
 
   /* An observer is refused before a request is written, whatever it asks. */
@@ -197,16 +196,15 @@ module.exports = async ({ eq, note, tmp, root }) => {
     eq(runs.map((r) => [r.code, r.out.trim().split('\n')[0]]), [
       [1, `Not sent: ${why}`], [1, `Not done: ${why}`], [1, `Not done: ${why}`], [1, `Not done: ${why}`],
       [1, `Not archived: "Fix the build" (${M}): ${why}`]],
-    'a message, a rename, a close, a resume and an archive from a supervisor that observes the conversation are refused with the '
-      + 'window\'s reason, naming its lead');
+    'an observer\'s message, rename, close, resume and archive are refused with the window\'s reason, which names the lead');
     eq([runs.slice(0, 4).every((r) => r.asked.length === 0), runs[4].asked.map((r) => [r.action, r.ids, r.terms])],
       [true, [['archive', [M2], { [M2]: 1 }]]],
-      'none of them writes a request, except an archive of the conversations it leads, each with its lead term');
+      'only the archive writes a request, for the conversations it leads, each with its lead term');
     const pending = world({ lead: { pending: { to: OBS, at: Date.now(), by: 'consent' } } });
     const waiting = await relay(pending, OBS, [M], { input: 'Stop and wait.' });
     eq([waiting.code, waiting.out.trim(), waiting.asked.length],
-      [1, `Not sent: "Fix the build" is being handed over from ${NAME(LEAD)} to you; wait for ${NAME(LEAD)}'s hand-over.`, 0],
-      'the supervisor a conversation is being handed over to is told to wait for the hand-over');
+      [1, `Not sent: "Fix the build" is being handed over from ${NAME(LEAD)} to you; send it nothing until a notice says you lead it.`, 0],
+      'the supervisor taking the conversation over is told to wait until the hand-over is done');
   }
 
   /* The window's reasons are printed as they are. */
@@ -217,9 +215,9 @@ module.exports = async ({ eq, note, tmp, root }) => {
       `"Fix the build" has no lead supervisor now; run steward-relay.py --take-lead ${M} --ask and ask the user.`,
       `The lead of "Fix the build" changed after you wrote this request; it is ${NAME(OBS)} now.`,
       `"Fix the build" is being handed over from ${NAME(LEAD)} to ${NAME(OBS2)}.`,
-      `"Fix the build" is being handed over from ${NAME(LEAD)} to you; wait for ${NAME(LEAD)}'s hand-over.`,
+      `"Fix the build" is being handed over from ${NAME(LEAD)} to you; send it nothing until a notice says you lead it.`,
       `The take-over question for "Fix the build" was asked more than 30 minutes ago. Ask the user again with --take-lead ${M} --ask.`,
-      `Only ${NAME(LEAD)}, the lead handing "Fix the build" over, can send its hand-over.`,
+      `Only ${NAME(LEAD)}, the lead handing "Fix the build" over, can run --hand-over.`,
     ];
     const sends = [], renames = [], takes = [], gives = [];
     for (const reason of reasons) {
@@ -232,7 +230,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     eq([sends, renames, takes, gives],
       [reasons.map((r) => `Not sent: ${r}`), reasons.map((r) => `Not done: ${r}`), reasons.map((r) => `Not done: ${r}`),
         reasons.map((r) => `Not done: ${r}`)],
-      'every reason a window gives for refusing a message, a rename, a take-over or a hand-over is printed word for word, after "Not sent" or "Not done"');
+      'a window\'s reason for refusing a message, a rename, a take-over or a hand-over is printed word for word after "Not sent" or "Not done"');
   }
 
   /* Taking a conversation over. */
@@ -242,10 +240,10 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const ask = await relay(d, OBS, ['--take-lead', M, '--ask'], { answer: () => ({ outcome: 'ask', question }) });
     const r = ask.asked[0] || {};
     eq([ask.code, r.action, r.ask, r.to, r.steward, r.term, r.seq, /\.v4\.json$/.test(r.file || ''), ask.out.split('\n').includes(question),
-      /^Ask the user exactly this, word for word, and end your turn/.test(ask.out), ask.out.includes(`Then run steward-relay.py --take-lead ${M}, without --ask.`)],
+      /^Ask the user this, word for word, and end your turn/.test(ask.out), ask.out.includes(`Then run steward-relay.py --take-lead ${M}, without --ask.`)],
     [0, 'take-lead', true, M, OBS, 3, 1, true, true, true, true],
     '--take-lead --ask writes a take-lead request with ask set, the lead term and a sequence number, and prints the window\'s question '
-      + 'on a line of its own, with what to do: ask the user exactly that, end the turn, and only after a clear yes run --take-lead');
+      + 'on its own line, then how to go on after the user\'s answer');
 
     const again = ` Ask the user again with --take-lead ${M} --ask.`;
     const none = await relay(d, OBS, ['--take-lead', M]);
@@ -255,8 +253,8 @@ module.exports = async ({ eq, note, tmp, root }) => {
       [1, `Not done: you have not asked the user whether to take over "Fix the build".${again}`, 0],
       [1, `Not done: you asked the user about taking over "Fix the build" more than 30 minutes ago.${again}`, 0],
       [1, `Not done: the lead of "Fix the build" changed after you asked the user.${again}`, 0]],
-    '--take-lead without a question asked, with one asked more than 30 minutes ago, or with the lead changed since, is refused '
-      + 'before a request is written, saying to ask the user again');
+    '--take-lead is refused before any request is written, with a note to ask the user again, when no question was asked, the '
+      + 'question is older than 30 minutes, or the lead changed since');
 
     const asked = { tickets: { [`${OBS} ${M}`]: { at: Date.now() - 60000, term: 3 } } };
     const agreed = await relay(world(asked), OBS, ['--take-lead', M], { answer: () => ({ outcome: 'pending', lead: LEAD }) });
@@ -265,13 +263,13 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const mine = await relay(world(), LEAD, ['--take-lead', M, '--ask']);
     const t = agreed.asked[0] || {};
     eq([t.action, t.ask, t.to, t.term, agreed.code, agreed.out.trim().startsWith(`Agreed: ${NAME(LEAD)} is asked to hand "Fix the build" over to you`),
-      now.code, now.out.trim().startsWith('You lead "Fix the build" now. A notice asks you to send it a first message saying so'),
+      now.code, now.out.trim().startsWith('You lead "Fix the build" now. A notice asks you to tell the conversation so'),
       busy.code, busy.out.trim(), busy.asked.length, mine.code, mine.out.trim(), mine.asked.length],
     ['take-lead', false, M, 3, 0, true, 0, true,
       1, `Not done: "Fix the build" is being handed over from ${NAME(LEAD)} to ${NAME(OBS2)}.`, 0,
       0, 'You already lead "Fix the build"; act on it as the user asked.', 0],
     'after the user agreed, --take-lead writes a take-lead request without ask and says the lead is asked to hand it over, or that '
-      + 'this supervisor leads it now; one being handed over to another supervisor is refused, and the lead is told it leads it already');
+      + 'this supervisor leads it now; one being handed over to another supervisor is refused, and its lead is told it already leads it');
   }
 
   /* Handing a conversation over. */
@@ -279,10 +277,10 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const handing = { lead: { pending: { to: OBS, at: Date.now(), by: 'consent' } } };
     const stranger = await relay(world(handing), OBS2, ['--hand-over', M], { input: 'Over to the docs supervisor.' });
     const taker = await relay(world(handing), OBS, ['--hand-over', M], { input: 'I take over.' });
-    const why = `Not done: Only ${NAME(LEAD)}, the lead handing "Fix the build" over, can send its hand-over.`;
+    const why = `Not done: Only ${NAME(LEAD)}, the lead handing "Fix the build" over, can run --hand-over.`;
     eq([stranger.code, stranger.out.trim(), stranger.asked.length, taker.code, taker.out.trim(), taker.asked.length],
       [1, why, 0, 1, why, 0],
-      '--hand-over from a supervisor other than the lead handing the conversation over, the one it goes to included, is refused before a request is written');
+      '--hand-over is refused before a request is written when it comes from any supervisor but the lead handing the conversation over, even the one it goes to');
     const note = 'You were fixing the flaky build test. The night supervisor takes over.';
     const done = await relay(world(handing), LEAD, ['--hand-over', M], { input: note + '\n', answer: () => ({ outcome: 'submitted', lead: OBS }) });
     const kept = await relay(world(handing), LEAD, ['--hand-over', M], { input: note, answer: () => ({ outcome: 'kept', lead: OBS }) });
@@ -295,7 +293,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     ['hand-over', M, note, LEAD, 3, 0, `Handed over: the note was sent to "Fix the build", and ${NAME(OBS)} leads it now; you observe it.`, 0, true,
       1, `Not done: ${after}`, 1],
     'the lead\'s --hand-over writes a hand-over request with the note from standard input and says who leads the conversation now, '
-      + 'also when the note waits for the conversation\'s next turn; once the hand-over is done, a second one goes to the window, whose refusal is printed');
+      + 'also when the note waits for the conversation\'s next turn; a second hand-over after that is refused by the window, and the refusal is printed');
   }
 
   /* A hand-off from a managed conversation goes to its lead only. */
@@ -304,11 +302,11 @@ module.exports = async ({ eq, note, tmp, root }) => {
     fs.mkdirSync(project, { recursive: true });
     fs.writeFileSync(path.join(project, `${M}.jsonl`), JSON.stringify({ type: 'user', message: {
       content: `Sent by the supervisor "Night supervisor" (${OBS}) for the user:\nDeploy the docs.` } }) + '\n');
-    const words = 'The user asked for the docs deploy; it belongs to the docs work.';
+    const words = 'The user asked for the docs deploy, which the docs conversation owns.';
     const handed = await relay(world(), M, ['--handoff'], { input: words,
       answer: (req) => ({ outcome: 'submitted', steward: req.to, stewardTitle: TITLES[req.to] }) });
     const h = handed.asked[0] || {};
-    eq([handed.code, h.action, h.to, h.from, h.term, h.text, handed.out.trim().startsWith(`Handed off to your lead supervisor ${NAME(LEAD)}:`),
+    eq([handed.code, h.action, h.to, h.from, h.term, h.text, handed.out.trim().startsWith(`Handed off to your lead supervisor ${NAME(LEAD)}, marked as not from the user.`),
       [TITLES[OBS], TITLES[OBS2], OBS, OBS2].some((x) => handed.out.includes(x))],
     [0, 'handoff', LEAD, M, 3, words, true, false],
     '--handoff asks for the conversation\'s lead, with its lead term, even when another supervisor\'s message started the turn, and '
@@ -317,14 +315,14 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const leaderless = await relay(world({ lead: { lead: '' } }), M, ['--handoff'], { input: words });
     const old = await relay(world({ version: 3, noLeads: true }), M, ['--handoff'], { input: words });
     eq([away, leaderless, old].map((x) => [x.code, x.out.trim(), x.asked.length]), [
-      [1, `Not done: its lead supervisor is not open in a VS Code window, so it cannot be told.${NOT_HANDED}`, 0],
-      [1, `Not done: no supervisor leads this conversation now, so it cannot be handed off.${NOT_HANDED}`, 0],
-      [1, `Not done: no supervisor leads this conversation now, so it cannot be handed off.${NOT_HANDED}`, 0]],
+      [1, `Not done: its lead supervisor is not open in a VS Code window.${NOT_HANDED}`, 0],
+      [1, `Not done: the supervisors of this conversation only observe it now.${NOT_HANDED}`, 0],
+      [1, `Not done: the supervisors of this conversation only observe it now.${NOT_HANDED}`, 0]],
     'a hand-off is refused without a request when the lead is not open in a window, even with its observers open, and when the '
       + 'conversation has no lead; the observers are not named');
   }
 
-  /* A request no window takes: a window of an older build shows the conversation but leaves a new request alone. */
+  /* No window takes the request: the one showing the conversation runs an older build, which leaves new requests alone. */
   {
     const quick = (data, as, argv, input) => {
       const r = cp.spawnSync(python, ['-B', '-c', [
@@ -342,15 +340,15 @@ module.exports = async ({ eq, note, tmp, root }) => {
       quick(world({ showing: [M] }), OBS, ['--take-lead', M, '--ask'], '')], [
       [1, 'Not done: no VS Code window that shows that conversation took the request. If no window has it open, --resume opens it.', 0],
       [1, `Not done: no VS Code window that shows that conversation took the request.${reload}`, 0],
-      [1, 'Not done: no VS Code window that shows this supervisor conversation took the request.', 0]],
-    'a request no window took is withdrawn; when a window shows the conversation, the script says that window may run an older build and '
+      [1, 'Not done: no VS Code window showing this supervisor conversation took the request.', 0]],
+    'a request no window took is withdrawn, and if a window shows the conversation the script says it may run an older build and '
       + 'should be reloaded');
     eq(quick(world({ showing: [OBS] }), OBS, ['--take-lead', M, '--ask'], '')[1],
-      `Not done: no VS Code window that shows this supervisor conversation took the request.${reload}`,
-      'the same for a request that the window showing the supervisor itself should take');
+      `Not done: no VS Code window showing this supervisor conversation took the request.${reload}`,
+      'the same when the window showing the supervisor should take the request itself');
   }
 
-  /* What a new or reopened conversation's answer says. */
+  /* The answer for a new or reopened conversation. */
   {
     const d = world();
     const folder = tmp('leads-folder');
@@ -364,7 +362,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     ].join('\n'));
     eq([opened.code, opened.out.split('\n')[0], resumed[0].endsWith('It is now ticked for you in the Supervisor panel. You are its lead supervisor.')],
       [0, 'Opened: a new conversation was started and its first message sent. It is now ticked for you in the Supervisor panel. You are its lead supervisor.', true],
-      'a conversation the supervisor opened or reopened is said to be led by it');
+      'after --open or --resume the script says this supervisor now leads the conversation');
   }
 
   /* Reading stewards.json while a window writes it: on Windows the file can be missing or unreadable for a moment while
@@ -392,7 +390,7 @@ module.exports = async ({ eq, note, tmp, root }) => {
     const broken = timed('');
     eq([none[0], none[1] < 0.05, stuck[0], stuck[1] >= 0.19 && stuck[1] < 1, late[0], broken[0], broken[1] < 0.05],
       [null, true, null, true, { version: 4 }, null, true],
-      'steward_table reads stewards.json at once when there is no file and no lock, waits up to 0.2 s while a window holds its lock, '
-        + 'takes the file the window writes meanwhile, and reads a broken file with no lock as no table');
+      'steward_table reads stewards.json at once when there is no lock; while a window holds the lock it waits up to 0.2 s for the '
+        + 'file the window writes; a broken file with no lock reads as no table');
   }
 };

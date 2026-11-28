@@ -45,7 +45,7 @@ MAX_SAID_CHARS = 2000
 # Text that reaches a conversation as a user message without the user typing it.
 NOT_TYPED = ("<cross-session-message", "<task-notification") + STEWARD_NOTICES + ("Handoff from ",)
 STATE_WORDS = {"busy": "working", "shell": "running a command", "waiting": "waiting for the user", "idle": "idle"}
-# The first line of a lead's hand-over note and of a new lead's first message to the conversation.
+# How a hand-over note and a new lead's first message begin.
 LEAD_LINE = re.compile(r'^From your (?:new )?lead supervisor "(.*)": ')
 REPLY_SUFFIX = ".reply.json"
 REPLY_FORMAT = 1

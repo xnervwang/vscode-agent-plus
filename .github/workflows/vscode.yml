@@ -9,7 +9,7 @@
 # Each platform's results folder is kept as an artifact, passed or not: a screenshot of each step, of any step that
 # failed, VS Code's logs, and for a failed step the window's HTML and text at that point (its state/ folder).
 #
-# It runs in full once a day and once more in release.yml before a release publishes; a push to main runs only check.yml.
+# A full run happens daily and from release.yml before each release is published. Pushes to main run check.yml instead.
 name: vscode
 
 on:

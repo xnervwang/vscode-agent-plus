@@ -117,7 +117,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     b.close();
   }
 
-  /* ── The lead: the one entry a source marks lead: true ── */
+  /* ── The lead ── */
   {
     const b = boot(root, tmp, { views: false });
     let answer = [];
@@ -130,13 +130,13 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     eq([whole, frozen(whole), whole.map((s) => Object.keys(s))], [[L('c', 'Lead C'), S('a', 'Observer A'), S('b', 'Observer B')], true, [KEYS, KEYS, KEYS]],
       'a lead the source lists last comes back first with lead true, and the others keep the source\'s order with lead false');
     eq(got([S('a'), S('b'), S('c')]), [['a', false], ['b', false], ['c', false]],
-      'a list with no entry marked, as from a source that knows no leads, keeps its order and has no lead');
+      'a list with no entry marked keeps its order and has no lead');
     eq(got([S('a'), L('b'), L('c')]), [['b', true], ['a', false], ['c', false]],
-      'of two entries one source marks, the first is the lead and the second one of the others');
+      'when one source marks two entries, the first is the lead and the second an ordinary entry');
     eq(got([S('a'), Object.assign(S('b'), { lead: 'true' }), Object.assign(S('c'), { lead: 1 }),
       { sourceId: 'claude-code', sessionId: 'd', get lead() { throw new Error('getter'); } }]),
     [['a', false], ['b', false], ['c', false], ['d', false]],
-    'only lead: true marks the lead; a string, a number or a getter that throws do not, and those entries are kept');
+    'a lead that is a string, a number or a getter that throws is not a lead, and its entry is kept');
     eq(got([S('a'), L('b'), S('b', 'Again'), S('c')]), [['b', true], ['a', false], ['c', false]],
       'the lead listed again unmarked comes back once');
     eq(got([S('a'), { sourceId: 'claude-code', sessionId: '', lead: true }, L('b')]), [['b', true], ['a', false]],
@@ -173,18 +173,18 @@ module.exports = async ({ eq, tmp, root, wait }) => {
     answers.first = [S('a', 'A'), S('shared', 'Shared from first')];
     answers.second = [L('shared', 'Shared from second'), S('c', 'C')];
     eq(got(), [['shared', 'Shared from first', true], ['a', 'A', false], ['c', 'C', false]],
-      'a lead the earlier source lists unmarked and the later one marks comes back once, first, with the title of its first place');
+      'marked only by the later source, the lead still comes first, once, with the title the earlier source gave it');
 
     answers.first = [L('shared', 'Shared from first'), S('a', 'A')];
     answers.second = [S('shared', 'Shared from second'), S('c', 'C')];
     eq(got(), [['shared', 'Shared from first', true], ['a', 'A', false], ['c', 'C', false]],
-      'a lead the earlier source marks and the later one lists unmarked comes back once');
+      'marked only by the earlier source, it also comes back once');
 
     answers.first = Array.from({ length: 20 }, (_, i) => S(`f${i}`));
     answers.second = [L('lead', 'Lead')];
     const cut = got();
     eq([cut.length, cut[0], cut[1][0], cut[19][0]], [20, ['lead', 'Lead', true], 'f0', 'f18'],
-      'when the earlier source fills the 20 places, the lead the later one marks is still given, first, and the last of the others is cut');
+      'when the earlier source fills the 20 places, the later source\'s lead still comes first and the last ordinary entry is dropped');
 
     answers.first = [L('lead', 'Lead')].concat(Array.from({ length: 19 }, (_, i) => S(`f${i}`)));
     const asked = second.asked.length;

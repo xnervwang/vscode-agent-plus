@@ -154,8 +154,9 @@ function start(context, log, opts = {}) {
 
   /*
    * stewardOf(), stewardsOf() and onDidChangeStewards (docs/protocol.md): the stewards that look after a conversation.
-   * stewardsOf() joins what every source with 'stewardList' gives, the conversation's lead first; stewardOf() is that
-   * lead, or when no source marks one, the first answer from the sources registered here that list 'stewards'.
+   * stewardsOf() merges the lists of the sources with 'stewardList' and puts the conversation's lead first.
+   * stewardOf() returns that lead; when no source marks one, it returns the first answer from the sources registered
+   * here that list 'stewards'.
    * However many things change the answers in one turn, the event fires once.
    */
   const stewardChanges = sources.emitter();
@@ -187,9 +188,9 @@ function start(context, log, opts = {}) {
     const sourceId = one ? sources.get(a, 'sourceId') : a, sessionId = one ? sources.get(a, 'sessionId') : b;
     return host.trusted() && sources.usableId(sourceId) && sources.usableId(sessionId) ? { sourceId, sessionId } : null;
   };
-  /* The sources' lists in registration order, each steward once with the title of its first place, cut at
-     sources.MAX_STEWARDS. The lead is the first one a source marks; it comes first, and a later source's lead is one
-     of the others. */
+  /* Merges the sources' lists in registration order. A steward that several sources list appears once, with the title
+     the first of them gives, and the list stops at sources.MAX_STEWARDS. The first steward a source marks as lead goes
+     first; a lead that a later source marks is kept as an ordinary entry. */
   const joinedStewards = (q) => {
     const all = new Map();
     let lead = '';
@@ -433,7 +434,7 @@ function start(context, log, opts = {}) {
     /* With 'stewards': the steward of that conversation, its lead when a source marks one, as a frozen
        { sourceId, sessionId }, or null. */
     stewardOf,
-    /* With 'stewardList': the stewards of that conversation, at most sources.MAX_STEWARDS, as a frozen array of frozen
+    /* With 'stewardList': up to sources.MAX_STEWARDS supervisors of the conversation, as a frozen array of frozen
        { sourceId, sessionId, title, open, lead }; with 'stewardLead', `lead` is true on the lead alone, which comes first. */
     stewardsOf,
     /* With 'stewards' or 'stewardList': vscode.Event<void>, stewardOf() or stewardsOf() may answer differently. */

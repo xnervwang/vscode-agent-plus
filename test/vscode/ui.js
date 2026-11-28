@@ -2011,7 +2011,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await theme(THEMES.dark);
     await showSessions('agentPlus.sessions');
     await sleep(800);
-    /* An archived conversation is renamed in place like any other and stays in Archived; its title is put back after. */
+    /* Renames an archived conversation, then puts its title back. */
     const archivedTitle = `${SLT.quiet}, renamed while archived`;
     const renameArchived = async (from, to) => {
       await slAct(from, 'rename', 'archived');
@@ -2021,7 +2021,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
       return until(async () => (await src('return src.conversations();')).some((c) => c.sessionId === 'sl-quiet' && c.title === to)
         && !!await slWait((r) => slFind(r, to, 'archived'), 3000), 10000, 300);
     };
-    check(!!await renameArchived(SLT.quiet, archivedTitle), 'an archived conversation has the Rename button too: the title is edited in place, the agent renames it, and it stays in Archived');
+    check(!!await renameArchived(SLT.quiet, archivedTitle), 'an archived conversation has the Rename button too; the rename reaches the agent and the conversation stays in Archived');
     check(!!await renameArchived(archivedTitle, SLT.quiet), 'and it can be renamed back the same way');
     await slAct(SLT.quiet, 'unarchive', 'archived');
     check(!!await slWait((r) => slFind(r, SLT.quiet, 'ungrouped')), 'Unarchive puts it back in Ungrouped');
@@ -2537,7 +2537,7 @@ async function run({ exe, profile, env, playwright, out, check: report, note, lo
     await src('return src.addOther(arg);', []);
     await showSessions('agentPlus.sessions');
     const title = await until(() => sl.evaluate(() => { const b = document.querySelector('.sl-new-agent'); return b && /Claude Code|Codex/.test(b.title) ? b.title : null; }), 15000, 300);
-    check(/start in Codex\b/.test(title || ''), 'after a reload the New bar still starts with Codex, the agent picked before it, not Claude Code', title);
+    check(/start in Codex\b/.test(title || ''), 'after a reload the New bar still starts with Codex, the agent picked last', title);
   });
   await shut();
 
