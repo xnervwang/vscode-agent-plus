@@ -163,6 +163,9 @@ DONE = {
 HANDED = ("Handed off to your lead supervisor %s: it was told, in a notice that is not the user's message. Say so in one "
           "sentence in your reply and leave it to the supervisor.")
 NOT_HANDED = " Say in your reply where it seems to belong, so the user decides."
+# A window of an older build shows the conversation but leaves a <id>.v4.json request alone.
+OLD_BUILD = (' The VS Code window "%s" shows it but took no request; it may run an older build of Claude Code Plus, which does '
+             "not take requests from this one. Ask the user to reload that window.")
 HEAD_BYTES = 64 * 1024
 CWD = re.compile(r'"cwd":"((?:[^"\\]|\\.)*)"')
 
@@ -353,6 +356,12 @@ def next_seq(directory, target):
     return top + 1
 
 
+def old_build(data, sid):
+    """OLD_BUILD for the first window that shows `sid`, or "" when none does."""
+    name = next((w.get("name") or "(untitled)" for w in windows(data) if shows(w, sid)), None)
+    return OLD_BUILD % name if name is not None else ""
+
+
 def taken_by(directory, rid):
     """The pid of the window that took request `rid`, from the name it renamed the request to, or ""."""
     try:
@@ -482,7 +491,8 @@ def archive(args):
         time.sleep(0.25)
     try:
         os.remove(request_file)
-        print("Not done: no VS Code window that shows this supervisor conversation took the request.")
+        print("Not done: no VS Code window that shows this supervisor conversation took the request."
+              + old_build(data, steward.lower()))
     except OSError:
         print("Unclear whether it was done: a window took the request but gave no answer in time.")
     return 1
@@ -703,12 +713,14 @@ def main(argv):
             for line in window_lines(windows(data)):
                 print("  " + line)
         elif handing:
-            print("Not done: no VS Code window that shows its lead supervisor took the request." + NOT_HANDED)
+            print("Not done: no VS Code window that shows its lead supervisor took the request." + old_build(data, target)
+                  + NOT_HANDED)
         elif action in LIST or other or taking or giving:
-            print("Not done: no VS Code window that shows this supervisor conversation took the request.")
+            print("Not done: no VS Code window that shows this supervisor conversation took the request." + old_build(data, me))
         else:
-            print("Not done: no VS Code window that shows that conversation took the request. If no window has it open, "
-                  "--resume opens it.")
+            older = old_build(data, target)
+            print("Not done: no VS Code window that shows that conversation took the request."
+                  + (older or " If no window has it open, --resume opens it."))
     except OSError:
         if resuming:
             taker = taken_by(directory, rid)

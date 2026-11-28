@@ -307,6 +307,32 @@ module.exports = async ({ eq, note, tmp, root }) => {
       + 'conversation has no lead; the observers are not named');
   }
 
+  /* A request no window takes: a window of an older build shows the conversation but leaves a new request alone. */
+  {
+    const quick = (data, as, argv, input) => {
+      const r = cp.spawnSync(python, ['-B', '-c', [
+        'import importlib.util, sys',
+        'spec = importlib.util.spec_from_file_location("relay", sys.argv[1])',
+        'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+        'm.WAIT_SECONDS = m.OTHER_WAIT_SECONDS = 1',
+        'sys.exit(m.main(["steward-relay.py"] + sys.argv[2:]))'].join('\n'), path.join(hooks, 'steward-relay.py'), ...argv, data],
+      { input, encoding: 'utf8', env: { ...env, CLAUDE_CODE_SESSION_ID: as } });
+      return [r.status, (r.stdout || r.stderr).trim(), fs.readdirSync(path.join(data, 'relay')).length];
+    };
+    const reload = ' The VS Code window "Main" shows it but took no request; it may run an older build of Claude Code Plus, which does '
+      + 'not take requests from this one. Ask the user to reload that window.';
+    eq([quick(world(), LEAD, [M], 'Go on.'), quick(world({ showing: [LEAD, M] }), LEAD, [M], 'Go on.'),
+      quick(world({ showing: [M] }), OBS, ['--take-lead', M, '--ask'], '')], [
+      [1, 'Not done: no VS Code window that shows that conversation took the request. If no window has it open, --resume opens it.', 0],
+      [1, `Not done: no VS Code window that shows that conversation took the request.${reload}`, 0],
+      [1, 'Not done: no VS Code window that shows this supervisor conversation took the request.', 0]],
+    'a request no window took is withdrawn; when a window shows the conversation, the script says that window may run an older build and '
+      + 'should be reloaded');
+    eq(quick(world({ showing: [OBS] }), OBS, ['--take-lead', M, '--ask'], '')[1],
+      `Not done: no VS Code window that shows this supervisor conversation took the request.${reload}`,
+      'the same for a request that the window showing the supervisor itself should take');
+  }
+
   /* What a new or reopened conversation's answer says. */
   {
     const d = world();
