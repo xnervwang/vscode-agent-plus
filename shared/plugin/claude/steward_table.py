@@ -223,13 +223,39 @@ def settle(entries):
     return out
 
 
+# How long a read waits for a window that is writing stewards.json.
+READ_WAIT_SECONDS = 0.2
+
+
+def read_whole(path):
+    """The JSON in `path`, or None when there is none. On Windows a read can fail, or find no file at all, at the moment
+    a window renames the new file over the old one, and the window holds the lock directory <path>.lock all through it
+    (src/file-lock.js in Claude Code Plus); so a read that fails is tried again while the lock is there, for up to
+    READ_WAIT_SECONDS, and once more after it goes."""
+    until = time.monotonic() + READ_WAIT_SECONDS
+    free = 0
+    while True:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            pass
+        if os.path.isdir(path + ".lock"):
+            free = 0
+            if time.monotonic() >= until:
+                return None
+            time.sleep(0.002)
+        else:
+            free += 1
+            if free > 1:
+                return None
+
+
 def read(directory):
     """The settled table, a Table: steward id -> {manages, ticked, names, paths, since, at, all, ...}, with the leads and
     tickets beside it; empty when there is no readable file."""
-    try:
-        with open(os.path.join(directory, STEWARDS_FILE), encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, ValueError):
+    data = read_whole(os.path.join(directory, STEWARDS_FILE))
+    if data is None:
         return Table()
     version = data.get("version") if isinstance(data, dict) else 0
     return Table(settle(entries_of(data)), leads_of(data), tickets_of(data),

@@ -366,4 +366,33 @@ module.exports = async ({ eq, note, tmp, root }) => {
       [0, 'Opened: a new conversation was started and its first message sent. It is now ticked for you in the Supervisor panel. You are its lead supervisor.', true],
       'a conversation the supervisor opened or reopened is said to be led by it');
   }
+
+  /* Reading stewards.json while a window writes it: on Windows the file can be missing or unreadable for a moment while
+     the window holds its lock directory, and steward_table waits that out instead of taking it for no table. */
+  {
+    const file = path.join(tmp('leads-read'), 'stewards.json');
+    const timed = (before) => py([
+      'import os, threading, time, steward_table',
+      `f = ${JSON.stringify(file)}`,
+      before,
+      't0 = time.monotonic(); got = steward_table.read_whole(f); took = time.monotonic() - t0',
+      'print(json.dumps([got, took]))',
+    ].join('\n'));
+    const none = timed('');
+    fs.mkdirSync(file + '.lock');
+    const stuck = timed('');
+    const late = timed([
+      'def finish():',
+      '    time.sleep(0.05)',
+      '    with open(f, "w") as fh: fh.write(json.dumps({"version": 4}))',
+      '    os.rmdir(f + ".lock")',
+      'threading.Thread(target=finish).start()',
+    ].join('\n'));
+    fs.writeFileSync(file, '{"version": 4, "stew');
+    const broken = timed('');
+    eq([none[0], none[1] < 0.05, stuck[0], stuck[1] >= 0.19 && stuck[1] < 1, late[0], broken[0], broken[1] < 0.05],
+      [null, true, null, true, { version: 4 }, null, true],
+      'steward_table reads stewards.json at once when there is no file and no lock, waits up to 0.2 s while a window holds its lock, '
+        + 'takes the file the window writes meanwhile, and reads a broken file with no lock as no table');
+  }
 };
