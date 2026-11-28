@@ -160,6 +160,21 @@ module.exports = async ({ eq, tmp, root }) => {
     list.dispose();
   }
 
+  /* ── A source that starts temporary conversations in some places only ── */
+  {
+    const t = setup();
+    const claude = source('claude-code', [], { made: '' });
+    claude.sessionActions = { open: ['tab', 'sidebar'], create: ['tab', 'sidebar'], temporary: ['tab'], rename: true, delete: true, own: [] };
+    t.entries.push({ id: 'claude-code', source: claude });
+    const list = L.createSessionList(t.host, { now });
+    await list.refresh();
+    const src = list.model().sources.find((x) => x.id === 'claude-code');
+    eq([src.temporary, src.temporaryAt], [true, ['tab']], 'the model tells the page where the source starts temporary conversations');
+    eq([await list.create('claude-code', 'sidebar', '', { temporary: true }), claude.calls.find((c) => c[0] === 'create')[2], list.temporaryIds('claude-code')],
+      ['done', { where: 'tab', temporary: true }, []], 'asked for one in the sidebar, it is started in a tab, and with no id yet the list registers nothing itself');
+    list.dispose();
+  }
+
   /* ── What cannot be made temporary ── */
   {
     const t = setup();

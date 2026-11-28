@@ -364,15 +364,20 @@
     if (cur) {
       setLogo(newLogo, cur.id);
       newAgent.title = `New conversations start in ${cur.label}. Click to choose another agent`;
-      newTab.disabled = !cur.create.includes('tab');
-      newSide.disabled = !cur.create.includes('sidebar');
+      newTemp.disabled = !cur.temporary;
+      if (newTemp.disabled) setTempOn(false);
+      const at = tempOn ? (cur.temporaryAt || []) : cur.create;
+      newTab.disabled = !at.includes('tab');
+      newSide.disabled = !at.includes('sidebar');
       newTab.classList.toggle('sl-primary', model.newWhere !== 'sidebar' && !newTab.disabled);
       newSide.classList.toggle('sl-primary', model.newWhere === 'sidebar' && !newSide.disabled);
-      newTemp.disabled = !cur.temporary;
+      for (const [b, w] of [[newTab, 'tab'], [newSide, 'sidebar']]) {
+        if (tempOn && b.disabled && cur.create.includes(w)) b.title = `${cur.label} starts temporary conversations only in ${w === 'tab' ? 'the sidebar' : 'a tab'}`;
+        else b.title = w === 'tab' ? 'Start a conversation in a new editor tab' : 'Start a conversation in the sidebar';
+      }
       newTemp.title = cur.temporary ? (tempOn ? 'The next new conversation is temporary: it stays out of this list and is deleted after it is closed. Click to turn off'
         : 'Make the next new conversation temporary: it stays out of this list and is deleted after it is closed')
         : `${cur.label} cannot start temporary conversations`;
-      if (newTemp.disabled) setTempOn(false);
       fitNew();
     }
     const lines = (model.problems || []).map((p) => el('div', 'sl-note sl-warn', p.text));

@@ -640,7 +640,7 @@ module.exports = async ({ eq, tmp, root, wait }) => {
   eq([s.kind, s.parentId, s.elsewhere.length, s.elsewhere[0].kind, s.elsewhere[0].label.length, s.elsewhere[0].detail[0].length, s.badges.map((b) => b.text), s.processes, s.hover, s.actions, s.detail],
     ['user', '', 8, 'other', 80, 200, ['goal', 'c'], 3, ['a', 'b'], ['x'], true], 'a session is held to the protocol: kinds, places, lengths and counts');
   eq(L.capsOf({ sessionActions: () => ({ open: ['tab', 'window'], rename: 1, own: [{ id: 'g', title: 'Go' }, { id: '' }] }) }),
-    { open: ['tab'], create: [], rename: false, delete: false, own: [{ id: 'g', title: 'Go' }] }, 'sessionActions is taken as given, with no actions added');
+    { open: ['tab'], create: [], temporary: [], rename: false, delete: false, own: [{ id: 'g', title: 'Go' }] }, 'sessionActions is taken as given, with no actions added');
 
   /* ── archive(): the record of every project whose list in an open window shows the conversation ── */
   {

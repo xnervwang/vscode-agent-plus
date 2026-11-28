@@ -119,7 +119,11 @@ function capsOf(source) {
   const places = (v) => (Array.isArray(v) ? v.filter((p) => p === 'tab' || p === 'sidebar') : []);
   const own = (Array.isArray(sources.get(a, 'own')) ? sources.get(a, 'own') : []).slice(0, 12)
     .map((o) => ({ id: str(sources.get(o, 'id'), 60), title: str(sources.get(o, 'title'), 80) })).filter((o) => o.id && o.title);
-  return { open: places(sources.get(a, 'open')), create: places(sources.get(a, 'create')), rename: sources.get(a, 'rename') === true,
+  const create = places(sources.get(a, 'create'));
+  /* Where it starts temporary conversations (feature 'temporary'): `temporary` when it names the places, else where it
+     starts any. */
+  const temporary = !sources.supports(source, 'temporary') ? [] : Array.isArray(sources.get(a, 'temporary')) ? places(sources.get(a, 'temporary')).filter((p) => create.includes(p)) : create;
+  return { open: places(sources.get(a, 'open')), create, temporary, rename: sources.get(a, 'rename') === true,
     delete: sources.get(a, 'delete') === true, own };
 }
 
@@ -723,9 +727,10 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
     const e = entryOf(sourceId);
     if (!e) return 'gone';
     const caps = capsOf(e.source);
-    const at = caps.create.includes(where) ? where : caps.create[0];
+    const can = temporary ? caps.temporary : caps.create;
+    if (temporary && !can.length) { warn(`${sources.labelOf(e.source)} cannot start temporary conversations.`); return 'nowhere'; }
+    const at = can.includes(where) ? where : can[0];
     if (!at) return 'nowhere';
-    if (temporary && !sources.supports(e.source, 'temporary')) { warn(`${sources.labelOf(e.source)} cannot start temporary conversations.`); return 'nowhere'; }
     if (host.globalMemento) Promise.resolve(host.globalMemento.update(LAST_NEW_KEY, { ...lastNew(), where: at })).catch(() => {});
     const res = await runAction(e, 'create', [], temporary ? { where: at, temporary: true } : { where: at });
     const made = res.find((x) => x.outcome === 'done');
@@ -978,8 +983,8 @@ function createSessionList(host, { now = Date.now, pageMs = PAGE_MS, actionMs = 
       rows: (p.key === 'closed' ? p.rows.map((r) => [r, 0]) : nest(p.rows)).map(([r, d]) => Object.assign(rowView(r, p.label, d),
         p.key === 'closed' ? { time: `closed ${age(r.closedAt, now())}` } : {})),
     }));
-    const srcs = entries().map((e) => ({ id: e.id, label: sources.labelOf(e.source), logo: sources.logoOf(e.source), create: capsOf(e.source).create,
-      temporary: sources.supports(e.source, 'temporary') }));
+    const srcs = entries().map((e) => { const c = capsOf(e.source); return { id: e.id, label: sources.labelOf(e.source), logo: sources.logoOf(e.source), create: c.create,
+      temporary: c.temporary.length > 0, temporaryAt: c.temporary }; });
     const accounts = [];
     for (const e of entries()) {
       const info = accountRaw(e);
